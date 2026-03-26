@@ -1,0 +1,675 @@
+<!DOCTYPE html><html><head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link rel="icon" type="image/png" href="favicon.svg">
+    
+
+  <title>html-runtime</title>
+
+<link rel="stylesheet" href="css/prism.css">
+<style>@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('font/JetBrainsMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('font/JetBrainsMono-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+body {
+  font-family: 'JetBrains Mono', monospace;
+  font-feature-settings: 'liga' 0, 'calt' 0;
+  background: #f4f1ec;
+  color: #2e2e2c;
+}
+
+
+.h1, .h2, .h3, .h4, .h5, .h6 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.h3 {
+    font-size: 28px;
+}
+
+.h4 {
+    font-size: 24px;
+}
+
+.h5 {
+    font-size: 20px;
+}
+
+.hidden {
+    display: none;
+}
+
+.row {
+    display: flex;
+    gap: 5px;
+    align-items: flex-start;
+}
+
+.frame {
+    border: 1px solid;
+    width: fit-content;
+    padding: 5px;
+}
+
+.circle {
+    width: 14px;
+    height: 14px;
+    border: 1px solid;
+    border-radius: 14px;
+}
+
+.triangle {
+    width: 18px;
+    height: 16px;
+    background: currentColor;
+    clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+    cursor: pointer;
+}
+
+.code {
+    font-size: 14px;
+}
+
+.click,
+.category,
+.object {
+  cursor: pointer;
+}
+
+.objects {
+    margin-left: 20px;
+}</style></head>
+  <body style="
+    font-feature-settings: 'liga' 0, 'calt' 0;
+">
+    
+
+<svg version="1.1" viewBox="0 0 32 32" style="
+    width: 20px;
+    cursor: pointer;
+    position: fixed;
+    top: 30px;
+" id="save" "="">
+    
+      
+      
+      
+      <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+          <g sketch:type="MSLayerGroup" transform="translate(-152.000000, -515.000000)" fill="#000000">
+              <path d="M171,525 C171.552,525 172,524.553 172,524 L172,520 C172,519.447 171.552,519 171,519 C170.448,519 170,519.447 170,520 L170,524 C170,524.553 170.448,525 171,525 L171,525 Z M182,543 C182,544.104 181.104,545 180,545 L156,545 C154.896,545 154,544.104 154,543 L154,519 C154,517.896 154.896,517 156,517 L158,517 L158,527 C158,528.104 158.896,529 160,529 L176,529 C177.104,529 178,528.104 178,527 L178,517 L180,517 C181.104,517 182,517.896 182,519 L182,543 L182,543 Z M160,517 L176,517 L176,526 C176,526.553 175.552,527 175,527 L161,527 C160.448,527 160,526.553 160,526 L160,517 L160,517 Z M180,515 L156,515 C153.791,515 152,516.791 152,519 L152,543 C152,545.209 153.791,547 156,547 L180,547 C182.209,547 184,545.209 184,543 L184,519 C184,516.791 182.209,515 180,515 L180,515 Z" sketch:type="MSShapeGroup">
+  
+  </path>
+          </g>
+      </g>
+  </svg><div style="
+    display: flex;
+    gap: 15px;
+    flex-direction: column;
+    x;
+    margin: 30px 0 30px 30px;
+    padding: 32px 36px;
+    background: #fffdf8;
+    border: 1px solid #d6d1c7;
+">
+
+    
+
+<div id="database" style="
+">
+
+
+
+<div class="object">
+
+<div class="h5" style="
+"><b>System</b></div><div class="objects" style="
+">
+    <div class="object">
+       
+<div class="category">core</div>
+       <div class="objects hidden">
+<div class="object">body</div><div class="object">money</div><div class="object">order</div>
+<div class="object">work</div><div class="object">meaning</div><div class="object">people</div><div class="object">focus / control</div></div>
+</div><div class="object">
+       
+<div class="category">data</div>
+       <div class="objects hidden">
+
+<div class="object">
+       
+<div class="category">art</div>
+       <div class="objects hidden">
+
+<div class="object">
+       
+<div class="category">movies</div>
+       <div class="objects hidden">
+<div class="object">the shawshank redemption (1994)</div><div class="object">the godfather (1972)</div><div class="object">the dark knight (2008)</div>
+<div class="object">12 angry men (1957)</div><div class="object">the lord of the rings</div><div class="object">schindler's list (1993)</div><div class="object">pulp fiction (1994)</div><div class="object">the good, the dad and the ugly (1966)</div></div>
+</div><div class="object">
+       
+<div class="category">series</div>
+       <div class="objects hidden">
+
+<div class="object">True detective</div></div>
+</div><div class="object">
+       <div class="category">music</div>
+       
+<div class="objects hidden">
+<div class="object">12 stones</div>
+<div class="object">2-4 grooves</div><div class="object">3 doors down</div><div class="object">30 seconds to mars</div><div class="object">36 crazyfists</div><div class="object">3rd strike</div></div></div></div>
+</div><div class="object">
+       
+<div class="category">concepts</div>
+       <div class="objects hidden">
+
+<div class="object">abstraction</div><div class="object">compression</div><div class="object">minimal</div><div class="object">mutation and mutable</div></div>
+</div><div class="object">
+       
+<div class="category">ideas</div>
+       <div class="objects hidden">
+<div class="object">
+       
+<div class="category">life-system</div>
+       <div class="objects">
+
+<div class="object">
+       
+<div class="category">life system map</div>
+       <div class="objects hidden">
+<div class="object">здоровье - 6</div>
+<div class="object">карьера / мастерство - 6</div><div class="object">финансы - 7</div><div class="object">отношения / интимность - 3</div><div class="object">смысл / философия - 8</div><div class="object">творчество / игра - 7</div></div>
+</div><div class="object">
+       
+<div class="category">principles of adult agency</div>
+       <div class="objects hidden">
+
+<div class="object">стремление к мастеству (IT)</div><div class="object">создавать ценность (для других)</div><div class="object">глубина опыта</div><div class="object">автономность</div></div>
+</div></div>
+</div>
+<div class="object">
+       
+<div class="category">project-ideas</div>
+       <div class="objects hidden">
+
+<div class="object">point of sync on digital ocean. microservices</div><div class="object">мир сочетающий реальные и нереальные объекты</div><div class="object">find new ideas</div><div class="object">automate routine on job</div><div class="object">connection between words</div><div class="object">Мир слов и идей и создать набор задач наперед. создать набор идей</div><div class="object">video editor</div><div class="object">record from radio, youtube</div><div class="object">схему найти с процессами</div></div>
+</div></div>
+</div><div class="object">
+       
+<div class="category">humanities</div>
+       <div class="objects hidden">
+<div class="object">philosophy</div>
+</div>
+</div><div class="object">
+       
+<div class="category">science</div>
+       <div class="objects hidden">
+
+<div class="object">
+       
+<div class="category">formal science</div>
+       <div class="objects">
+<div class="object">logic</div><div class="object">math</div>
+<div class="object">statistics</div><div class="object">
+       <div class="category">computer science</div>
+       <div class="objects hidden"><div class="object">
+       <div class="category">arch and patterns</div>
+       <div class="objects hidden"><div class="object">dry</div><div class="object">
+       <div class="category">gof</div>
+       <div class="objects hidden"><div class="object">
+       <div class="category">creational</div>
+       <div class="objects"><div class="object">factory method</div><div class="object">abstract factory</div><div class="object">builder</div><div class="object">prototype</div><div class="object">singleton</div></div>
+</div><div class="object">
+       <div class="category">structural</div>
+       <div class="objects"><div class="object">adapter</div><div class="object">bridge</div><div class="object">composite</div><div class="object">decorator</div><div class="object">facade</div><div class="object">flyweight
+
+</div><div class="object">proxy</div></div>
+</div><div class="object">
+       <div class="category">behavioral</div>
+       <div class="objects"><div class="object">chain of responsibility</div><div class="object">command
+</div><div class="object">iterator</div><div class="object">mediator</div><div class="object">memento</div><div class="object">observer</div><div class="object">state</div><div class="object">strategy</div><div class="object">template method</div><div class="object">visitor</div></div>
+</div></div>
+</div><div class="object">
+       <div class="category">grasp</div>
+       <div class="objects hidden"><div class="object">information expert</div><div class="object">creator
+</div><div class="object">controller</div><div class="object">indirection</div><div class="object">low coupling</div><div class="object">high cohesion</div><div class="object">polymorphism</div><div class="object">protected variations</div><div class="object">pure fabrication</div></div>
+</div><div class="object">kiss</div><div class="object">
+       <div class="category">solid</div>
+       <div class="objects"><div class="object">single responsibility</div><div class="object">open–closed principle</div><div class="object">liskov substitution</div><div class="object">interface segregation</div><div class="object">dependency inversion</div></div>
+</div></div>
+</div><div class="object">
+       <div class="category">infastructure</div>
+       <div class="objects"><div class="object">aws</div><div class="object">
+       <div class="category">kubernetes</div>
+       <div class="objects"><div class="object">cluster</div><div class="object">node</div><div class="object">deployment</div><div class="object">replicaSet</div><div class="object">statefulSet</div><div class="object">daemonSet</div><div class="object">pod</div><div class="object">job</div><div class="object">cronJob</div><div class="object">service</div><div class="object">ingress</div><div class="object">configMap</div><div class="object">secret</div><div class="object">volume</div><div class="object">persistentVolume</div></div>
+</div></div>
+</div><div class="object">
+       
+<div class="category">db</div>
+       <div class="objects hidden">
+<div class="object">postgres
+</div><div class="object">redis
+</div>
+</div>
+</div><div class="object">rabbitmq</div><div class="object">kafka</div><div class="object">node.js</div><div class="object">nest.js</div><div class="object">
+       
+<div class="category">langs</div>
+       <div class="objects hidden">
+<div class="object">javascript</div><div class="object">typescript</div>
+</div>
+</div></div>
+</div></div>
+</div><div class="object">
+       
+<div class="category">natural science</div>
+       <div class="objects hidden">
+
+<div class="object">
+       
+<div class="category">physics</div>
+       <div class="objects">
+<div class="object">space</div><div class="object">time</div><div class="object">energy</div>
+</div>
+</div></div>
+</div><div class="object">
+       
+<div class="category">applied science</div>
+       <div class="objects hidden">
+
+<div class="object">
+       <div class="category">engineering</div>
+       <div class="objects"><div class="object">design</div></div>
+</div><div class="object">medicine</div></div>
+</div></div>
+</div></div>
+</div>
+
+<div class="object">
+       
+<div class="category">runtime</div>
+       <div class="objects">
+
+<div class="object">
+
+    
+
+<div class="object" style="
+">
+
+    
+
+<div class="click to-id--show-hide target--next-element-sibling">init css</div>
+
+<div contenteditable="plaintext-only" style="
+    border: 1px solid;
+    width: fit-content;
+    padding: 5px;
+" id="init-css" class="code hidden">@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('font/JetBrainsMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('font/JetBrainsMono-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+body {
+  font-family: 'JetBrains Mono', monospace;
+  font-feature-settings: 'liga' 0, 'calt' 0;
+  background: #f4f1ec;
+  color: #2e2e2c;
+}
+
+
+.h1, .h2, .h3, .h4, .h5, .h6 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.h3 {
+    font-size: 28px;
+}
+
+.h4 {
+    font-size: 24px;
+}
+
+.h5 {
+    font-size: 20px;
+}
+
+.hidden {
+    display: none;
+}
+
+.row {
+    display: flex;
+    gap: 5px;
+    align-items: flex-start;
+}
+
+.frame {
+    border: 1px solid;
+    width: fit-content;
+    padding: 5px;
+}
+
+.circle {
+    width: 14px;
+    height: 14px;
+    border: 1px solid;
+    border-radius: 14px;
+}
+
+.triangle {
+    width: 18px;
+    height: 16px;
+    background: currentColor;
+    clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+    cursor: pointer;
+}
+
+.code {
+    font-size: 14px;
+}
+
+.click,
+.category,
+.object {
+  cursor: pointer;
+}
+
+.objects {
+    margin-left: 20px;
+}<br></div></div><div class="click to-id--show-hide target--next-element-sibling">init js</div>
+
+<div contenteditable="plaintext-only" style="
+    padding: 5px;
+" class="frame code hidden" id="init-script">document.querySelectorAll('style').forEach((el) =&gt; el.remove())
+
+const initCss = document.getElementById('init-css')
+const style = document.createElement('style')
+style.textContent = initCss.textContent
+
+document.head.append(style)
+
+const x = (id, msg) =&gt; {
+  const e = document.getElementById(id)
+  if (e &amp;&amp; e.f) return e.f(msg)
+}
+
+const elems = document.getElementsByClassName('js-fn')
+for (let i = 0; i &lt; elems.length; i++) {
+  const el = elems[i]
+  el.x = x
+
+  eval(el.textContent)(el)
+}
+
+window.addEventListener('click', (e) =&gt; {
+  const t = e.target
+  const classList = t.classList
+  if (!classList.contains('click')) return
+
+  const id = x('extract-value-from-class', { 
+    classList, 
+    startsWith: 'to-id--' 
+  })
+
+  if (!id) return
+  const el = document.getElementById(id)
+  if (el.f) el.f(t)
+})<br></div></div><div class="object">
+
+    
+
+<div class="click to-id--show-hide target--next-element-sibling">database-click</div><div contenteditable="plaintext-only" style="
+" class="code frame js-fn hidden">(x) =&gt; {
+  const db = document.getElementById('database')
+  db.addEventListener('click', (e) =&gt; {
+    const t = e.target
+    const next = t.nextElementSibling
+
+    if (e.metaKey) {
+      const el = document.createElement('div')
+      el.className = 'object'
+      el.textContent = 'new obj'
+
+      if (next) {
+        next.parentNode.insertBefore(el, next)
+      } else {
+        t.parentNode.append(el)
+      }
+
+      return
+    }
+
+
+    if (!next) return
+
+    const isCategory = t.classList.contains('category')    
+    if (!isCategory) return
+    
+    next.classList.toggle('hidden')
+  })
+}</div></div><div class="object">
+
+    <div class="click to-id--show-hide target--next-element-sibling">show-hide</div>
+
+<div contenteditable="plaintext-only" style="
+" class="code frame js-fn hidden" id="show-hide">(x) =&gt; {
+  x.f = (showHideBtn) =&gt; {
+    const target = x.x('extract-value-from-class', { 
+      classList: showHideBtn.classList, 
+      startsWith: 'target--' 
+    })
+
+    if (target === 'next-element-sibling') {
+      const targetObj = showHideBtn.nextElementSibling
+      targetObj.classList.toggle('hidden')
+    }
+  }
+}</div></div><div class="object">
+
+    <div class="click to-id--show-hide target--next-element-sibling">extract-value-from-class</div>
+
+<div contenteditable="plaintext-only" style="
+" class="code frame js-fn hidden" id="extract-value-from-class">(x) =&gt; {
+  x.f = ({ classList, startsWith }) =&gt; {
+    const extractValue = kvStr =&gt; {
+        return kvStr.split('--')[1] ?? ''
+    }
+
+    for (const cls of classList) {
+      if (cls.startsWith(startsWith)) {
+        return extractValue(cls)
+      }
+    }
+  }
+}</div></div><div class="object">
+
+    <div class="click to-id--show-hide target--next-element-sibling">console</div>
+
+<div contenteditable="plaintext-only" style="
+" class="code frame js-fn hidden" id="console">(x) =&gt; {
+  const el = x.parentNode.children[1]
+
+  x.f = (str) =&gt; {
+    el.innerHTML += `&lt;div&gt;${str}&lt;div&gt;`
+  }
+}<div><div></div></div></div></div><div class="object">
+
+
+
+
+    
+
+
+
+
+
+
+
+
+
+
+<div class="click to-id--show-hide target--next-element-sibling">test-fn</div><div contenteditable="plaintext-only" style="
+    font-family: monospace;
+" class="frame js-fn hidden" id="test-fn">//reload function dynamic
+
+(x) =&gt; {
+  x.f = () =&gt; console.log('testF')
+}</div></div><div class="object">
+
+    <div class="click to-id--show-hide target--next-element-sibling">observer-fn</div>
+
+<div contenteditable="plaintext-only" style="
+" class="code frame js-fn hidden" id="observer-fn">(x) =&gt; {
+  const config = { attributes: true, childList: true, subtree: true }
+  const callback = (mutationList, observer) =&gt; {
+    for (const mutation of mutationList) {
+      console.log('type', mutation.type)
+    }
+  }
+
+  //const ob = new MutationObserver(callback)
+}<div><div></div></div></div></div><div class="object">
+
+    <div class="click to-id--show-hide target--next-element-sibling">tickerFactory</div>
+
+<div contenteditable="plaintext-only" style="
+" class="code frame js-fn hidden" id="tickerFactory">(x) =&gt; {
+
+  const sleep = (ms) =&gt; new Promise(resolve =&gt; setTimeout(resolve, ms))
+
+  x.f = () =&gt; {
+    let intervalId = null
+    const subs = new Set()
+
+    return {
+      async start() {
+        while (true) {
+          await sleep(2000) 
+          subs.forEach(fn =&gt; fn())
+        }
+      },
+
+      stop() {},
+
+      subscribe(fn) {
+        subs.add(fn)
+        return () =&gt; subs.delete(fn)
+      },
+    }
+
+  }
+
+}<div><div></div></div></div></div><div class="object">
+
+
+
+
+    
+
+
+
+
+
+
+
+
+
+
+<div class="click to-id--show-hide target--next-element-sibling">test-fn</div><div contenteditable="plaintext-only" style="
+    font-family: monospace;
+" class="frame js-fn " id="test-fn">//reload function dynamic
+
+(x) =&gt; {
+  x.f = () =&gt; console.log('testF')
+}</div></div></div>
+</div><div class="object">
+       
+<div class="category">projects</div>
+       <div class="objects">
+<div class="object">
+       
+<div class="category">tick</div>
+       <div class="objects hidden">
+<input value="insert cmd">
+<div contenteditable="plaintext-only" style="
+    font-family: monospace;
+" class="frame code js-fn" id="tick">(x) =&gt; {
+  //several intervals
+
+  const tickPoints = x.nextElementSibling
+  const tick = () =&gt; {
+    const d = document.createElement('span')
+    d.textContent = '.'
+    tickPoints.append(d)
+
+    if (tickPoints.children.length &gt; 10) {
+      tickPoints.innerHTML = ''
+    }
+  }
+
+  const input = x.previousElementSibling
+  input.addEventListener('input', () =&gt; {
+    const v = input.value
+  })
+  setInterval(tick, 2000)
+
+  
+
+}</div><div class="tick-points"><span>.</span><span>.</span></div></div>
+</div><div class="object">
+       
+<div class="category">html-runtime</div>
+       <div class="objects hidden">
+<div class="object">подключить codemirror</div><div class="object">терминал для ввода операции</div>
+<div class="object">improve UX of this system</div><div class="object">позже редактор добавить справа</div><div class="object">сделать как-то подсветку контрактов сущности</div></div>
+</div><div class="object">service manager</div>
+<div class="object">cli-runtime</div><div class="object">code-editor</div><div class="object">video-editor</div><div class="object">type-editor</div><div class="object">contract-editor</div></div>
+</div></div></div>
+
+
+
+</div><div style="
+    margin-top: 15px;
+    font-size: 20px;
+"></div><script>
+      window.saveHtml = () => {
+        const html = '<!DOCTYPE html>' + document.documentElement.outerHTML
+        fetch('/save', { method: 'POST', body: html })
+      }
+
+      const saveBtn = document.getElementById('save')
+      saveBtn.addEventListener('click', saveHtml)
+
+      const initScript = document.getElementById('init-script')
+      eval(initScript.textContent)
+    </script>
+<script src="js/prism.js"></script></div>
+
+    
+</body></html>
