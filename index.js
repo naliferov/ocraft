@@ -1,6 +1,6 @@
 import http from 'http'
 import fs from 'fs/promises'
-import { getDirname } from '../../supervisor/utils.js'
+import { getDirname } from './utils.js'
 import mime from 'mime-types'
 
 const currentDir = getDirname(import.meta.url)

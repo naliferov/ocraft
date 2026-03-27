@@ -5,9 +5,10 @@
     <link rel="icon" type="image/png" href="favicon.svg">
     
 
-  <title>html-runtime</title>
+  <title>ocraft</title>
 
-<link rel="stylesheet" href="css/prism.css">
+
+<link rel="stylesheet" href="https://unpkg.com/codemirror@5/lib/codemirror.css">
 <style>@font-face {
   font-family: 'JetBrains Mono';
   src: url('font/JetBrainsMono-Regular.woff2') format('woff2');
@@ -30,7 +31,6 @@ body {
   background: #f4f1ec;
   color: #2e2e2c;
 }
-
 
 .h1, .h2, .h3, .h4, .h5, .h6 {
   margin-top: 0;
@@ -92,6 +92,17 @@ body {
 
 .objects {
     margin-left: 20px;
+}
+
+
+.tree-node {
+    display: flex;
+    gap: 5px;
+}
+
+
+.flex {
+    display: flex;
 }</style></head>
   <body style="
     font-feature-settings: 'liga' 0, 'calt' 0;
@@ -138,10 +149,10 @@ body {
 <div class="h5" style="
 "><b>System</b></div><div class="objects" style="
 ">
-    <div class="object">
-       
-<div class="category">core</div>
-       <div class="objects hidden">
+    <div class="tree-item">
+  <div class="tree-node"><div class="tree-node__icon">▶</div>
+<div class="tree-node__label">core</div></div>
+       <div class="tree-children">
 <div class="object">body</div><div class="object">money</div><div class="object">order</div>
 <div class="object">work</div><div class="object">meaning</div><div class="object">people</div><div class="object">focus / control</div></div>
 </div><div class="object">
@@ -295,6 +306,12 @@ body {
        <div class="objects"><div class="object">design</div></div>
 </div><div class="object">medicine</div></div>
 </div></div>
+</div><div class="object">
+       
+<div class="category">sites</div>
+       <div class="objects hidden">
+
+<div class="object">localfirst.fm</div><div class="object">os-js.org</div></div>
 </div></div>
 </div>
 
@@ -318,7 +335,7 @@ body {
     border: 1px solid;
     width: fit-content;
     padding: 5px;
-" id="init-css" class="code hidden">@font-face {
+" id="init-css" class="code">@font-face {
   font-family: 'JetBrains Mono';
   src: url('font/JetBrainsMono-Regular.woff2') format('woff2');
   font-weight: 400;
@@ -340,7 +357,6 @@ body {
   background: #f4f1ec;
   color: #2e2e2c;
 }
-
 
 .h1, .h2, .h3, .h4, .h5, .h6 {
   margin-top: 0;
@@ -402,7 +418,18 @@ body {
 
 .objects {
     margin-left: 20px;
-}<br></div></div><div class="click to-id--show-hide target--next-element-sibling">init js</div>
+}
+
+
+.tree-node {
+    display: flex;
+    gap: 5px;
+}
+
+
+.flex {
+    display: flex;
+}</div></div><div class="click to-id--show-hide target--next-element-sibling">init js</div>
 
 <div contenteditable="plaintext-only" style="
     padding: 5px;
@@ -414,7 +441,7 @@ style.textContent = initCss.textContent
 
 document.head.append(style)
 
-const x = (id, msg) =&gt; {
+const callFunction = (id, msg) =&gt; {
   const e = document.getElementById(id)
   if (e &amp;&amp; e.f) return e.f(msg)
 }
@@ -422,7 +449,7 @@ const x = (id, msg) =&gt; {
 const elems = document.getElementsByClassName('js-fn')
 for (let i = 0; i &lt; elems.length; i++) {
   const el = elems[i]
-  el.x = x
+  el.x = callFunction
 
   eval(el.textContent)(el)
 }
@@ -432,7 +459,7 @@ window.addEventListener('click', (e) =&gt; {
   const classList = t.classList
   if (!classList.contains('click')) return
 
-  const id = x('extract-value-from-class', { 
+  const id = callFunction('extract-value-from-class', { 
     classList, 
     startsWith: 'to-id--' 
   })
@@ -601,17 +628,15 @@ window.addEventListener('click', (e) =&gt; {
 
 
 
-<div class="click to-id--show-hide target--next-element-sibling">test-fn</div><div contenteditable="plaintext-only" style="
-    font-family: monospace;
-" class="frame js-fn " id="test-fn">//reload function dynamic
+<div class="click to-id--show-hide target--next-element-sibling">test-fn2</div><textarea style="font-family: monospace; width: 273px; height: 93px;" class="js-fn" id="test-fn2">//reload function dynamic//
 
 (x) =&gt; {
   x.f = () =&gt; console.log('testF')
-}</div></div></div>
+}</textarea></div></div>
 </div><div class="object">
        
 <div class="category">projects</div>
-       <div class="objects">
+       <div class="objects hidden">
 <div class="object">
        
 <div class="category">tick</div>
@@ -641,7 +666,7 @@ window.addEventListener('click', (e) =&gt; {
 
   
 
-}</div><div class="tick-points"><span>.</span><span>.</span></div></div>
+}</div><div class="tick-points"><span>.</span><span>.</span><span>.</span><span>.</span><span>.</span><span>.</span><span>.</span><span>.</span><span>.</span><span>.</span></div></div>
 </div><div class="object">
        
 <div class="category">html-runtime</div>
@@ -669,7 +694,9 @@ window.addEventListener('click', (e) =&gt; {
       const initScript = document.getElementById('init-script')
       eval(initScript.textContent)
     </script>
-<script src="js/prism.js"></script></div>
+</div>
 
     
+<script src="https://unpkg.com/codemirror@5/lib/codemirror.js"></script>
+<script src="https://unpkg.com/codemirror@5/mode/javascript/javascript.js"></script>
 </body></html>
