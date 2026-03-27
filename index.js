@@ -20,7 +20,7 @@ const server = http.createServer(async(req, res) => {
 
     const tokenPath = path.join(currentDir, '../token')
     const fileToken = (await fs.readFile(tokenPath, 'utf8')).trim()
-    
+
     if (!incomingToken || incomingToken !== fileToken) {
       res.writeHead(401).end('Unauthorized')
       return
@@ -47,6 +47,6 @@ const server = http.createServer(async(req, res) => {
   }
 })
 
-server.listen(3000, () => {
-  console.log('Server running on http://localhost:3000')
+server.listen(80, () => {
+  console.log('Server running on 80 port')
 })
