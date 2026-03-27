@@ -47,6 +47,6 @@ const server = http.createServer(async(req, res) => {
   }
 })
 
-server.listen(80, () => {
+server.listen(80, '0.0.0.0', () => {
   console.log('Server running on 80 port')
 })
