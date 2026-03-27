@@ -1,5 +1,6 @@
 import http from 'http'
 import fs from 'fs/promises'
+import path from 'path'
 import { getDirname } from './utils.js'
 import mime from 'mime-types'
 
@@ -14,6 +15,17 @@ const server = http.createServer(async(req, res) => {
     return
   }
   if (url === '/save') {
+    const authHeader = req.headers['authorization'] || ''
+    const incomingToken = authHeader.replace('Bearer ', '').trim()
+
+    const tokenPath = path.join(currentDir, '../token')
+    const fileToken = (await fs.readFile(tokenPath, 'utf8')).trim()
+    
+    if (!incomingToken || incomingToken !== fileToken) {
+      res.writeHead(401).end('Unauthorized')
+      return
+    }
+
     const chunks = []
     for await (const chunk of req) chunks.push(chunk)
     const body = Buffer.concat(chunks).toString('utf8')
