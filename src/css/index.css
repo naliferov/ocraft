@@ -1,0 +1,93 @@
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('../font/JetBrainsMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('../font/JetBrainsMono-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+body {
+  font-family: 'JetBrains Mono', monospace;
+  font-feature-settings: 'liga' 0, 'calt' 0;
+  background: #f4f1ec;
+  color: #2e2e2c;
+}
+
+.h1, .h2, .h3, .h4, .h5, .h6 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.h3 {
+    font-size: 28px;
+}
+
+.h4 {
+    font-size: 24px;
+}
+
+.h5 {
+    font-size: 20px;
+}
+
+.hidden {
+    display: none;
+}
+
+.row {
+    display: flex;
+    gap: 5px;
+    align-items: flex-start;
+}
+
+.frame {
+    border: 1px solid;
+    width: fit-content;
+    padding: 5px;
+}
+
+.circle {
+    width: 14px;
+    height: 14px;
+    border: 1px solid;
+    border-radius: 14px;
+}
+
+.triangle {
+    width: 18px;
+    height: 16px;
+    background: currentColor;
+    clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+    cursor: pointer;
+}
+
+.code {
+    font-size: 14px;
+}
+
+.click,
+.category,
+.object {
+  cursor: pointer;
+}
+
+.objects {
+    margin-left: 20px;
+}
+
+.tree-node {
+    display: flex;
+    gap: 5px;
+}
+
+.flex {
+    display: flex;
+}

@@ -6,15 +6,24 @@ import mime from 'mime-types'
 
 const currentDir = getDirname(import.meta.url)
 
-const server = http.createServer(async(req, res) => {
-  const url = req.url
-  
-  if (url === '/') {
+
+const resolveFile = async (url) => {
+  let file
+  const fPath = `${currentDir}${url}`
+  try { 
+    file = await fs.readFile(fPath)
+  } catch {}
+
+  return file
+}
+
+const map = {
+  '/': async (req,res) => {
     const html = await fs.readFile(`${currentDir}/index.html`, 'utf8')
     res.writeHead(200, { 'Content-Type': 'text/html' }).end(html)
     return
-  }
-  if (url === '/save') {
+  },
+  '/save': async (req, res) => {
     const authHeader = req.headers['authorization'] || ''
     const incomingToken = authHeader.replace('Bearer ', '').trim()
 
@@ -33,20 +42,29 @@ const server = http.createServer(async(req, res) => {
     
     res.writeHead(200).end('Saved')
     return
+  },
+}
+
+const server = http.createServer(async(req, res) => {
+  const url = req.url
+  
+  const handler = map[url]
+  if (handler) {
+    await handler(req, res)
+    return
   }
-  
-  let file
-  const fPath = `${currentDir}${url}`
-  try { file = await fs.readFile(fPath) } catch {}
-  
+
+  const file = await resolveFile(url)
   if (file) {
-    const type = mime.lookup(fPath) || 'application/octet-stream'
+    const type = mime.lookup(url) || 'application/octet-stream'
     res.writeHead(200, { 'Content-Type': type }).end(file)
-  } else {
-    res.writeHead(404).end('Not found')
+    return
   }
+
+  res.writeHead(404).end('Not found')
+  return
 })
 
-server.listen(80, '0.0.0.0', () => {
+server.listen(3000, '0.0.0.0', () => {
   console.log('Server running on 80 port')
 })

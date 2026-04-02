@@ -1,0 +1,10 @@
+{
+  "tag": "div",
+  "attrs": {
+    "contenteditable": "plaintext-only",
+    "style": "\n    font-family: monospace;\n",
+    "class": "frame code js-fn",
+    "id": "tick"
+  },
+  "textFile": "inline.js"
+}

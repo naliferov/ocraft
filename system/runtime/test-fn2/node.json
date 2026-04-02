@@ -1,0 +1,7 @@
+{
+  "kind": "fn",
+  "title": "test-fn2",
+  "id": "test-fn2",
+  "classes": "frame js-fn",
+  "codeFile": "code.js"
+}
