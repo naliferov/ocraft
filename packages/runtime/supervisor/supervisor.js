@@ -1,9 +1,9 @@
 import fs from 'node:fs/promises'
-import { spawn } from 'node:child_process'
-import { getProcessList, processKill, wait, getTime, log } from './utils.js'
-import path from 'path'
-import { fileURLToPath } from 'url'
-
+import { getProcessList, processKill } from '../lib/functions/process.js'
+import { wait } from '../lib/functions/time.js'
+import { log } from '../lib/functions/log.js'
+import { getDirname } from '../lib/functions/path.js'
+import path from 'node:path'
 
 const getServicePid = async (servicePath) => {
   try {
@@ -119,8 +119,7 @@ const processServices = async (servicesPath) => {
 
 export const createSupervisor = () => {
 
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = path.dirname(__filename);
+  const __dirname = getDirname(import.meta.url);
   const servicesPath = path.join(__dirname, '../services');
 
   const start = async() => {

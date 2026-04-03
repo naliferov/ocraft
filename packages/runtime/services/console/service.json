@@ -1,0 +1,7 @@
+{
+  "name": "telegram-bot",
+  "kind": "daemon",
+  "entry": "index.js",
+  "enabled": true,
+  "restart": "always"
+}

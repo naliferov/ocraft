@@ -1,17 +1,4 @@
 import { spawn } from 'node:child_process'
-import { fileURLToPath } from 'node:url'
-import path from 'node:path'
-
-export const log = (msg, addTime = false) => {
-  const str = addTime ? `${getTime()} ${msg}` : msg
-  console.log(str)
-}
-
-export const getTime = () => {
-  const pad = (n) => String(n).padStart(2, '0');
-  const d = new Date();
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-}
 
 export const getProcessList = () => {
   const { promise, resolve, reject } = Promise.withResolvers()
@@ -27,7 +14,7 @@ export const getProcessList = () => {
 
   const procs = {}
   let output = ''
-  
+
   const child = spawn('ps', ['aux'])
   child.stdout.on('data', (data) => {
     output += data.toString()
@@ -47,7 +34,6 @@ export const getProcessList = () => {
 }
 
 export const processKill = (pid) => {
-
   const { promise, resolve, reject } = Promise.withResolvers()
 
   const child = spawn('kill', [pid])
@@ -59,10 +45,4 @@ export const processKill = (pid) => {
     }
   })
   return promise
-}
-
-export const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms))
-
-export const getDirname = (metaUrl) => {
-  return path.dirname(fileURLToPath(metaUrl))
 }
