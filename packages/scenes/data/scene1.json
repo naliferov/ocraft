@@ -1,10 +1,9 @@
 {
   "name": "scene1",
   "description": "scene1",
-  "version": "1.0.0",
-  "author": "ocraft",
-  "license": "MIT",
-  "dependencies": {
-    "vue": "^3.5.13"
+  "viewport": {
+    "aspectRatio": "16:9",
+    "fit": "contain",
+    "mode": "transform"
   }
 }
