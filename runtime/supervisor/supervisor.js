@@ -110,11 +110,10 @@ const processService = async (servicesPath, service) => {
 }
 
 const processServices = async (servicesPath) => {
-
   const services = await fs.readdir(servicesPath)
-  for (const service of services) {
-    await processService(servicesPath, service)
-  }
+  // for (const service of services) {
+  //   await processService(servicesPath, service)
+  // }
 }
 
 export const createSupervisor = () => {
