@@ -23,6 +23,7 @@ export const execute = async (name, args = []) => {
   const logs = []
   const ctx = {
     args,
+    env: process.env,
     log: (msg) => {
       const entry = { time: getTime(), msg }
       logs.push(entry)
