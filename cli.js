@@ -1,4 +1,5 @@
 import 'dotenv/config'
+import { execute } from './runtime/executor.js'
 
 const [command, ...args] = process.argv.slice(2)
 
@@ -9,7 +10,6 @@ const commands = {
       console.error('Usage: node cli.js run <function-name> [args...]')
       process.exit(1)
     }
-    const { execute } = await import('./functions/executor.js')
     const execution = await execute(name, fnArgs)
     console.log(`\nStatus: ${execution.status}`)
   },
