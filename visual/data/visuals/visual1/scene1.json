@@ -1,0 +1,9 @@
+{
+  "name": "scene1",
+  "description": "scene1",
+  "viewport": {
+    "aspectRatio": "16:9",
+    "fit": "contain",
+    "mode": "transform"
+  }
+}

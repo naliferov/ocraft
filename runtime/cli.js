@@ -1,36 +1,25 @@
-import { createSupervisor } from './src/supervisor/supervisor.js'
-import { getProcessList } from './src/supervisor/utils.js'
-import { analyzeProject } from './src/tasks/analyze-project.js'
+import 'dotenv/config'
 
 const [command, ...args] = process.argv.slice(2)
 
 const commands = {
-  'start-supervisor': async () => {
-      const supervisor = createSupervisor()
-      await supervisor.start()
-  },
-  'list-procs': async () => {
-    const processList = await getProcessList()
-    for (const pid in processList) {
-      const command = processList[pid].command
-      if (command.includes('service-manager/src/services')) {
-        console.log(command)
-      }
+  'run': async () => {
+    const [name, ...fnArgs] = args
+    if (!name) {
+      console.error('Usage: node cli.js run <function-name> [args...]')
+      process.exit(1)
     }
-  },
-  'analyze-project': async () => {
-    const projectPath = args[0]
-
-    console.log('analyze project')
-    //await analyzeProject(projectPath)
+    const { execute } = await import('./functions/executor.js')
+    const execution = await execute(name, fnArgs)
+    console.log(`\nStatus: ${execution.status}`)
   },
 }
 
 const exec = commands[command]
 if (!exec) {
   console.error('Usage: node cli.js <command> [args...]')
-  console.error('Commands: start-worker-manager')
+  console.error('Commands: run <function-name>')
   process.exit(1)
 }
 
-exec(...args)
+exec()
