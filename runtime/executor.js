@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { getTime } from './lib/time.js'
-//import { saveExecution } from './storage.js'
+import { saveExecution } from './storage.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -51,9 +51,9 @@ export const execute = async (name, args = []) => {
   }
 
   const finishedAt = new Date().toISOString()
-
   const execution = { name, startedAt, finishedAt, status, result, logs, error }
-  //await saveExecution(execution)
+  
+  await saveExecution(execution)
 
   return execution
 }

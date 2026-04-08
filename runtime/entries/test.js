@@ -1,5 +1,5 @@
 export const run = async (ctx) => {
-  const [projectPath] = ctx.args
+  const [arg1] = ctx.args
 
-  ctx.log(`run test entry: ${projectPath}`)
+  ctx.log(`run test entry with arg: ${arg1}`)
 }
