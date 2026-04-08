@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import { execute } from './runtime/executor.js'
 import { listExecutions } from './runtime/storage.js'
+import { runScheduler } from './runtime/scheduler.js'
 
 const [command, ...args] = process.argv.slice(2)
 
@@ -13,6 +14,9 @@ const commands = {
     }
     const execution = await execute(name, fnArgs)
     console.log(`\nStatus: ${execution.status}`)
+  },
+  'start-scheduler': async () => {
+    await runScheduler()
   },
   'list-executions': async () => {
     const executions = await listExecutions()

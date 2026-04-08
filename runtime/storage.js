@@ -37,3 +37,18 @@ export const listExecutions = async () => {
       return { id: f.replace('.json', ''), name: nameParts.join('-'), timestamp: Number(timestamp) }
     })
 }
+
+const SCHEDULER_STATE_FILE = path.join(__dirname, 'scheduler-state.json')
+
+export const loadSchedulerState = async () => {
+  try {
+    const raw = await fs.readFile(SCHEDULER_STATE_FILE, 'utf-8')
+    return JSON.parse(raw)
+  } catch {
+    return {}
+  }
+}
+
+export const saveSchedulerState = async (state) => {
+  await fs.writeFile(SCHEDULER_STATE_FILE, JSON.stringify(state, null, 2))
+}

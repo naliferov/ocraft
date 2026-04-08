@@ -1,3 +1,4 @@
 node_modules
 .env
 runtime/executions/
+runtime/scheduler-state.json
