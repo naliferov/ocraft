@@ -5,6 +5,7 @@ import { runScheduler } from './runtime/scheduler.js'
 
 const [command, ...args] = process.argv.slice(2)
 
+//check deploy
 
 const commands = {
   'run': async () => {
