@@ -1,12 +1,13 @@
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { getTime } from './lib/time.js'
 import { saveExecution } from './storage.js'
+import { getDirname } from './lib/path.js'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const currentDir = getDirname(import.meta.url)
 
 export const execute = async (name, args = []) => {
-  const entryPath = path.join(__dirname, 'entries', `${name}.js`)
+
+  const entryPath = path.join(currentDir, 'entries', `${name}.js`)
 
   let mod
   try {

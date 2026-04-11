@@ -1,9 +1,9 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { getDirname } from './lib/path.js'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const EXECUTIONS_DIR = path.join(__dirname, 'executions')
+const currentDir = getDirname(import.meta.url)
+const EXECUTIONS_DIR = path.join(currentDir, 'executions')
 const MAX_EXECUTIONS = 1000
 
 export const saveExecution = async (execution) => {
@@ -38,7 +38,7 @@ export const listExecutions = async () => {
     })
 }
 
-const SCHEDULER_STATE_FILE = path.join(__dirname, 'scheduler-state.json')
+const SCHEDULER_STATE_FILE = path.join(currentDir, 'scheduler-state.json')
 
 export const loadSchedulerState = async () => {
   try {

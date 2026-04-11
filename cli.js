@@ -5,6 +5,7 @@ import { runScheduler } from './runtime/scheduler.js'
 
 const [command, ...args] = process.argv.slice(2)
 
+
 const commands = {
   'run': async () => {
     const [name, ...fnArgs] = args
@@ -12,6 +13,7 @@ const commands = {
       console.error('Usage: node cli.js run <function-name> [args...]')
       process.exit(1)
     }
+
     const execution = await execute(name, fnArgs)
     console.log(`\nStatus: ${execution.status}`)
   },

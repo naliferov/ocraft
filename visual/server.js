@@ -6,7 +6,7 @@ import { getDirname } from './utils.js'
 const currentDir = getDirname(import.meta.url)
 const VISUALS_DIR = path.join(currentDir, 'data/visuals')
 
-const visualPath = (id) => path.join(VISUALS_DIR, id, `${id}.json`)
+const visualPath = (id) => path.join(VISUALS_DIR, id, 'state.json')
 
 const readBody = async (req) => {
   const chunks = []

@@ -1,4 +1,4 @@
-@font-face {
+/* @font-face {
   font-family: 'JetBrains Mono';
   src: url('../font/JetBrainsMono-Regular.woff2') format('woff2');
   font-weight: 400;
@@ -12,12 +12,9 @@
   font-weight: 700;
   font-style: normal;
   font-display: swap;
-}
+} */
 
 body {
-  font-family: 'JetBrains Mono', monospace;
-  font-feature-settings: 'liga' 0, 'calt' 0;
-  background: #f4f1ec;
   color: #2e2e2c;
 }
 

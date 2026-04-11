@@ -1,9 +1,9 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { getDirname } from './path.js'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const LOCKS_DIR = path.join(__dirname, '..')
+const currentDir = getDirname(import.meta.url)
+const LOCKS_DIR = path.join(currentDir, '..')
 
 const lockPath = name => path.join(LOCKS_DIR, `${name}.lock`)
 
