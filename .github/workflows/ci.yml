@@ -20,11 +20,8 @@ jobs:
           node --version
 
       - name: Deploy
-        env:
-          NODE: /root/.nvm/versions/node/v25.8.2/bin/node
-          NPM: /root/.nvm/versions/node/v25.8.2/bin/npm
         run: |
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > /tmp/deploy_key
           chmod 600 /tmp/deploy_key
           ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no ${{ secrets.DEPLOY_HOST }} \
-            "cd /root/ocraft && git pull && $NPM install && $NODE cli.js run deploy"
+            "cd /root/ocraft && git pull && /root/.nvm/versions/node/v25.8.2/bin/npm install && /root/.nvm/versions/node/v25.8.2/bin/node cli.js run deploy"
