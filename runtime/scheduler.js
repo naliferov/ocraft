@@ -11,6 +11,11 @@ const match = (schedule, date) => {
   return true
 }
 
+const isActiveHour = (activeHours, date) => {
+  const h = date.getHours()
+  return h >= activeHours.from && h < activeHours.to
+}
+
 const jobs = [
   {
     id: 'test',
@@ -19,9 +24,16 @@ const jobs = [
     intervalMs: minutes(1)
   },
   {
-    id: 'every-hour',
-    entry: 'every-hour',
+    id: 'send-reminder',
+    entry: 'send-reminder',
+    args: ['reminder-text'],
     schedule: { hour: '*', minute: 0 }
+  },
+  {
+    id: 'telegram-send-movement-reminder',
+    entry: 'telegram-send-movement-reminder',
+    intervalMs: minutes(10),
+    //activeHours: { from: 8, to: 22 }
   }
 ]
 
@@ -31,6 +43,10 @@ export const runScheduler = () => withLock('scheduler', async () => {
   const date = new Date(now)
 
   for (const job of jobs) {
+    if (job.activeHours && !isActiveHour(job.activeHours, now)) {
+      continue
+    }
+
     if (job.intervalMs) {
       const lastRunAt = state[job.id]?.lastRunAt ?? 0
       if (now - lastRunAt < job.intervalMs) continue
