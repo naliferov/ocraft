@@ -4,11 +4,12 @@ import { getDirname } from './lib/path.js'
 
 const currentDir = getDirname(import.meta.url)
 const EXECUTIONS_DIR = path.join(currentDir, 'executions')
-const MAX_EXECUTIONS = 1000
+const MAX_EXECUTIONS = 500
 
 export const saveExecution = async (execution) => {
   await fs.mkdir(EXECUTIONS_DIR, { recursive: true })
-  const id = `${Date.now()}-${execution.name}`
+  const date = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  const id = `${date}-${execution.name}`
   const filePath = path.join(EXECUTIONS_DIR, `${id}.json`)
   await fs.writeFile(filePath, JSON.stringify(execution, null, 2))
   await rotateExecutions()
@@ -17,9 +18,8 @@ export const saveExecution = async (execution) => {
 
 const rotateExecutions = async () => {
   const files = (await fs.readdir(EXECUTIONS_DIR)).sort()
-  const excess = files.length - MAX_EXECUTIONS
-  if (excess > 0) {
-    for (const f of files.slice(0, excess)) {
+  if (files.length > MAX_EXECUTIONS) {
+    for (const f of files.slice(0, files.length - MAX_EXECUTIONS)) {
       await fs.unlink(path.join(EXECUTIONS_DIR, f))
     }
   }
@@ -33,8 +33,10 @@ export const listExecutions = async () => {
     .sort()
     .reverse()
     .map(f => {
-      const [timestamp, ...nameParts] = f.replace('.json', '').split('-')
-      return { id: f.replace('.json', ''), name: nameParts.join('-'), timestamp: Number(timestamp) }
+      const base = f.replace('.json', '')
+      const dateStr = base.slice(0, 19).replace(/T(\d{2})-(\d{2})-(\d{2})/, 'T$1:$2:$3')
+      const name = base.slice(20)
+      return { id: base, name, timestamp: new Date(dateStr).getTime() }
     })
 }
 
