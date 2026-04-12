@@ -29,12 +29,12 @@ const jobs = [
     args: ['reminder-text'],
     schedule: { hour: '*', minute: 0 }
   },
-  {
-    id: 'telegram-send-movement-reminder',
-    entry: 'telegram-send-movement-reminder',
-    intervalMs: minutes(10),
+  //{
+    //id: 'telegram-send-movement-reminder',
+    //entry: 'telegram-send-movement-reminder',
+    //intervalMs: minutes(10),
     //activeHours: { from: 8, to: 22 }
-  }
+  //}
 ]
 
 export const runScheduler = () => withLock('scheduler', async () => {
