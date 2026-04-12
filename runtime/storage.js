@@ -9,7 +9,7 @@ const MAX_EXECUTIONS = 500
 export const saveExecution = async (execution) => {
   await fs.mkdir(EXECUTIONS_DIR, { recursive: true })
   const date = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-  const id = `${date}-${execution.name}`
+  const id = `${date}-${execution.entry}`
   const filePath = path.join(EXECUTIONS_DIR, `${id}.json`)
   await fs.writeFile(filePath, JSON.stringify(execution, null, 2))
   await rotateExecutions()
@@ -40,7 +40,9 @@ export const listExecutions = async () => {
     })
 }
 
-const SCHEDULER_STATE_FILE = path.join(currentDir, 'scheduler-state.json')
+const STATE_DIR = path.join(currentDir, 'state')
+const SCHEDULER_STATE_FILE = path.join(STATE_DIR, 'scheduler.json')
+const entryStatePath = (name) => path.join(STATE_DIR, 'entries', `${name}.json`)
 
 export const loadSchedulerState = async () => {
   try {
@@ -52,5 +54,21 @@ export const loadSchedulerState = async () => {
 }
 
 export const saveSchedulerState = async (state) => {
+  await fs.mkdir(path.dirname(SCHEDULER_STATE_FILE), { recursive: true })
   await fs.writeFile(SCHEDULER_STATE_FILE, JSON.stringify(state, null, 2))
+}
+
+export const loadEntryState = async (name) => {
+  try {
+    const raw = await fs.readFile(entryStatePath(name), 'utf-8')
+    return JSON.parse(raw)
+  } catch {
+    return {}
+  }
+}
+
+export const saveEntryState = async (name, state) => {
+  const file = entryStatePath(name)
+  await fs.mkdir(path.dirname(file), { recursive: true })
+  await fs.writeFile(file, JSON.stringify(state, null, 2))
 }
