@@ -22,14 +22,15 @@ jobs:
           node --version
 
       - name: Deploy
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: |
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > /tmp/deploy_key
           chmod 600 /tmp/deploy_key
-          ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no ${{ secrets.DEPLOY_HOST }} "
-            export PATH=/root/.nvm/versions/node/v25.8.2/bin:\$PATH &&
-cd /root/ocraft &&
-            echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" > .env &&
-            git pull &&
-            npm install &&
-            node cli.js run deploy
-          "
+          ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no ${{ secrets.DEPLOY_HOST }} \
+            "export PATH=/root/.nvm/versions/node/v25.8.2/bin:\$PATH && \
+             cd /root/ocraft && \
+             echo 'TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN' > .env && \
+             git pull && \
+             npm install && \
+             node cli.js run deploy"
