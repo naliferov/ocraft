@@ -3,14 +3,15 @@ import { loadSchedulerState, saveSchedulerState } from './storage.js'
 import { log } from './lib/log.js'
 import { withLock } from './lib/lock.js'
 
+const minutes = m => m * 60 * 1000
 const hours = h => h * 60 * 60 * 1000
 
 const jobs = [
   {
     id: 'test',
     entry: 'test',
-    args: ['superawesome'],
-    intervalMs: hours(1)
+    args: ['argument-of-test-function'],
+    intervalMs: minutes(1)
   }
 ]
 
