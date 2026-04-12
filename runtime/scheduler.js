@@ -5,6 +5,11 @@ import { withLock } from './lib/lock.js'
 
 const minutes = m => m * 60 * 1000
 const hours = h => h * 60 * 60 * 1000
+const match = (schedule, date) => {
+  if (schedule.hour !== '*' && schedule.hour !== date.getHours()) return false
+  if (schedule.minute !== '*' && schedule.minute !== date.getMinutes()) return false
+  return true
+}
 
 const jobs = [
   {
@@ -12,16 +17,28 @@ const jobs = [
     entry: 'test',
     args: ['argument-of-test-function'],
     intervalMs: minutes(1)
+  },
+  {
+    id: 'every-hour',
+    entry: 'every-hour',
+    schedule: { hour: '*', minute: 0 }
   }
 ]
 
 export const runScheduler = () => withLock('scheduler', async () => {
   const state = await loadSchedulerState()
   const now = Date.now()
+  const date = new Date(now)
 
   for (const job of jobs) {
-    const lastRunAt = state[job.id]?.lastRunAt ?? 0
-    if (now - lastRunAt < job.intervalMs) continue
+    if (job.intervalMs) {
+      const lastRunAt = state[job.id]?.lastRunAt ?? 0
+      if (now - lastRunAt < job.intervalMs) continue
+    } else if (job.schedule) {
+      if (!match(job.schedule, date)) continue
+      const lastRunAt = state[job.id]?.lastRunAt ?? 0
+      if (now - lastRunAt < minutes(1)) continue
+    }
 
     log(`[scheduler] running ${job.id}`)
     await execute(job.entry, job.args)
