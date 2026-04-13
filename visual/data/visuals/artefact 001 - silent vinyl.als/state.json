@@ -1,6 +1,6 @@
 {
-  "name": "neon silence",
-  "description": "neon silence desc",
+  "name": "artefact 001 - silent vinyl",
+  "description": "",
   "viewport": {
     "width": 160,
     "height": 90,
@@ -21,7 +21,7 @@
       "id": "bg",
       "type": "background",
       "props": {
-        "fill": "#f2f2fe"
+        "fill": "#36454F"
       },
       "state": {},
       "events": []
@@ -45,7 +45,17 @@
         "y": 5,
         "width": 30,
         "height": 30,
-        "fill": "white"
+        "fill": "lightgray"
+      }
+    }
+  ],
+  "effects": [
+    {
+      "id": "grain1",
+      "type": "grain",
+      "props": {
+        "intensity": 0.05,
+        "animated": true
       }
     }
   ]

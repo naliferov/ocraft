@@ -2,6 +2,8 @@ import sharp from 'sharp'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
+//node cli.js run img-optimize visual/data/assets/img/ryan-gosling-drive.jpg visual/data/assets/img/ryan-gosling-drive.webp
+
 export const run = async (ctx) => {
   const [inputPath, outputPath] = ctx.args
 

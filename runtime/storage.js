@@ -8,12 +8,10 @@ const MAX_EXECUTIONS = 500
 
 export const saveExecution = async (execution) => {
   await fs.mkdir(EXECUTIONS_DIR, { recursive: true })
-  const date = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-  const id = `${date}-${execution.entry}`
-  const filePath = path.join(EXECUTIONS_DIR, `${id}.json`)
+  const filePath = path.join(EXECUTIONS_DIR, `${execution.id}.json`)
   await fs.writeFile(filePath, JSON.stringify(execution, null, 2))
   await rotateExecutions()
-  return id
+  return execution.id
 }
 
 const rotateExecutions = async () => {

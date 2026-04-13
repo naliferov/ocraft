@@ -4,6 +4,7 @@ import p5 from 'p5'
 import { NInput, NButton } from 'naive-ui'
 import { useVisualsStore } from '../stores/visuals.js'
 import { renderScene } from './renderScene.js'
+import { renderSceneP5 } from './renderSceneP5.js'
 
 const props = defineProps({
   visual: { type: Object, required: true }
@@ -31,14 +32,6 @@ const backgroundFill = computed({
   }
 })
 
-const render = (params) => {
-  const el = canvas.value
-  if (!el) return
-  const ctx = el.getContext('2d')
-  if (!ctx) return
-  renderScene(ctx, params, props.visual)
-}
-
 const calcRenderParams = () => {
   const container = preview.value
   if (!container) return null
@@ -48,7 +41,7 @@ const calcRenderParams = () => {
   return { width, height, dpr }
 }
 
-const resize = () => {
+const resizeCanvas = () => {
   const el = canvas.value
   const params = calcRenderParams()
   if (!el || !params) return null
@@ -62,54 +55,56 @@ const resize = () => {
   return params
 }
 
+const renderSceneOnCanvas = (params) => {
+  const el = canvas.value
+  if (!el) return
+  const ctx = el.getContext('2d')
+  if (!ctx) return
+  renderScene(ctx, params, props.visual)
+}
+
 onMounted(() => {
   const container = preview.value
   if (!container) return
 
   const resizeAndRender = () => {
-    const params = resize()
-    if (!params) return
-    render(params)
+    // const params = resizeCanvas()
+    // if (!params) return
+    // renderSceneOnCanvas(params)
+
+    p5Instance.resizeCanvas(
+    container.offsetWidth,
+    container.offsetHeight
+  )
+
+    p5Instance.redraw()
   }
+
+  p5Instance = new p5((s) => {
+    s.setup = () => {
+      s.createCanvas(container.offsetWidth, container.offsetHeight).parent(container)
+      s.rectMode(s.CORNER)
+      s.frameRate(30)
+    }
+    s.draw = () => {
+      //const t = getTime()
+      renderSceneP5(
+        s,
+        {
+          width: s.width,
+          height: s.height
+        },
+        props.visual
+      )
+    }
+  })
 
   resizeAndRender()
   ro = new ResizeObserver(resizeAndRender)
   ro.observe(container)
-
-  let t = 0
-
-  p5Instance = new p5((s) => {
-    s.setup = () => {
-      s.createCanvas(400, 225).parent(p5Container.value) // 16:9
-      s.rectMode(s.CENTER)
-      s.noStroke()
-    }
-
-    s.draw = () => {
-      s.background(10, 18)
-
-      //t += (Math.PI * 2 * 125) / 3600
-      t += 0.02
-      //console.log(t)
-
-      const cx = s.width / 2
-      const cy = s.height / 2
-
-      const x = cx + Math.sin(t) * 100
-      const y = cy
-
-      s.push()
-      s.translate(x, y)
-
-      // основной объект
-      s.fill(230)
-      s.rect(0, 0, 80, 40)
-      s.pop()
-    }
-  })
 })
 
-const p5Container = ref(null)
+//const p5Container = ref(null)
 let p5Instance = null
 
 onBeforeUnmount(() => {
@@ -120,8 +115,8 @@ onBeforeUnmount(() => {
 watch(
   () => props.visual,
   () => {
-    const params = calcRenderParams()
-    if (params) render(params)
+    //const params = calcRenderParams()
+    //if (params) render(params)
   },
   { deep: true }
 )
@@ -143,7 +138,7 @@ watch(
     <n-button size="small" @click="save">Save</n-button>
 
     <div ref="preview" class="visual-preview">
-      <canvas ref="canvas" class="canvas" />
+      <!-- <canvas ref="canvas" class="canvas" /> -->
     </div>
 
     <div ref="p5Container" class="p5-container" />
@@ -158,6 +153,7 @@ watch(
   padding: 8px 12px;
   box-sizing: border-box;
   gap: 12px;
+  overflow-y: auto;
 }
 
 .info {
