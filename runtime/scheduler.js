@@ -24,16 +24,9 @@ const jobs = [
     intervalMs: minutes(1)
   },
   {
-    id: 'send-reminder',
-    entry: 'send-reminder',
-    args: ['reminder-text'],
-    schedule: { hour: '*', minute: 0 }
-  },
-  //todo: add check mail reminder
-
-  {
-    id: 'telegram-send-movement-reminder',
-    entry: 'telegram-send-movement-reminder',
+    id: 'reminder-movement',
+    entry: 'telegram-reminder',
+    args: ['Time to move'],
     intervalMs: hours(1),
     activeHours: { from: 8, to: 22 }
   }
