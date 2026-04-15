@@ -5,8 +5,8 @@ import path from 'node:path'
 const SUPPORTED_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp'])
 
 export const run = async (ctx) => {
-  const inputDir = 'visual/data/assets/img/raw'
-  const outputDir = 'visual/data/assets/img/optimized'
+  const inputDir = 'artefacts/data/assets/img/raw'
+  const outputDir = 'artefacts/data/assets/img/optimized'
 
   await fs.mkdir(outputDir, { recursive: true })
 

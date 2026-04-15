@@ -38,7 +38,7 @@ export const runScheduler = () => withLock('scheduler', async () => {
   const date = new Date(now)
 
   for (const job of jobs) {
-    if (job.activeHours && !isActiveHour(job.activeHours, now)) {
+    if (job.activeHours && !isActiveHour(job.activeHours, date)) {
       continue
     }
 

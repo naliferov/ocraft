@@ -4,9 +4,9 @@ import path from 'node:path'
 import { getDirname } from './utils.js'
 
 const currentDir = getDirname(import.meta.url)
-const VISUALS_DIR = path.join(currentDir, 'data/visuals')
+const ARTEFACTS_DIR = path.join(currentDir, 'data/artefacts')
 
-const visualPath = (id) => path.join(VISUALS_DIR, id, 'state.json')
+const artefactPath = (id) => path.join(ARTEFACTS_DIR, id, 'state.json')
 
 const readBody = async (req) => {
   const chunks = []
@@ -15,31 +15,31 @@ const readBody = async (req) => {
 }
 
 const routes = {
-  'GET /api/visuals': async (req, res) => {
-    const dirs = await fs.readdir(VISUALS_DIR)
+  'GET /api/artefacts': async (req, res) => {
+    const dirs = await fs.readdir(ARTEFACTS_DIR)
     const visuals = await Promise.all(
       dirs.map(async (id) => {
-        const raw = await fs.readFile(visualPath(id), 'utf-8')
+        const raw = await fs.readFile(artefactPath(id), 'utf-8')
         return { id, ...JSON.parse(raw) }
       })
     )
     res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(visuals))
   },
 
-  'GET /api/visuals/:id': async (req, res, { id }) => {
+  'GET /api/artefacts/:id': async (req, res, { id }) => {
     try {
-      const raw = await fs.readFile(visualPath(id), 'utf-8')
+      const raw = await fs.readFile(artefactPath(id), 'utf-8')
       res.writeHead(200, { 'Content-Type': 'application/json' }).end(raw)
     } catch {
       res.writeHead(404).end('Not found')
     }
   },
 
-  'POST /api/visuals/:id': async (req, res, { id }) => {
+  'POST /api/artefacts/:id': async (req, res, { id }) => {
     const body = await readBody(req)
-    const dir = path.join(VISUALS_DIR, id)
+    const dir = path.join(ARTEFACTS_DIR, id)
     await fs.mkdir(dir, { recursive: true })
-    await fs.writeFile(visualPath(id), JSON.stringify(body, null, 2))
+    await fs.writeFile(artefactPath(id), JSON.stringify(body, null, 2))
     res.writeHead(200).end('Saved')
   },
 }
