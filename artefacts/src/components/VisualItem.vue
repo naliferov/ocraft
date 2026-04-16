@@ -3,7 +3,6 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import p5 from 'p5'
 import { NInput, NButton } from 'naive-ui'
 import { useVisualsStore } from '../stores/visuals.js'
-import { renderScene } from './renderScene.js'
 import { renderSceneP5 } from './renderSceneP5.js'
 
 const props = defineProps({
@@ -15,7 +14,6 @@ const save = () => store.save(props.visual.id, props.visual)
 
 const canvas = ref(null)
 const preview = ref(null)
-
 let ro
 
 const backgroundNode = computed(() =>
@@ -25,58 +23,23 @@ const backgroundNode = computed(() =>
 const backgroundFill = computed({
   get: () => backgroundNode.value?.props?.fill ?? '',
   set: (val) => {
-    console.log('test88')
     if (backgroundNode.value) {
       backgroundNode.value.props.fill = val
     }
   }
 })
 
-const calcRenderParams = () => {
-  const container = preview.value
-  if (!container) return null
-  const dpr = window.devicePixelRatio || 1
-  const width = container.offsetWidth
-  const height = container.offsetHeight
-  return { width, height, dpr }
-}
-
-const resizeCanvas = () => {
-  const el = canvas.value
-  const params = calcRenderParams()
-  if (!el || !params) return null
-
-  const { width, height, dpr } = params
-  el.width = Math.round(width * dpr)
-  el.height = Math.round(height * dpr)
-  el.style.width = width + 'px'
-  el.style.height = height + 'px'
-
-  return params
-}
-
-const renderSceneOnCanvas = (params) => {
-  const el = canvas.value
-  if (!el) return
-  const ctx = el.getContext('2d')
-  if (!ctx) return
-  renderScene(ctx, params, props.visual)
-}
-
 onMounted(() => {
   const container = preview.value
   if (!container) return
 
+  console.log('container size: ', container.offsetWidth, container.offsetHeight)
+
   const resizeAndRender = () => {
-    // const params = resizeCanvas()
-    // if (!params) return
-    // renderSceneOnCanvas(params)
-
     p5Instance.resizeCanvas(
-    container.offsetWidth,
-    container.offsetHeight
-  )
-
+      container.offsetWidth,
+      container.offsetHeight
+    )
     p5Instance.redraw()
   }
 
@@ -87,7 +50,7 @@ onMounted(() => {
       s.frameRate(30)
     }
     s.draw = () => {
-      //const t = getTime()
+
       renderSceneP5(
         s,
         {
@@ -97,6 +60,7 @@ onMounted(() => {
         props.visual
       )
     }
+
   })
 
   resizeAndRender()
@@ -112,14 +76,14 @@ onBeforeUnmount(() => {
   p5Instance?.remove()
 })
 
-watch(
-  () => props.visual,
-  () => {
-    //const params = calcRenderParams()
-    //if (params) render(params)
-  },
-  { deep: true }
-)
+// watch(
+//   () => props.visual,
+//   () => {
+//     //const params = calcRenderParams()
+//     //if (params) render(params)
+//   },
+//   { deep: true }
+// )
 </script>
 
 <template>
@@ -134,14 +98,8 @@ watch(
       placeholder="#f2f2fe"
       size="small"
     />
-
     <n-button size="small" @click="save">Save</n-button>
-
-    <div ref="preview" class="visual-preview">
-      <!-- <canvas ref="canvas" class="canvas" /> -->
-    </div>
-
-    <div ref="p5Container" class="p5-container" />
+    <div ref="preview" class="artefact-container"></div>
   </div>
 </template>
 
@@ -153,7 +111,7 @@ watch(
   padding: 8px 12px;
   box-sizing: border-box;
   gap: 12px;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .info {
@@ -172,22 +130,11 @@ watch(
   font-size: 0.85em;
 }
 
-.visual-preview {
+.artefact-container {
   width: 100%;
   aspect-ratio: 16 / 9;
-  max-width: 100%;
   background: #f2f2f2;
   overflow: hidden;
-  flex-shrink: 0;
-}
-
-.canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-.p5-container {
-  flex-shrink: 0;
+  min-height: 0;
 }
 </style>

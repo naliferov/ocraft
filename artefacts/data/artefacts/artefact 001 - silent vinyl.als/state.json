@@ -21,7 +21,7 @@
       "id": "bg",
       "type": "background",
       "props": {
-        "fill": "#36454F"
+        "fill": "#28282B"
       },
       "state": {},
       "events": []
@@ -54,8 +54,12 @@
       "id": "grain1",
       "type": "grain",
       "props": {
-        "intensity": 0.05,
-        "animated": true
+        "rangeColor": {
+          "min": [0, 0, 0],
+          "max": [255, 255, 255]
+        },
+        "amount": 0.3,
+        "intensity": 0.1
       }
     }
   ]

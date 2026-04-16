@@ -28,7 +28,7 @@ const jobs = [
     entry: 'telegram-reminder',
     args: ['Time to move'],
     intervalMs: hours(1),
-    activeHours: { from: 8, to: 22 }
+    activeHours: { from: 8, to: 21 }
   }
 ]
 
