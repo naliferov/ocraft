@@ -19,7 +19,7 @@ The `vite.config.js` `backendPlugin` automatically spawns `server.js` when Vite 
 
 ## Architecture
 
-This is a **visual scene editor** — a Vue 3 + p5.js app for composing and previewing scene-based visuals ("artefacts") stored as JSON.
+This is a **visual scene editor** — a Vue 3 + p5.js app for composing and previewing scene-based visuals ("artifacts") stored as JSON.
 
 ### Data model (`data/visuals/<id>/state.json`)
 

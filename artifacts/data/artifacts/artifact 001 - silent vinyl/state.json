@@ -1,5 +1,5 @@
 {
-  "name": "artefact 001 - silent vinyl",
+  "name": "artifact 001 - silent vinyl",
   "description": "",
   "viewport": {
     "width": 160,
@@ -51,15 +51,29 @@
   ],
   "effects": [
     {
-      "id": "grain1",
+      "id": "grain",
       "type": "grain",
       "props": {
+        "grainSize": 1,
         "rangeColor": {
-          "min": [0, 0, 0],
+          "min": [180, 180, 180],
           "max": [255, 255, 255]
         },
-        "amount": 0.3,
-        "intensity": 0.1
+        "amount": 0.06,
+        "intensity": 0.2
+      }
+    },
+    {
+      "id": "crackle",
+      "type": "grain",
+      "props": {
+        "grainSize": 10,
+        "rangeColor": {
+          "min": [150, 150, 150],
+          "max": [255, 255, 255]
+        },
+        "amount": 0.000003,
+        "intensity": 1
       }
     }
   ]

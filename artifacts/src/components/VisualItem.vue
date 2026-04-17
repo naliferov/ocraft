@@ -99,7 +99,7 @@ onBeforeUnmount(() => {
       size="small"
     />
     <n-button size="small" @click="save">Save</n-button>
-    <div ref="preview" class="artefact-container"></div>
+    <div ref="preview" class="artifact-container"></div>
   </div>
 </template>
 
@@ -130,7 +130,7 @@ onBeforeUnmount(() => {
   font-size: 0.85em;
 }
 
-.artefact-container {
+.artifact-container {
   width: 100%;
   aspect-ratio: 16 / 9;
   background: #f2f2f2;

@@ -8,12 +8,12 @@ export const useVisualsStore = defineStore('visuals', () => {
   const active = computed(() => visuals.value.find(v => v.id === activeId.value) ?? null)
 
   const load = async () => {
-    const res = await fetch('/api/artefacts')
+    const res = await fetch('/api/artifacts')
     visuals.value = await res.json()
   }
 
   const save = async (id, data) => {
-    await fetch(`/api/artefacts/${id}`, {
+    await fetch(`/api/artifacts/${id}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)

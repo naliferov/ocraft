@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ocraft/
   cli.js            # CLI entry point for the runtime
   runtime/          # Job scheduler + executor engine
-  visual/           # Vue 3 + p5.js visual editor (separate dev server)
+  artifacts/           # Vue 3 + p5.js visual editor (separate dev server)
 ```
 
 ---
@@ -51,9 +51,9 @@ Uses `withLock('scheduler', fn)` (`runtime/lib/lock.js`) — a PID-file lock tha
 
 ---
 
-## Visual editor (`visual/`)
+## Visual editor (`artifacts/`)
 
-See `visual/CLAUDE.md` for frontend-specific details.
+See `artifacts/CLAUDE.md` for frontend-specific details.
 
 ### Commands
 

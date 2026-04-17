@@ -1,7 +1,5 @@
 const clamp = (value) => Math.min(255, Math.max(0, value))
 
-const randBetween = (min, max) => min + Math.random() * (max - min)
-
 const applyPixelDelta = (pixels, index, delta) => {
   pixels[index]     = clamp(pixels[index]     + delta[0])
   pixels[index + 1] = clamp(pixels[index + 1] + delta[1])
@@ -42,19 +40,36 @@ const getGrainDelta = ({ baseColor, color, intensity }) => {
 }
 
 const applyGrain = (s, props) => {
-  const { rangeColor, intensity, color, amount = 0.5 } = props ?? {}
+  const { rangeColor, intensity, color, amount = 1, grainSize = 10 } = props ?? {}
 
   const baseColor = rangeColor ? getBaseGrainColor(rangeColor) : null
   
   s.loadPixels()
-  for (let i = 0; i < s.pixels.length; i += 4) {
-    if (Math.random() > amount) {
-      continue
-    }
 
-    const delta = getGrainDelta({ baseColor, intensity, color })
-    applyPixelDelta(s.pixels, i, delta)
+  const d = s.pixelDensity()
+  const width = s.width * d
+  const height = s.height * d
+
+  for (let y = 0; y < height; y += grainSize) {
+    for (let x = 0; x < width; x += grainSize) {
+      if (Math.random() > amount) continue
+
+      const delta = getGrainDelta({ baseColor, intensity, color })
+
+      for (let yy = 0; yy < grainSize && y + yy < height; yy++) {
+        for (let xx = 0; xx < grainSize && x + xx < width; xx++) {
+          const px = x + xx
+          const py = y + yy
+          const i = (py * width + px) * 4
+
+          applyPixelDelta(s.pixels, i, delta)
+        }
+      }
+    }
   }
+
+
+
   s.updatePixels()
 }
 
