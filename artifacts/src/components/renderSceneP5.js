@@ -68,8 +68,6 @@ const applyGrain = (s, props) => {
     }
   }
 
-
-
   s.updatePixels()
 }
 
@@ -88,6 +86,7 @@ export const renderSceneP5 = (s, { width, height }, visual) => {
   s.scale(scale)
 
   for (const node of visual.nodes ?? []) {
+    if (node.enabled === false) continue
     if (node.type === 'background' && node.props.fill) {
       s.noStroke()
       s.fill(node.props.fill)
@@ -104,17 +103,18 @@ export const renderSceneP5 = (s, { width, height }, visual) => {
         fill = 'white'
       } = node.props ?? {}
 
-      // if (kind === 'rect') {
-      //   s.noStroke()
-      //   s.fill(fill)
-      //   s.rect(x, y, width, height)
-      // }
+      if (kind === 'rect') {
+        s.noStroke()
+        s.fill(fill)
+        s.rect(x, y, width, height)
+      }
     }
   }
 
   s.pop()
 
   for (const effect of visual.effects ?? []) {
+    if (effect.enabled === false) continue
     if (effect.type === 'grain') {
       applyGrain(s, effect.props)
     }

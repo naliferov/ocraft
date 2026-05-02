@@ -38,6 +38,7 @@
     },
     {
       "id": "box1",
+      "enabled": false,
       "type": "shape",
       "props": {
         "kind": "rect",

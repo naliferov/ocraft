@@ -12,7 +12,6 @@ const props = defineProps({
 const store = useVisualsStore()
 const save = () => store.save(props.visual.id, props.visual)
 
-const canvas = ref(null)
 const preview = ref(null)
 let ro
 
@@ -60,7 +59,6 @@ onMounted(() => {
         props.visual
       )
     }
-
   })
 
   resizeAndRender()
@@ -68,22 +66,12 @@ onMounted(() => {
   ro.observe(container)
 })
 
-//const p5Container = ref(null)
 let p5Instance = null
 
 onBeforeUnmount(() => {
   ro?.disconnect()
   p5Instance?.remove()
 })
-
-// watch(
-//   () => props.visual,
-//   () => {
-//     //const params = calcRenderParams()
-//     //if (params) render(params)
-//   },
-//   { deep: true }
-// )
 </script>
 
 <template>
