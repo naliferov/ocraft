@@ -35,6 +35,16 @@ const routes = {
     }
   },
 
+  'GET /api/artifacts/:id/script': async (req, res, { id }) => {
+    try {
+      const scriptPath = path.join(ARTIFACTS_DIR, id, 'script.js')
+      const raw = await fs.readFile(scriptPath, 'utf-8')
+      res.writeHead(200, { 'Content-Type': 'text/javascript' }).end(raw)
+    } catch {
+      res.writeHead(404).end('Not found')
+    }
+  },
+
   'POST /api/artifacts/:id': async (req, res, { id }) => {
     const body = await readBody(req)
     const dir = path.join(ARTIFACTS_DIR, id)

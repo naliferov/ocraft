@@ -14,6 +14,17 @@ const save = () => store.save(props.visual.id, props.visual)
 
 const preview = ref(null)
 let ro
+let scriptDraw = null
+
+const loadScript = async () => {
+  const res = await fetch(`/api/artifacts/${encodeURIComponent(props.visual.id)}/script`)
+  const code = await res.text()
+  const blob = new Blob([code], { type: 'application/javascript' })
+  const url = URL.createObjectURL(blob)
+  const mod = await import(/* @vite-ignore */ url)
+  URL.revokeObjectURL(url)
+  scriptDraw = mod.draw ?? null
+}
 
 const backgroundNode = computed(() =>
   props.visual.nodes?.find(n => n.type === 'background') ?? null
@@ -28,11 +39,13 @@ const backgroundFill = computed({
   }
 })
 
-onMounted(() => {
+onMounted(async () => {
   const container = preview.value
   if (!container) return
 
-  console.log('container size: ', container.offsetWidth, container.offsetHeight)
+  if (props.visual.type === 'script') {
+    await loadScript()
+  }
 
   const resizeAndRender = () => {
     p5Instance.resizeCanvas(
@@ -49,15 +62,13 @@ onMounted(() => {
       s.frameRate(30)
     }
     s.draw = () => {
-
-      renderSceneP5(
-        s,
-        {
-          width: s.width,
-          height: s.height
-        },
-        props.visual
-      )
+      if (props.visual.type === 'script') {
+        const vw = props.visual.viewport?.width ?? s.width
+        const vh = props.visual.viewport?.height ?? s.height
+        scriptDraw?.(s, vw, vh)
+      } else {
+        renderSceneP5(s, { width: s.width, height: s.height }, props.visual)
+      }
     }
   })
 
