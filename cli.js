@@ -1,7 +1,7 @@
 import 'dotenv/config'
-import { execute } from './runtime/executor.js'
-import { listExecutions } from './runtime/storage.js'
-import { runScheduler } from './runtime/scheduler.js'
+import { execute } from './backend/executor.js'
+import { listExecutions } from './backend/storage.js'
+import { runScheduler } from './backend/scheduler.js'
 
 const [command, ...args] = process.argv.slice(2)
 

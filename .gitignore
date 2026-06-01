@@ -1,5 +1,5 @@
 node_modules
 .env
-runtime/executions/
-runtime/state/scheduler.json
-runtime/state/entries/
+backend/executions/
+backend/state/scheduler.json
+backend/state/entries/

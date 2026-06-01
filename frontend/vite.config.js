@@ -8,15 +8,12 @@ const backendPlugin = () => {
 
   const start = () => {
     proc?.kill()
-    proc = spawn('node', [path.resolve('server.js')], { stdio: 'inherit' })
+    proc = spawn('node', [path.resolve('../backend/server.js')], { stdio: 'inherit' })
   }
 
   return {
     name: 'backend',
-    buildStart: start,
-    watchChange(id) {
-      if (id.endsWith('server.js')) start()
-    }
+    buildStart: start
   }
 }
 

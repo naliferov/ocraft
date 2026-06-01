@@ -1,7 +1,7 @@
 import http from 'node:http'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { getDirname } from './utils.js'
+import { getDirname } from './lib/path.js'
 
 const currentDir = getDirname(import.meta.url)
 const ARTIFACTS_DIR = path.join(currentDir, 'data/artifacts')
