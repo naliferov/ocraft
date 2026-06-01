@@ -61,9 +61,12 @@ const matchUrl = (method, url) => {
     
     const pattern = routePath.replace(/:\w+/g, '([^/]+)')
     const m = url.match(new RegExp(`^${pattern}$`))
+
     if (m) {
       const paramNames = [...routePath.matchAll(/:(\w+)/g)].map(x => x[1])
-      const params = Object.fromEntries(paramNames.map((name, i) => [name, m[i + 1]]))
+      const params = Object.fromEntries(paramNames.map((name, i) => {
+        return [name, m[i + 1]]
+      }))
       return { handler: routes[key], params }
     }
   }
@@ -71,7 +74,8 @@ const matchUrl = (method, url) => {
 }
 
 const server = http.createServer(async (req, res) => {
-  const route = matchUrl(req.method, req.url)
+  const path = req.url.split('?')[0]
+  const route = matchUrl(req.method, path)
   if (route) {
     await route.handler(req, res, route.params)
     return

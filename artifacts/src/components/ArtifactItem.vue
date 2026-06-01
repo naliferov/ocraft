@@ -1,33 +1,33 @@
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import p5 from 'p5'
 import { NInput, NButton } from 'naive-ui'
-import { useVisualsStore } from '../stores/visuals.js'
+import { useArtifactsStore } from '../stores/artifacts.js'
 import { renderSceneP5 } from './renderSceneP5.js'
 
 const props = defineProps({
-  visual: { type: Object, required: true }
+  artifact: { type: Object, required: true }
 })
 
-const store = useVisualsStore()
-const save = () => store.save(props.visual.id, props.visual)
-
-const preview = ref(null)
+const store = useArtifactsStore()
+const save = () => store.save(props.artifact.id, props.artifact)
+let p5Instance = null
 let ro
-let scriptDraw = null
+const preview = ref(null)
 
 const loadScript = async () => {
-  const res = await fetch(`/api/artifacts/${encodeURIComponent(props.visual.id)}/script`)
+  const res = await fetch(`/api/artifacts/${props.artifact.id}/script`)
+
   const code = await res.text()
   const blob = new Blob([code], { type: 'application/javascript' })
   const url = URL.createObjectURL(blob)
   const mod = await import(/* @vite-ignore */ url)
   URL.revokeObjectURL(url)
-  scriptDraw = mod.draw ?? null
+  mod.default?.()
 }
 
 const backgroundNode = computed(() =>
-  props.visual.nodes?.find(n => n.type === 'background') ?? null
+  props.artifact.nodes?.find(n => n.type === 'background') ?? null
 )
 
 const backgroundFill = computed({
@@ -40,20 +40,13 @@ const backgroundFill = computed({
 })
 
 onMounted(async () => {
+  if (props.artifact.type === 'script') {
+    await loadScript()
+    return
+  }
+
   const container = preview.value
   if (!container) return
-
-  if (props.visual.type === 'script') {
-    await loadScript()
-  }
-
-  const resizeAndRender = () => {
-    p5Instance.resizeCanvas(
-      container.offsetWidth,
-      container.offsetHeight
-    )
-    p5Instance.redraw()
-  }
 
   p5Instance = new p5((s) => {
     s.setup = () => {
@@ -62,22 +55,16 @@ onMounted(async () => {
       s.frameRate(30)
     }
     s.draw = () => {
-      if (props.visual.type === 'script') {
-        const vw = props.visual.viewport?.width ?? s.width
-        const vh = props.visual.viewport?.height ?? s.height
-        scriptDraw?.(s, vw, vh)
-      } else {
-        renderSceneP5(s, { width: s.width, height: s.height }, props.visual)
-      }
+      renderSceneP5(s, { width: s.width, height: s.height }, props.artifact)
     }
   })
-
-  resizeAndRender()
+  const resizeAndRender = () => {
+    p5Instance.resizeCanvas(container.offsetWidth, container.offsetHeight)
+    p5Instance.redraw()
+  }
   ro = new ResizeObserver(resizeAndRender)
   ro.observe(container)
 })
-
-let p5Instance = null
 
 onBeforeUnmount(() => {
   ro?.disconnect()
@@ -88,17 +75,18 @@ onBeforeUnmount(() => {
 <template>
   <div class="wrap">
     <div class="info">
-      <span class="name">{{ visual.name }}</span>
-      <span class="desc">{{ visual.description }}</span>
+      <span class="name">{{ artifact.name }}</span>
+      <span class="desc">{{ artifact.description }}</span>
     </div>
 
     <n-input
+      v-if="artifact.type !== 'script'"
       v-model:value="backgroundFill"
       placeholder="#f2f2fe"
       size="small"
     />
     <n-button size="small" @click="save">Save</n-button>
-    <div ref="preview" class="artifact-container"></div>
+    <div v-if="artifact.type !== 'script'" ref="preview" class="artifact-container"></div>
   </div>
 </template>
 

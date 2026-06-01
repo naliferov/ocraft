@@ -21,9 +21,32 @@ The `vite.config.js` `backendPlugin` automatically spawns `server.js` when Vite 
 
 This is a **visual scene editor** — a Vue 3 + p5.js app for composing and previewing scene-based visuals ("artifacts") stored as JSON.
 
-### Data model (`data/visuals/<id>/state.json`)
+### Data directory (`data/`)
 
-Each visual is a JSON document with:
+```
+data/
+  artifacts/           # one folder per artifact, named "<id> - <slug>/"
+    <id>/
+      state.json       # artifact metadata and scene definition
+      script.js        # present only when type === "script"
+  assets/
+    audio/             # mp3 sound files
+    img/
+      optimized/       # processed images served by the app
+      raw/             # source images (not served)
+    text/              # misc JSON text assets
+  catalogs/
+    backgrounds.json   # catalog of available background presets
+    concepts.json      # catalog of concept definitions
+```
+
+### Artifact state (`data/artifacts/<id>/state.json`)
+
+Each artifact has a `type` field that changes what the editor renders:
+- `"script"` — runs `script.js` via dynamic import; no p5 canvas, no background input shown
+- _(default/scene)_ — p5.js scene with `nodes[]`, `effects[]`, `viewport`, `tempo`, `structure`
+
+Scene artifact fields:
 - `viewport` — logical canvas dimensions (e.g. 160×90 at 16:9)
 - `nodes[]` — scene objects typed as `background`, `shape`, `phrase`, etc., each with `props`, `state`, `events`
 - `effects[]` — post-process passes (e.g. `grain` with `intensity`)
