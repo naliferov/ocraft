@@ -4,9 +4,9 @@ import path from 'node:path'
 import { getDirname } from './lib/path.js'
 
 const currentDir = getDirname(import.meta.url)
-const ARTIFACTS_DIR = path.join(currentDir, 'data/artifacts')
+const NODES_DIR = path.join(currentDir, 'data/nodes')
 
-const artifactPath = (id) => path.join(ARTIFACTS_DIR, id, 'state.json')
+const nodePath = (id) => path.join(NODES_DIR, id, 'state.json')
 
 const readBody = async (req) => {
   const chunks = []
@@ -14,30 +14,37 @@ const readBody = async (req) => {
   return JSON.parse(Buffer.concat(chunks).toString('utf-8'))
 }
 
+const readText = async (req) => {
+  const chunks = []
+  for await (const chunk of req) chunks.push(chunk)
+  return Buffer.concat(chunks).toString('utf-8')
+}
+
 const routes = {
-  'GET /api/artifacts': async (req, res) => {
-    const dirs = await fs.readdir(ARTIFACTS_DIR)
-    const visuals = await Promise.all(
+  'GET /api/nodes': async (req, res) => {
+    const dirs = await fs.readdir(NODES_DIR)
+    const nodes = await Promise.all(
       dirs.map(async (id) => {
-        const raw = await fs.readFile(artifactPath(id), 'utf-8')
-        return { id, ...JSON.parse(raw) }
+        const raw = await fs.readFile(nodePath(id), 'utf-8')
+        const { id: _id, ...data } = JSON.parse(raw)
+        return { id, ...data }
       })
     )
-    res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(visuals))
+    res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(nodes))
   },
 
-  'GET /api/artifacts/:id': async (req, res, { id }) => {
+  'GET /api/nodes/:id': async (req, res, { id }) => {
     try {
-      const raw = await fs.readFile(artifactPath(id), 'utf-8')
+      const raw = await fs.readFile(nodePath(id), 'utf-8')
       res.writeHead(200, { 'Content-Type': 'application/json' }).end(raw)
     } catch {
       res.writeHead(404).end('Not found')
     }
   },
 
-  'GET /api/artifacts/:id/script': async (req, res, { id }) => {
+  'GET /api/nodes/:id/script': async (req, res, { id }) => {
     try {
-      const scriptPath = path.join(ARTIFACTS_DIR, id, 'script.js')
+      const scriptPath = path.join(NODES_DIR, id, 'script.js')
       const raw = await fs.readFile(scriptPath, 'utf-8')
       res.writeHead(200, { 'Content-Type': 'text/javascript' }).end(raw)
     } catch {
@@ -45,11 +52,18 @@ const routes = {
     }
   },
 
-  'POST /api/artifacts/:id': async (req, res, { id }) => {
+  'POST /api/nodes/:id/script': async (req, res, { id }) => {
+    const code = await readText(req)
+    const scriptPath = path.join(NODES_DIR, id, 'script.js')
+    await fs.writeFile(scriptPath, code)
+    res.writeHead(200).end('Saved')
+  },
+
+  'POST /api/nodes/:id': async (req, res, { id }) => {
     const body = await readBody(req)
-    const dir = path.join(ARTIFACTS_DIR, id)
+    const dir = path.join(NODES_DIR, id)
     await fs.mkdir(dir, { recursive: true })
-    await fs.writeFile(artifactPath(id), JSON.stringify(body, null, 2))
+    await fs.writeFile(nodePath(id), JSON.stringify(body, null, 2))
     res.writeHead(200).end('Saved')
   },
 }

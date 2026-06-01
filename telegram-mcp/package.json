@@ -1,0 +1,20 @@
+{
+  "name": "telegram-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Thin MCP server exposing read/search over a Telegram user account via GramJS (MTProto)",
+  "bin": {
+    "telegram-mcp": "server.js"
+  },
+  "scripts": {
+    "login": "node login.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "dotenv": "^16.4.5",
+    "telegram": "^2.26.16",
+    "zod": "^3.23.8"
+  }
+}

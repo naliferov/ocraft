@@ -16,46 +16,46 @@ The `vite.config.js` `backendPlugin` spawns the backend API server (`../backend/
 
 ## Architecture
 
-This is a **visual scene editor** — a Vue 3 + p5.js app for composing and previewing scene-based visuals ("artifacts") stored as JSON. The server and data store live in the backend (`../backend/`); this app is the client and reaches them only over `/api`.
+This is a **visual scene editor** — a Vue 3 + p5.js app for composing and previewing typed nodes stored as JSON. The server and data store live in the backend (`../backend/`); this app is the client and reaches them only over `/api`.
 
 ### Data (owned by the backend)
 
-Artifacts, assets, and catalogs live under `../backend/data/` and are served via the API — see `../backend/CLAUDE.md` (or `../CLAUDE.md`). Each artifact is `../backend/data/artifacts/<id>/state.json`, plus a `script.js` when `type === "script"`.
+Nodes, assets, and catalogs live under `../backend/data/` and are served via the API — see `../backend/CLAUDE.md` (or `../CLAUDE.md`). Each node is `../backend/data/nodes/<id>/state.json`, plus a `script.js` when `type === "script"`.
 
-### Artifact state (`state.json`)
+### Node state (`state.json`)
 
-Each artifact has a `type` field that changes what the editor renders:
-- `"script"` — runs `script.js` via dynamic import (fetched from `GET /api/artifacts/:id/script`); no p5 canvas
-- _(default/scene)_ — p5.js scene with `nodes[]`, `effects[]`, `viewport`, `tempo`, `structure`
+Each node has a `type` field that changes what the editor renders:
+- `"script"` — runs `script.js` via dynamic import (fetched from `GET /api/nodes/:id/script`); no p5 canvas
+- _(default/scene)_ — p5.js scene with `elements[]`, `effects[]`, `viewport`, `tempo`, `structure`
 
-Scene artifact fields:
+Scene node fields:
 - `viewport` — logical canvas dimensions (e.g. 160×90 at 16:9)
-- `nodes[]` — scene objects typed as `background`, `shape`, `phrase`, etc., each with `props`, `state`, `events`
+- `elements[]` — scene objects typed as `background`, `shape`, `phrase`, etc., each with `props`, `state`, `events`
 - `effects[]` — post-process passes (e.g. `grain` with `intensity`)
 - `tempo`, `structure` — music timing metadata (bpm, bars, loop)
 
 ### API (served by `../backend/server.js`)
 
-- `GET /api/artifacts` — list all artifacts (reads every `state.json`)
-- `GET /api/artifacts/:id` — read one artifact
-- `GET /api/artifacts/:id/script` — raw `script.js` for a script artifact
-- `POST /api/artifacts/:id` — overwrite `state.json` for an artifact
+- `GET /api/nodes` — list all nodes (reads every `state.json`)
+- `GET /api/nodes/:id` — read one node
+- `GET /api/nodes/:id/script` — raw `script.js` for a script node
+- `POST /api/nodes/:id` — overwrite `state.json` for a node
 
 ### Frontend (`src/`)
 
-- **`stores/artifacts.js`** — Pinia store; fetches the artifact list via `/api/artifacts`, tracks `activeArtifactId`, exposes `save(id, data)`
+- **`stores/nodes.js`** — Pinia store; fetches the node list via `/api/nodes`, tracks `activeNodeId`, exposes `save(id, data)`
 - **`router.js`** — vue-router routes
-- **`App.vue`** — sidebar list of artifacts + main content area
-- **`components/ArtifactItem.vue`** — renders the active artifact; for scenes mounts a p5 instance and calls `renderSceneP5` on each draw frame; for scripts fetches and imports `script.js`
-- **`components/renderSceneP5.js`** — p5.js renderer: scales/centers viewport into container, draws nodes in order, then applies effects (grain via `loadPixels`/`updatePixels`)
+- **`App.vue`** — sidebar list of nodes + main content area
+- **`components/NodeItem.vue`** — renders the active node; for scenes mounts a p5 instance and calls `renderSceneP5` on each draw frame; for scripts fetches and imports `script.js`
+- **`components/renderSceneP5.js`** — p5.js renderer: scales/centers viewport into container, draws elements in order, then applies effects (grain via `loadPixels`/`updatePixels`)
 - **`components/renderScene.js`** — legacy Canvas 2D renderer (currently unused; p5 renderer is active)
 
 ### Rendering flow
 
-`ArtifactItem` → p5 `draw()` loop → `renderSceneP5(s, {width, height}, artifact)`:
+`NodeItem` → p5 `draw()` loop → `renderSceneP5(s, {width, height}, node)`:
 1. Clear canvas
-2. Compute scale + offset to fit `artifact.viewport` into container (letterbox)
-3. Draw each node by type (`background` → filled rect, `shape/rect` → filled rect)
+2. Compute scale + offset to fit `node.viewport` into container (letterbox)
+3. Draw each element by type (`background` → filled rect, `shape/rect` → filled rect)
 4. Apply effects outside the transform (`grain` → pixel noise)
 
 ### Parent repo

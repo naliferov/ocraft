@@ -16,7 +16,7 @@
     "bars": 4,
     "loop": true
   },
-  "nodes": [
+  "elements": [
     {
       "id": "bg",
       "type": "background",

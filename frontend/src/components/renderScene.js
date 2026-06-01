@@ -11,7 +11,7 @@ export const renderScene = (ctx, { width, height, dpr }, visual) => {
 
   ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * offsetX, dpr * offsetY)
 
-  for (const node of visual.nodes ?? []) {
+  for (const node of visual.elements ?? []) {
     if (node.type === 'background' && node.props.fill) {
       ctx.fillStyle = node.props.fill
       ctx.fillRect(0, 0, vw, vh)

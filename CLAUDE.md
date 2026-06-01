@@ -7,17 +7,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```
 ocraft/
   cli.js            # CLI entry point for the backend (imports backend/*)
-  backend/          # Job scheduler/executor engine + artifact API server + data store
+  backend/          # Job scheduler/executor engine + node API server + data store
   frontend/         # Vue 3 + p5.js visual editor (separate dev server)
+  telegram-mcp/     # Standalone MCP server: read/search a Telegram user account (GramJS/MTProto)
 ```
 
-The two are independent apps. The frontend talks to the backend only over `/api/*` (HTTP, port 3001).
+The backend and frontend are independent apps; the frontend talks to the backend only over `/api/*` (HTTP, port 3001). `telegram-mcp/` is a separate MCP server (registered in `.mcp.json`) unrelated to the scheduler — see its own `README.md`.
 
 ---
 
 ## Backend (`backend/` + `cli.js`)
 
-A lightweight job scheduler and executor plus the artifact API server. No external frameworks — plain Node.js ESM.
+A lightweight job scheduler and executor plus the node API server. No external frameworks — plain Node.js ESM.
 
 ### CLI
 
@@ -51,9 +52,9 @@ Uses `withLock('scheduler', fn)` (`backend/lib/lock.js`) — a PID-file lock tha
 
 **API helpers (`backend/api/`)** — thin wrappers (e.g. `telegram.js` for sending messages).
 
-**Artifact API server (`backend/server.js`)** — minimal Node.js HTTP server on port 3001 (no framework) that reads/writes artifact JSON under `backend/data/artifacts/`. Serves `GET/POST /api/artifacts[/:id]` and `GET /api/artifacts/:id/script`. Auto-spawned by the frontend's Vite dev server; can also be run standalone with `node backend/server.js`.
+**Node API server (`backend/server.js`)** — minimal Node.js HTTP server on port 3001 (no framework) that reads/writes node JSON under `backend/data/nodes/`. Serves `GET/POST /api/nodes[/:id]` and `GET /api/nodes/:id/script`. Auto-spawned by the frontend's Vite dev server; can also be run standalone with `node backend/server.js`.
 
-**Data store (`backend/data/`)** — `artifacts/` (one folder per artifact), `assets/` (img/audio/text), `catalogs/`. Owned by the backend; the frontend reaches it only via `/api`.
+**Data store (`backend/data/`)** — `nodes/` (one folder per node), `assets/` (img/audio/text), `catalogs/`. Owned by the backend; the frontend reaches it only via `/api`.
 
 ---
 

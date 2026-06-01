@@ -85,7 +85,7 @@ export const renderSceneP5 = (s, { width, height }, visual) => {
   s.translate(offsetX, offsetY)
   s.scale(scale)
 
-  for (const node of visual.nodes ?? []) {
+  for (const node of visual.elements ?? []) {
     if (node.enabled === false) continue
     if (node.type === 'background' && node.props.fill) {
       s.noStroke()

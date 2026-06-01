@@ -1,5 +1,5 @@
 {
-  "name": "artifact 001 - silent vinyl",
+  "name": "silent vinyl",
   "description": "",
   "viewport": {
     "width": 160,
@@ -16,7 +16,7 @@
     "bars": 4,
     "loop": true
   },
-  "nodes": [
+  "elements": [
     {
       "id": "bg",
       "type": "background",
