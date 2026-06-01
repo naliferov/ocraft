@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, watch } from 'vue'
+import { watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { NConfigProvider, NLayout, NLayoutSider, NLayoutContent } from 'naive-ui'
 import { useNodesStore } from './stores/nodes.js'
@@ -8,16 +8,6 @@ import NodeItem from './components/NodeItem.vue'
 const store = useNodesStore()
 const router = useRouter()
 const route = useRoute()
-
-onMounted(() => store.load())
-
-watch(() => store.nodes, (list) => {
-  if (!list.length) return
-  if (route.params.id) return
-
-  const firstId = list[0].id
-  router.replace(`/node/${firstId}`)
-})
 
 watch(() => route.params.id, (id) => {
   if (id) store.activeNodeId = id
@@ -38,7 +28,7 @@ const navigate = (id) => router.push(`/node/${id}`)
       </n-layout-sider>
 
       <n-layout-content content-style="height: 100%; overflow: hidden;">
-        <NodeItem v-if="store.activeNode" :key="store.activeNode.id" :node="store.activeNode" />
+        <NodeItem v-if="route.params.id && store.activeNode" :key="store.activeNode.id" :node="store.activeNode" />
       </n-layout-content>
     </n-layout>
   </n-config-provider>
