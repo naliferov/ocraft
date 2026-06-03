@@ -33,14 +33,30 @@ Address a chat by `@username`, numeric id, or exact title.
    cp .env.example .env
    ```
 
-3. **Log in once** (interactive — needs your phone number, the login code Telegram sends you, and your
-   2FA password if you have one). This writes `TG_SESSION` into `.env`.
+3. **Log in once.** This writes `TG_SESSION` into `.env`. Two options:
+
+   **a) Phone + code** — needs your phone number, the login code Telegram sends (delivered **in-app** in
+   the "Telegram" service chat, not by SMS, if you have another active session), and your 2FA password if set.
    ```bash
    npm run login
    ```
 
+   **b) QR code** (like Telegram Web/Desktop) — renders a QR in the terminal; scan it from your phone:
+   **Telegram → Settings → Devices → Link Desktop Device**. No login code needed.
+   ```bash
+   npm run login:qr
+   ```
+
 4. **Registration** — already wired into the repo's `.mcp.json` as `telegram`.
    After logging in (step 3), restart Claude Code (or run `/mcp`) to confirm it connects.
+
+## Logging out
+
+Terminate the session on Telegram's side and remove `TG_SESSION` from `.env`:
+```bash
+npm run logout
+```
+After this the MCP server won't connect until you `npm run login` again.
 
 ## Notes
 

@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import NodeItem from './components/NodeItem.vue'
+import NodeItem from './components/NodeItem/NodeItem.vue'
 import { useNodesStore } from './stores/nodes.js'
 
 export const router = createRouter({

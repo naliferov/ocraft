@@ -3,7 +3,7 @@ import { watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { NConfigProvider, NLayout, NLayoutSider, NLayoutContent } from 'naive-ui'
 import { useNodesStore } from './stores/nodes.js'
-import NodeItem from './components/NodeItem.vue'
+import NodeItem from './components/NodeItem/NodeItem.vue'
 
 const store = useNodesStore()
 const router = useRouter()

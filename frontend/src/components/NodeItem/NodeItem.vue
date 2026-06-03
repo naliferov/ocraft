@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { NSelect } from 'naive-ui'
 import NodeSceneEditor from './NodeSceneEditor.vue'
 import NodeScriptEditor from './NodeScriptEditor.vue'
+import NodeStreamEditor from './NodeStreamEditor.vue'
 
 const props = defineProps({
   node: { type: Object, required: true }
@@ -11,6 +12,7 @@ const props = defineProps({
 const typeOptions = [
   { label: 'scene', value: 'scene' },
   { label: 'script', value: 'script' },
+  { label: 'stream', value: 'stream' },
 ]
 
 const nodeType = computed({
@@ -33,6 +35,7 @@ const nodeType = computed({
     </div>
 
     <NodeScriptEditor v-if="nodeType === 'script'" :node="node" />
+    <NodeStreamEditor v-else-if="nodeType === 'stream'" :node="node" />
     <NodeSceneEditor v-else :node="node" />
   </div>
 </template>
