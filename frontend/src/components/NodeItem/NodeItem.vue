@@ -4,6 +4,7 @@ import { NSelect } from 'naive-ui'
 import NodeSceneEditor from './NodeSceneEditor.vue'
 import NodeScriptEditor from './NodeScriptEditor.vue'
 import NodeStreamEditor from './NodeStreamEditor.vue'
+import NodeCategoryEditor from './NodeCategoryEditor.vue'
 
 const props = defineProps({
   node: { type: Object, required: true }
@@ -13,6 +14,7 @@ const typeOptions = [
   { label: 'scene', value: 'scene' },
   { label: 'script', value: 'script' },
   { label: 'stream', value: 'stream' },
+  { label: 'category', value: 'category' },
 ]
 
 const nodeType = computed({
@@ -30,12 +32,13 @@ const nodeType = computed({
         v-model:value="nodeType"
         :options="typeOptions"
         size="small"
-        style="width: 88px; margin-left: auto; flex-shrink: 0;"
+        style="width: 110px; margin-left: auto; flex-shrink: 0;"
       />
     </div>
 
     <NodeScriptEditor v-if="nodeType === 'script'" :node="node" />
     <NodeStreamEditor v-else-if="nodeType === 'stream'" :node="node" />
+    <NodeCategoryEditor v-else-if="nodeType === 'category'" :node="node" />
     <NodeSceneEditor v-else :node="node" />
   </div>
 </template>

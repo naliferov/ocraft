@@ -74,8 +74,7 @@ const applyGrain = (s, props) => {
 export const renderSceneP5 = (s, { width, height }, visual) => {
   s.clear()
 
-  const vw = visual.viewport.width
-  const vh = visual.viewport.height
+  const { width: vw, height: vh } = visual.viewport ?? { width: 160, height: 90 }
   const scale = Math.min(width / vw, height / vh)
 
   const offsetX = (width - vw * scale) / 2

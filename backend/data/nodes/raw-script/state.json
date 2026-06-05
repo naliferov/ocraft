@@ -1,9 +1,5 @@
 {
-"name": "raw script",
-  "description": "",
+  "name": "raw script",
   "type": "script",
-  "viewport": {
-    "width": 160,
-    "height": 90
-  }
+  "parentId": "library"
 }
