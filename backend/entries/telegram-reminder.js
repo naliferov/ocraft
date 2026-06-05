@@ -1,4 +1,4 @@
-import { sendTelegramMessage } from '../api/telegram.js'
+import { sendTelegramMessage } from '../api/telegramBot.js'
 
 export const run = async (ctx) => {
   const token = ctx.env.TELEGRAM_BOT_TOKEN

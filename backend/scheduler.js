@@ -4,7 +4,6 @@ import { log } from './lib/log.js'
 import { withLock } from './lib/lock.js'
 
 const minutes = m => m * 60 * 1000
-const hours = h => h * 60 * 60 * 1000
 const match = (schedule, date) => {
   if (schedule.hour !== '*' && schedule.hour !== date.getHours()) return false
   if (schedule.minute !== '*' && schedule.minute !== date.getMinutes()) return false
@@ -22,13 +21,6 @@ const jobs = [
     entry: 'test',
     args: ['argument-of-test-function'],
     intervalMs: minutes(1)
-  },
-  {
-    id: 'reminder-movement',
-    entry: 'telegram-reminder',
-    args: ['Time to move'],
-    intervalMs: hours(2),
-    activeHours: { from: 8, to: 21 }
   }
 ]
 
