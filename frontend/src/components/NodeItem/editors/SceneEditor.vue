@@ -1,9 +1,10 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import p5 from 'p5'
-import { renderSceneP5 } from '../../lib/renderSceneP5.js'
-import { useNodesStore } from '../../stores/nodes.js'
-import { useTimeline } from '../../composables/useTimeline.js'
+import { renderSceneP5 } from '../../../lib/renderSceneP5.js'
+import { useNodesStore } from '../../../stores/nodes.js'
+import { useTimeline } from '../../../composables/useTimeline.js'
+import Stage from './Stage.vue'
 
 const props = defineProps({
   node: { type: Object, required: true }
@@ -51,21 +52,18 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="transport">
-    <button class="btn" @click="isPlaying ? pause() : play()">{{ isPlaying ? '⏸' : '▶' }}</button>
-    <button class="btn" @click="stop">⏹</button>
-    <span class="meta">{{ bpm }} BPM · {{ bars }} bars</span>
-    <button class="btn save" @click="store.save(node.id, node)">Save</button>
-  </div>
-
-  <!-- stage fills all space left over by the transport + timeline; the canvas
-       letterboxes into it as the largest centered 16:9 box -->
-  <div class="stage">
+  <Stage>
+    <template #toolbar>
+      <button class="btn" @click="isPlaying ? pause() : play()">{{ isPlaying ? '⏸' : '▶' }}</button>
+      <button class="btn" @click="stop">⏹</button>
+      <span class="meta">{{ bpm }} BPM · {{ bars }} bars</span>
+      <button class="btn save" @click="store.save(node.id, node)">Save</button>
+    </template>
+    <!-- the canvas letterboxes into the stage as the largest centered 16:9 box -->
     <div ref="preview" class="canvas"></div>
-  </div>
+  </Stage>
 
   <div class="timeline">
-    <div v-if="!tracks.length" class="no-tracks">no tracks yet</div>
     <div v-for="t in tracks" :key="t.name" class="track">
       <div class="track-label">{{ t.name }}</div>
       <div class="track-steps">
@@ -86,57 +84,10 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.transport {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.btn {
-  background: #2a2a2a;
-  border: 1px solid #3a3a3a;
-  color: #ccc;
-  padding: 3px 10px;
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 13px;
-  line-height: 1.6;
-}
-
-.btn:hover { background: #3a3a3a; }
-.btn.save { margin-left: auto; }
-
-.meta {
-  font-size: 12px;
-  opacity: 0.5;
-}
-
-.stage {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-}
-
-.canvas {
-  height: 100%;
-  max-width: 100%;
-  aspect-ratio: 16 / 9;
-  margin: auto;
-  background: #1a1a1a;
-  overflow: hidden;
-}
-
 .timeline {
   flex: 0 1 auto;
   overflow-y: auto;
   min-height: 0;
-}
-
-.no-tracks {
-  font-size: 11px;
-  color: #444;
-  padding: 8px 0 0 80px;
 }
 
 .track {

@@ -10,9 +10,30 @@ ocraft/
   backend/          # Job scheduler/executor engine + node API server + data store
   frontend/         # Vue 3 + p5.js visual editor (separate dev server)
   telegram-mcp/     # Standalone MCP server: read/search a Telegram user account (GramJS/MTProto)
+  IDEAS.md          # Roadmap / parking lot for future work — read when planning ahead
 ```
 
 The backend and frontend are independent apps; the frontend talks to the backend only over `/api/*` (HTTP, port 3001). `telegram-mcp/` is a separate MCP server (registered in `.mcp.json`) unrelated to the scheduler — see its own `README.md`.
+
+For future direction (planned features, infrastructure ideas, learning goals), see `IDEAS.md` — a parking lot, not a spec; confirm before building from it.
+
+## Life-management vision (direction, not yet built)
+
+Beyond dev chores, the intent is to grow this stack into a **personal life-management system**, with **ThinkTank** (`../ThinkTank/`, the Markdown/Obsidian knowledge base) as the hub and source of truth for organizing daily life — eat, sleep, work, and the rest. ocraft is the automation layer: the scheduler + entries decide *when/what*, the Telegram MCP/bot is the input/output channel, and Claude supplies the judgment/language step (turning raw inputs — chats, repos, photos — into summaries and decisions). ThinkTank holds the durable memory: plans, daily notes, logs, reviews. This is a direction, not a spec — confirm before building, and park concrete feature ideas in `IDEAS.md`.
+
+## Transcribing audio (whisper.cpp is already installed)
+
+For transcribing Telegram voice notes (e.g. download via `telegram-mcp`, write transcript to a `.txt`), use the **whisper.cpp** install that's already on this machine — do NOT reinstall or hunt for `whisper` / `main` / `~/.cache/whisper` (those don't exist here):
+- Binary: **`whisper-cli`** at `/opt/homebrew/bin/whisper-cli` (Homebrew `whisper-cpp`).
+- Model: `~/.cache/whisper-cpp/ggml-large-v3-turbo-q5_0.bin` (multilingual; handles Russian/Ukrainian well).
+- Telegram voice notes are Opus `.ogg`; `whisper-cli` needs 16 kHz mono WAV, so convert with `ffmpeg` first.
+
+```bash
+ffmpeg -y -i in.ogg -ar 16000 -ac 1 -c:a pcm_s16le out.wav
+whisper-cli -m ~/.cache/whisper-cpp/ggml-large-v3-turbo-q5_0.bin -f out.wav -l ru -nt -np > out.txt
+```
+
+(`-l` sets language, `-nt` drops timestamps, `-np` suppresses progress so stdout is clean transcript. Whisper may emit a short repeated phrase on trailing silence — harmless, trim if needed.)
 
 ---
 

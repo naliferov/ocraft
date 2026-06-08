@@ -1,0 +1,6 @@
+node_modules/
+.env
+
+# service-account key — never commit
+projectrepl-*.json
+*.service-account.json

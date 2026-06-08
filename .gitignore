@@ -3,3 +3,8 @@ node_modules
 backend/executions/
 backend/state/scheduler.json
 backend/state/entries/
+backend/state/procs/
+backend/*.lock
+
+# oh-my-claudecode session state (created wherever OMC runs, at any depth)
+.omc/

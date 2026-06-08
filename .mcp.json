@@ -2,7 +2,12 @@
   "mcpServers": {
     "telegram": {
       "command": "node",
-      "args": ["telegram-mcp/server.js"],
+      "args": ["mcp-servers/telegram-mcp/server.js"],
+      "cwd": "/Users/varcraft/projects/ocraft"
+    },
+    "gcal": {
+      "command": "node",
+      "args": ["mcp-servers/gcal-mcp/server.js"],
       "cwd": "/Users/varcraft/projects/ocraft"
     }
   }

@@ -49,22 +49,6 @@
       }
     }
   ],
-  "tracks": [
-    {
-      "name": "bass",
-      "props": {
-        "note": "C3"
-      },
-      "events": [0, 16, 32, 48]
-    },
-    {
-      "name": "lead",
-      "props": {
-        "note": "G4"
-      },
-      "events": [8, 24, 40, 56]
-    }
-  ],
   "effects": [
     {
       "name": "grain",

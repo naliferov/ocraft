@@ -1,0 +1,19 @@
+{
+  "name": "gcal-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Thin MCP server exposing read access to Google Calendar via the Google Calendar API (service account)",
+  "bin": {
+    "gcal-mcp": "server.js"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "dotenv": "^16.4.5",
+    "googleapis": "^173.0.0",
+    "zod": "^3.23.8"
+  }
+}

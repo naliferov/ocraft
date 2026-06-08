@@ -1,26 +1,32 @@
 <script setup>
 import { computed } from 'vue'
 import { NSelect } from 'naive-ui'
-import NodeSceneEditor from './NodeSceneEditor.vue'
-import NodeScriptEditor from './NodeScriptEditor.vue'
-import NodeStreamEditor from './NodeStreamEditor.vue'
-import NodeCategoryEditor from './NodeCategoryEditor.vue'
+import SceneEditor from './editors/SceneEditor.vue'
+import ScriptEditor from './editors/ScriptEditor.vue'
+import StreamEditor from './editors/StreamEditor.vue'
+import CategoryEditor from './editors/CategoryEditor.vue'
 
 const props = defineProps({
   node: { type: Object, required: true }
 })
 
-const typeOptions = [
-  { label: 'scene', value: 'scene' },
-  { label: 'script', value: 'script' },
-  { label: 'stream', value: 'stream' },
-  { label: 'category', value: 'category' },
-]
+// Registry of node type -> editor: the single source of truth for both the type
+// picker and which component renders. Adding a node type = one entry here.
+const EDITORS = {
+  scene: { label: 'scene', component: SceneEditor },
+  script: { label: 'script', component: ScriptEditor },
+  stream: { label: 'stream', component: StreamEditor },
+  category: { label: 'category', component: CategoryEditor },
+}
+
+const typeOptions = Object.entries(EDITORS).map(([value, { label }]) => ({ label, value }))
 
 const nodeType = computed({
   get: () => props.node.type ?? 'scene',
   set: (val) => { props.node.type = val === 'scene' ? undefined : val }
 })
+
+const editor = computed(() => (EDITORS[nodeType.value] ?? EDITORS.scene).component)
 </script>
 
 <template>
@@ -36,10 +42,7 @@ const nodeType = computed({
       />
     </div>
 
-    <NodeScriptEditor v-if="nodeType === 'script'" :node="node" />
-    <NodeStreamEditor v-else-if="nodeType === 'stream'" :node="node" />
-    <NodeCategoryEditor v-else-if="nodeType === 'category'" :node="node" />
-    <NodeSceneEditor v-else :node="node" />
+    <component :is="editor" :node="node" />
   </div>
 </template>
 

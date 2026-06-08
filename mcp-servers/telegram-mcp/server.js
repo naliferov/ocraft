@@ -171,6 +171,38 @@ server.registerTool(
 )
 
 server.registerTool(
+  'tg_download_media',
+  {
+    title: 'Download media from messages to local files',
+    description: 'Download photo/document media from one or more messages in a chat to local image files, and return the saved file paths (so the images can be opened/viewed). Pass the message ids whose "media" was non-null in tg_read_messages / tg_search.',
+    inputSchema: {
+      chat: z.string().describe('@username, numeric id, or exact title of the chat'),
+      ids: z.array(z.number().int()).min(1).max(20).describe('Message ids to download media from'),
+      outDir: z.string().optional().describe('Optional output directory (defaults to telegram-mcp/downloads)'),
+    },
+  },
+  async ({ chat, ids, outDir }) => {
+    try {
+      const entity = await resolveEntity(chat)
+      const msgs = await client.getMessages(entity, { ids })
+      const dir = outDir || path.join(import.meta.dirname, 'downloads')
+      fs.mkdirSync(dir, { recursive: true })
+      const results = []
+      for (const m of msgs) {
+        if (!m || !m.media) { results.push({ id: m?.id ?? null, saved: false, reason: 'no media on this message' }); continue }
+        const buf = await client.downloadMedia(m, {})
+        if (!buf || !buf.length) { results.push({ id: m.id, saved: false, reason: 'empty download' }); continue }
+        const ext = m.photo ? 'jpg' : (m.document?.mimeType?.split('/')[1] || 'bin')
+        const file = path.join(dir, `media-${m.id}.${ext}`)
+        fs.writeFileSync(file, buf)
+        results.push({ id: m.id, saved: true, path: file, bytes: buf.length, type: m.media.className })
+      }
+      return ok(results)
+    } catch (e) { return fail(e?.message ?? e) }
+  }
+)
+
+server.registerTool(
   'tg_send_message',
   {
     title: 'Send a message to a chat',
