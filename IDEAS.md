@@ -17,9 +17,10 @@ become concrete, code-relevant work.
   state, or receive commands from a backend service). Explore how this could
   connect to the existing ocraft backend/scheduler.
 
-- **Stream-type editor on the backend** — develop the editor / tooling for the
-  `stream` node type on the backend side (the stream node type was recently
-  added). Flesh out how stream nodes are created, configured, and run.
+- **Backend run model for `stream` nodes** — the frontend `StreamEditor` and a
+  `sample-stream` node now exist, but the backend has no notion of how a stream
+  node actually *runs* (it's just stored JSON like any other node). Define how
+  stream nodes are configured and executed on the backend side.
 
 - **Scripts calling other scripts by name** — let every script in the editor
   invoke another script by its name (composition / reuse between nodes). Open
@@ -27,15 +28,23 @@ become concrete, code-relevant work.
   discovery becomes organic once the node ("artifact") list is **hierarchical**
   — the tree structure itself acts as the namespace/registry, so a script can
   reference siblings/children by path-like names instead of needing a separate
-  lookup mechanism.
+  lookup mechanism. (The tree foundation — `parentId` + the `category` type —
+  has since shipped, so this is now unblocked.)
 
 - **CRUD nodes from the frontend + nested nodes** — add full create/read/update/
   delete for nodes directly in the frontend editor. A node should be able to
   contain other nodes (nesting), which gives the hierarchical tree above. Idea:
   introduce a `category` node type that acts like a directory — its job is to
   hold child nodes rather than run a script. This is the structural foundation
-  the script discovery idea depends on. (Nesting + the `category` type are now
-  built; the create/update/delete-from-UI part is still open.)
+  the script discovery idea depends on. (Nesting + the `category` type are
+  built, and `POST /api/nodes/:id` already upserts a node on the backend; the
+  remaining gaps are a DELETE endpoint and wiring create/update/delete into the
+  editor UI.)
+
+- **Node / script versioning (version-on-save)** — saving a node script
+  overwrites it today. Instead, each save could write a new version (keep
+  history, allow diff/rollback) rather than clobbering the previous one. (From
+  the old Varcraft notes — "need fx versioning, i.e. a new save.")
 
 - **Chat node type ("conversation with cloud code")** — a new node type with a
   chat UI (message thread + input pinned at bottom, like web Claude). Messages
@@ -43,30 +52,97 @@ become concrete, code-relevant work.
   the "brain" — start as an echo stub, later swap to the Claude API or the cloud
   WS exchange. Same node-type pattern as `category`/`stream`.
 
+- **Daily briefing** — the inputs for a single morning briefing now all exist
+  (telegram + gcal + gmail MCPs). Fold unread email + today's calendar +
+  overnight Telegram into one summary pushed to Telegram. Open question mirrors
+  the [[thinktank-mcp]] note: a headless scheduler entry can't call MCP tools,
+  so this likely lives in the judgment step (the [[chat-node-type]] brain /
+  cloud code) rather than a plain entry — and wants a durable home for the
+  result.
+
+- **`yo` as a node scripting medium** — `js-engine/` already holds `yo`, a tiny
+  async-first toy interpreter (lexer -> parser -> evaluator, `@`-keyword
+  syntax). It could grow into an embeddable, sandboxed scripting medium for
+  nodes (a safer alternative to raw-JS `script` nodes), or a symbolic medium for
+  the generative-art experiments below.
+
+- **Sandboxed execution with resource limits** — node/entry scripts currently
+  run with full Node access. Run them in an isolated environment (container or
+  VM) with disk / memory / CPU caps, so an artifact can't take down the host.
+  Pairs with the `yo` sandbox idea above, and the DO droplet is a natural place
+  to run isolated workers. (From the old Varcraft notes — the original vision
+  already assumed containerised, resource-limited module execution.)
+
+- **Re-enable the `stream` node type** — the `stream` node is temporarily
+  **hidden from the type picker** (`hidden: true` on its entry in `NodeItem.vue`'s
+  `EDITORS` registry) until it does something real. Today it's just a black
+  preview canvas (`StreamEditor.vue`) with **no backend run model** — see
+  IDEAS-PLANS "Backend run model for `stream` nodes" for what it needs (a `run`
+  block + an executor path). The existing `sample-stream` node (5) still renders;
+  new ones just can't be created from the UI. Flip the flag to re-enable once
+  streams actually run.
+
 ## Infrastructure
 
-- **Process control / supervisor** — a single mechanism to start/stop/restart/
-  status/log all the moving processes as one unit: backend API server, frontend
-  dev server, the scheduler, and the MCP servers. Today nothing owns their
-  lifecycle (Vite auto-spawns the backend; MCP servers are launched by the MCP
-  host from `.mcp.json`). Forks to decide: custom plain-ESM `supervisor.js`
-  (manifest of processes like `scheduler.js`'s `jobs[]`, reusing `withLock` +
-  the `state/` store) vs. off-the-shelf (Procfile/overmind, pm2, docker-compose).
-  Note: stdio MCP servers can only be supervised standalone if moved to
+- **Process control / supervisor — extend coverage** — `backend/procManager.js`
+  now exists (the custom plain-ESM fork was chosen: per-proc config files like
+  `scheduler.js`'s `jobs[]`, reusing `withLock` + the `state/` store, with
+  rotating logs). But it currently supervises only two procs (`frontend`,
+  `ticker`). Bring the rest under the one start/stop/restart/status/log unit:
+  the scheduler, the backend API server, and the MCP servers. Caveat still
+  stands — stdio MCP servers can only be supervised standalone if moved to
   HTTP/SSE transport.
+
+- **Process-management UI + live resource monitoring** — `procManager.js` is
+  backend-only; there's no way to start/stop/restart procs or watch them from
+  the editor. Add a frontend page that lists procs with their status, tails
+  their logs, and shows live RAM / CPU usage per proc. (From the old Varcraft
+  notes — "a page for managing app processes... and query RAM and CPU.")
 
 - **Cloud WebSocket exchange (Digital Ocean)** — a hosted relay/broker that
   exchanges WS messages between the backend, the editor, and future clients.
   This is the "cloud" the [[flutter-cloud-mobile-control]] idea needs — the hub
   that lets cloud code drive a mobile app. Open questions: pub/sub topics vs.
   direct routing, auth, and whether the local backend is the origin or just
-  another client of the exchange.
+  another client of the exchange. Infra now has a home: a DigitalOcean droplet
+  (fra1) with a reserved IP is a ready deploy target, and the DigitalOcean MCP
+  is wired up to provision/operate it.
 
-- **Digital Ocean MCP** — an MCP server for managing Digital Ocean (droplets,
-  apps, databases, networking) so Claude can provision and operate the cloud
-  infrastructure directly. Pairs naturally with the [[cloud-websocket-exchange]]
-  idea — the hosted relay would live on DO, and this MCP would be how it gets
-  stood up and managed.
+- **Integrate `stream.x8.deno.net` (the live WS exchange) into ocraft** — the
+  cloud WS relay from [[cloud-websocket-exchange]] now *exists* as a deployed
+  endpoint: `wss://stream.x8.deno.net/ws` (on **Deno Deploy**, not the DO droplet
+  that item assumed — so revisit which is the real home). Next step is wiring it
+  into the stack: the local backend connects as a **client** and publishes
+  node / proc / execution events; the editor **subscribes** for live updates
+  (replacing the poll-based proc UI and chat-node streaming); future clients
+  (the Flutter/mobile idea) join the same hub. Open before that: the message
+  protocol (pub/sub topics vs. direct addressing) and auth. Already have a
+  throwaway tester at `/ws` (`WsTester.vue`) and a `test-websocket-script` node
+  for poking the endpoint.
+
+- **More MCP servers to build** — beyond telegram + gcal + gmail, the
+  life-management loop still has no _memory organ_ and no _hands on its own
+  machinery_:
+
+  - **ThinkTank MCP** — search across _all_ vault notes and modify them
+    (append to the daily note, create/link, resolve `[[wikilinks]]`, read
+    backlinks). Note the real driver: an _interactive_ Claude Code session
+    already has Read/Grep/Edit over the markdown for free — so this MCP exists
+    for **ocraft itself** (the headless scheduler + the [[chat-node-type]]
+    brain) to reach the vault programmatically, since it can't borrow Claude
+    Code's filesystem tools. This is the "remember" step every other MCP's
+    summaries need a durable home in.
+
+  - **ocraft self-MCP** — expose the scheduler/nodes/procManager as tools
+    (`list_jobs`, `run_entry`, `proc_status`, `tail_execution_log`,
+    `create_node`) so Claude can _operate_ the system, not just edit its files.
+    This is the [[chat-node-type]] "conversation with cloud code" made real.
+
+  - **Music** — _probably not worth a dedicated MCP._ For playback control the
+    claude-in-chrome extension already drives the Spotify/Apple Music web
+    player. An API MCP would only pay off for the data side (listening history,
+    building playlists as data) — a weaker need. Park it; revisit if the
+    history/logging use case becomes real.
 
 ## Generative Art
 

@@ -25,6 +25,7 @@ const navigate = (id) => router.push(`/node/${id}`)
           :nodes="store.tree"
           :active-id="store.activeNodeId"
           @select="navigate"
+          @toggle="store.toggleCollapsed"
         />
       </n-layout-sider>
 

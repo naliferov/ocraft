@@ -5,8 +5,38 @@ import { getDirname } from './lib/path.js'
 
 const currentDir = getDirname(import.meta.url)
 const NODES_DIR = path.join(currentDir, 'data/nodes')
+const ASSETS_DIR = path.join(currentDir, 'data/assets')
 
 const nodePath = (id) => path.join(NODES_DIR, id, 'state.json')
+
+// Static asset serving (GET /api/assets/<relpath>). Used by the scene renderer to
+// load clipart SVGs from data/assets/. Read-only; guarded against path traversal.
+const ASSET_CONTENT_TYPES = {
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.txt': 'text/plain; charset=utf-8',
+  '.json': 'application/json',
+}
+
+const serveAsset = async (res, relPath) => {
+  // Resolve under ASSETS_DIR and reject anything that escapes it (../ traversal).
+  const full = path.resolve(ASSETS_DIR, decodeURIComponent(relPath))
+  if (full !== ASSETS_DIR && !full.startsWith(ASSETS_DIR + path.sep)) {
+    res.writeHead(403).end('Forbidden')
+    return
+  }
+  try {
+    const data = await fs.readFile(full)
+    const type = ASSET_CONTENT_TYPES[path.extname(full).toLowerCase()] ?? 'application/octet-stream'
+    res.writeHead(200, { 'Content-Type': type }).end(data)
+  } catch {
+    res.writeHead(404).end('Not found')
+  }
+}
 
 const readBody = async (req) => {
   const chunks = []
@@ -59,6 +89,30 @@ const routes = {
     res.writeHead(200).end('Saved')
   },
 
+  // Compile an isWasm node's AssemblyScript source (script.js) to wasm on demand.
+  // The frontend fetches this, instantiates it, and calls an export. asc is heavy,
+  // so it's lazy-imported — the server pays nothing until wasm is requested.
+  // Compile errors return 400 + the asc diagnostics so the editor can show them.
+  'GET /api/nodes/:id/wasm': async (req, res, { id }) => {
+    let source
+    try {
+      source = await fs.readFile(path.join(NODES_DIR, id, 'script.js'), 'utf-8')
+    } catch {
+      res.writeHead(404).end('Not found')
+      return
+    }
+    const { default: asc } = await import('assemblyscript/asc')
+    const { error, stderr, binary } = await asc.compileString(source, {
+      optimizeLevel: 3,
+      runtime: 'stub',
+    })
+    if (error || !binary) {
+      res.writeHead(400, { 'Content-Type': 'text/plain' }).end(stderr?.toString() || String(error))
+      return
+    }
+    res.writeHead(200, { 'Content-Type': 'application/wasm' }).end(Buffer.from(binary))
+  },
+
   'POST /api/nodes/:id': async (req, res, { id }) => {
     const body = await readBody(req)
     const dir = path.join(NODES_DIR, id)
@@ -87,8 +141,16 @@ const matchUrl = (method, url) => {
   return null
 }
 
+const ASSETS_PREFIX = '/api/assets/'
+
 const server = http.createServer(async (req, res) => {
   const path = req.url.split('?')[0]
+  // Asset files live under a nested path, which the :param matcher (which stops at
+  // '/') can't capture — handle the prefix directly before the route table.
+  if (req.method === 'GET' && path.startsWith(ASSETS_PREFIX)) {
+    await serveAsset(res, path.slice(ASSETS_PREFIX.length))
+    return
+  }
   const route = matchUrl(req.method, path)
   if (route) {
     await route.handler(req, res, route.params)
@@ -97,6 +159,7 @@ const server = http.createServer(async (req, res) => {
   res.writeHead(404).end('Not found')
 })
 
-server.listen(3001, () => {
-  console.log('API server running on port 3001')
+const PORT = process.env.PORT || 3001
+server.listen(PORT, () => {
+  console.log(`API server running on port ${PORT}`)
 })

@@ -1,16 +1,13 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import p5 from 'p5'
 import { renderSceneP5 } from '../../../lib/renderSceneP5.js'
-import { useNodesStore } from '../../../stores/nodes.js'
 import { useTimeline } from '../../../composables/useTimeline.js'
 import Stage from './Stage.vue'
 
 const props = defineProps({
   node: { type: Object, required: true }
 })
-
-const store = useNodesStore()
 
 const {
   isPlaying, playheadProgress,
@@ -20,6 +17,10 @@ const {
 
 const isStepActive = (track, s) =>
   Array.isArray(track.events) && track.events.includes(s)
+
+// Nodes can opt out of the visual stage (e.g. an audio-only track) with
+// `stage: false`; then we show only the transport + timeline and never mount p5.
+const showStage = computed(() => props.node.stage !== false)
 
 // p5 scene preview
 const preview = ref(null)
@@ -33,7 +34,7 @@ onMounted(() => {
     s.setup = () => {
       s.createCanvas(container.offsetWidth, container.offsetHeight).parent(container)
       s.rectMode(s.CORNER)
-      s.frameRate(30)
+      s.frameRate(props.node.frameRate ?? 24)
     }
     s.draw = () => renderSceneP5(s, { width: s.width, height: s.height }, props.node)
   })
@@ -52,15 +53,14 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <Stage>
+  <Stage :canvas="showStage">
     <template #toolbar>
       <button class="btn" @click="isPlaying ? pause() : play()">{{ isPlaying ? '⏸' : '▶' }}</button>
       <button class="btn" @click="stop">⏹</button>
       <span class="meta">{{ bpm }} BPM · {{ bars }} bars</span>
-      <button class="btn save" @click="store.save(node.id, node)">Save</button>
     </template>
     <!-- the canvas letterboxes into the stage as the largest centered 16:9 box -->
-    <div ref="preview" class="canvas"></div>
+    <div v-if="showStage" ref="preview" class="canvas"></div>
   </Stage>
 
   <div class="timeline">

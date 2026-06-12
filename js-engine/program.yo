@@ -1,0 +1,7 @@
+onePlusOne = @a -> {
+    sum = 1 + 1
+    @r sum
+}
+
+result = @w onePlusOne()
+@l(result)

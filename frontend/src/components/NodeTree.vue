@@ -1,6 +1,4 @@
 <script setup>
-import { ref } from 'vue'
-
 // Recursive sidebar tree. Renders a list of nodes (each carrying a `children`
 // array built by the store) and recurses into NodeTree for nested levels.
 const props = defineProps({
@@ -9,10 +7,13 @@ const props = defineProps({
   depth: { type: Number, default: 0 },
 })
 
-const emit = defineEmits(['select'])
+const emit = defineEmits(['select', 'toggle'])
 
-const collapsed = ref({})
-const toggle = (id) => { collapsed.value[id] = !collapsed.value[id] }
+// Collapse state is the node's own `collapsed` flag (from state.json). Toggling
+// is emitted up to the store, which flips the flag and persists it, so the choice
+// survives reloads; the tree re-renders reactively once the flag changes.
+const isCollapsed = (n) => !!n.collapsed
+const toggle = (n) => emit('toggle', n.id)
 const isCategory = (n) => n.type === 'category'
 </script>
 
@@ -27,9 +28,9 @@ const isCategory = (n) => n.type === 'category'
         <svg
           v-if="n.children.length"
           class="caret"
-          :class="{ 'caret--open': !collapsed[n.id] }"
+          :class="{ 'caret--open': !isCollapsed(n) }"
           viewBox="0 0 24 24"
-          @click.stop="toggle(n.id)"
+          @click.stop="toggle(n)"
         >
           <path
             d="M9 6l6 6-6 6"
@@ -49,11 +50,12 @@ const isCategory = (n) => n.type === 'category'
       </div>
 
       <NodeTree
-        v-if="n.children.length && !collapsed[n.id]"
+        v-if="n.children.length && !isCollapsed(n)"
         :nodes="n.children"
         :active-id="activeId"
         :depth="depth + 1"
         @select="emit('select', $event)"
+        @toggle="emit('toggle', $event)"
       />
     </template>
   </div>

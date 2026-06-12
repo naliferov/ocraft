@@ -1,15 +1,10 @@
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { useNodesStore } from '../../../stores/nodes.js'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import Stage from './Stage.vue'
 
-const props = defineProps({
+defineProps({
   node: { type: Object, required: true }
 })
-
-const store = useNodesStore()
-
-const stream = computed(() => props.node.stream ?? { source: '' })
 
 // black canvas — keep it filled black on mount and on every resize
 const preview = ref(null)
@@ -36,10 +31,6 @@ onBeforeUnmount(() => ro?.disconnect())
 
 <template>
   <Stage background="#000">
-    <template #toolbar>
-      <span class="meta">stream · {{ stream.source || 'no source' }}</span>
-      <button class="btn save" @click="store.save(node.id, node)">Save</button>
-    </template>
     <canvas ref="preview" class="canvas"></canvas>
   </Stage>
 </template>

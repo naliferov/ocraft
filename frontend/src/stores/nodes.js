@@ -52,11 +52,25 @@ export const useNodesStore = defineStore('nodes', () => {
     })
   }
 
+  // Flip a node's `collapsed` flag and persist it. Mutating the real node in
+  // `nodes` (not the tree copy) reactively recomputes `tree`, so the sidebar
+  // updates instantly; the save just makes the choice survive reloads.
+  const toggleCollapsed = async (id) => {
+    const node = nodes.value.find(n => n.id === id)
+    if (!node) return
+    node.collapsed = !node.collapsed
+    await save(id, node)
+  }
+
   watch(nodes, (list) => {
-    if (list.length > 0 && !activeNodeId.value) {
+    if (list.length < 0) {
+      activeNodeId.value = null
+      return
+    }
+    if (!activeNodeId.value) {
       activeNodeId.value = list[0].id
     }
   })
 
-  return { nodes, activeNodeId, activeNode, tree, childrenOf, pathOf, load, save }
+  return { nodes, activeNodeId, activeNode, tree, childrenOf, pathOf, load, save, toggleCollapsed }
 })

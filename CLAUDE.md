@@ -17,6 +17,10 @@ The backend and frontend are independent apps; the frontend talks to the backend
 
 For future direction (planned features, infrastructure ideas, learning goals), see `IDEAS.md` — a parking lot, not a spec; confirm before building from it.
 
+## Conventions
+
+- **Never use the `.mjs` extension.** Every package here is ESM already (`"type": "module"` in package.json), so plain `.js` is ESM. Use `.js` for all JavaScript files — scripts, helpers, one-offs, everything.
+
 ## Life-management vision (direction, not yet built)
 
 Beyond dev chores, the intent is to grow this stack into a **personal life-management system**, with **ThinkTank** (`../ThinkTank/`, the Markdown/Obsidian knowledge base) as the hub and source of truth for organizing daily life — eat, sleep, work, and the rest. ocraft is the automation layer: the scheduler + entries decide *when/what*, the Telegram MCP/bot is the input/output channel, and Claude supplies the judgment/language step (turning raw inputs — chats, repos, photos — into summaries and decisions). ThinkTank holds the durable memory: plans, daily notes, logs, reviews. This is a direction, not a spec — confirm before building, and park concrete feature ideas in `IDEAS.md`.

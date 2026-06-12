@@ -2,14 +2,19 @@
 // Shared chrome for preview-style editors (scene, stream): a top toolbar row and
 // a letterboxed 16:9 preview area. The parent supplies the toolbar controls via
 // the "toolbar" slot and the canvas element (class="canvas") via the default slot.
+// Set :canvas="false" to keep just the toolbar and drop the preview area (e.g. an
+// audio-only node that wants the transport but no visual stage).
 defineProps({
-  background: { type: String, default: '#1a1a1a' }
+  background: { type: String, default: '#1a1a1a' },
+  canvas: { type: Boolean, default: true }
 })
 </script>
 
 <template>
-  <div class="transport"><slot name="toolbar" /></div>
-  <div class="stage" :style="{ '--stage-bg': background }">
+  <div class="transport">
+    <slot name="toolbar" />
+  </div>
+  <div v-if="canvas" class="stage">
     <slot />
   </div>
 </template>
@@ -48,8 +53,6 @@ defineProps({
   height: 100%;
   max-width: 100%;
   aspect-ratio: 16 / 9;
-  margin: auto;
-  background: var(--stage-bg);
   overflow: hidden;
 }
 </style>

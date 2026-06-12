@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="120" viewBox="0 0 240 120">
+  <!-- ground shadow -->
+  <ellipse cx="121" cy="108" rx="98" ry="6" fill="#000000" opacity="0.15"/>
+
+  <!-- body: straight edges, sharp corners, flat hood/roof, near-vertical front & rear -->
+  <path d="M20 92 L20 68 L74 68 L90 46 L156 46 L172 68 L220 68 L220 92 Z" fill="#E25C5C"/>
+  <!-- lower-body shade -->
+  <path d="M20 92 L220 92 L220 86 L20 86 Z" fill="#000000" opacity="0.12"/>
+
+  <!-- glass: near-rectangular greenhouse, only slight pillar slant -->
+  <path d="M82 50 L160 50 L164 64 L78 64 Z" fill="#BFE3F2"/>
+  <!-- B-pillar splitting front/rear windows -->
+  <rect x="118" y="50" width="5" height="14" fill="#E25C5C"/>
+
+  <!-- door seam + handle -->
+  <line x1="121" y1="68" x2="121" y2="86" stroke="#000000" stroke-opacity="0.18" stroke-width="2"/>
+  <rect x="129" y="74" width="10" height="3" fill="#000000" fill-opacity="0.22"/>
+
+  <!-- lights: rectangular, no rounding -->
+  <rect x="20" y="72" width="7" height="7" fill="#FFE27A"/>
+  <rect x="213" y="72" width="7" height="7" fill="#B4332B"/>
+
+  <!-- wheels -->
+  <g>
+    <circle cx="72" cy="88" r="16" fill="#262626"/>
+    <circle cx="72" cy="88" r="7" fill="#C2CAD2"/>
+    <circle cx="72" cy="88" r="2.4" fill="#6B7280"/>
+  </g>
+  <g>
+    <circle cx="168" cy="88" r="16" fill="#262626"/>
+    <circle cx="168" cy="88" r="7" fill="#C2CAD2"/>
+    <circle cx="168" cy="88" r="2.4" fill="#6B7280"/>
+  </g>
+</svg>

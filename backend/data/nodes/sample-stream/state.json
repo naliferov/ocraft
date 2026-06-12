@@ -1,8 +1,0 @@
-{
-  "name": "sample stream",
-  "type": "stream",
-  "parentId": "library",
-  "stream": {
-    "source": "demo-feed"
-  }
-}
