@@ -8,3 +8,4 @@ backend/*.lock
 
 # oh-my-claudecode session state (created wherever OMC runs, at any depth)
 .omc/
+backend/state/droplet.json

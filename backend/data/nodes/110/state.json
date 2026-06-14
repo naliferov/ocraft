@@ -1,0 +1,6 @@
+{
+  "name": "yhelper",
+  "type": "html",
+  "text": "<p>git.slygods.com/yhelper</p>\n<p><a href=\"https://git.slygods.com/yhelper/yhelper-docker\">yhelper-docker</a>\n<a href=\"https://git.slygods.com/yhelper/yhelper-frontend-nl\">yhelper-frontend-nl</a>\n<a href=\"https://git.slygods.com/yhelper/iu-support-chat-nodejs\">iu-support-chat-nodejs</a>\n<a href=\"https://git.slygods.com/yhelper/service-users\">service-users</a>\n<a href=\"https://git.slygods.com/yhelper/vue-widget-v3\">vue-widget-v3</a>\n<a href=\"https://git.slygods.com/yhelper/yhelper-rest\">yhelper-rest</a></p>\n<h2>Local DNS Setup</h2>\n<p>Domain: <code>*.deconstruct.dev</code> → <code>127.0.0.1</code></p>\n<pre><code class=\"language-sh\"># systemd-resolved: создан файл\n/etc/systemd/resolved.conf.d/deconstruct.dev.conf\n\n# Ошибка при setup:\n# Failed to enable unit: Unit file dnsmasq.service does not exist.\n# make: *** [Makefile:36: dns-setup] Error 1\n# → dnsmasq не установлен, нужно: apt install dnsmasq\n</code></pre>",
+  "parentId": "144"
+}

@@ -1,13 +1,15 @@
 <script setup>
 // Recursive sidebar tree. Renders a list of nodes (each carrying a `children`
 // array built by the store) and recurses into NodeTree for nested levels.
+import { ref, nextTick } from 'vue'
+
 const props = defineProps({
   nodes: { type: Array, required: true },
   activeId: { type: String, default: null },
   depth: { type: Number, default: 0 },
 })
 
-const emit = defineEmits(['select', 'toggle'])
+const emit = defineEmits(['select', 'toggle', 'create', 'rename', 'remove', 'reparent'])
 
 // Collapse state is the node's own `collapsed` flag (from state.json). Toggling
 // is emitted up to the store, which flips the flag and persists it, so the choice
@@ -15,6 +17,85 @@ const emit = defineEmits(['select', 'toggle'])
 const isCollapsed = (n) => !!n.collapsed
 const toggle = (n) => emit('toggle', n.id)
 const isCategory = (n) => n.type === 'category'
+
+// Drag a node onto a category to reparent it. Native HTML5 DnD carries the dragged
+// id in dataTransfer, so it crosses recursive NodeTree instances without shared
+// state. Only categories are drop targets; the store applies the cycle guard.
+const dragOverId = ref(null)
+const onDragStart = (node, event) => {
+  event.dataTransfer.setData('text/plain', node.id)
+  event.dataTransfer.effectAllowed = 'move'
+  // The default drag image is a tight, edge-to-edge snapshot of the bare label,
+  // so the dragged name looks cramped. Build a padded chip with the same font as
+  // the source label and use it as the drag image; remove it once the browser has
+  // taken its snapshot (next tick).
+  const sourceLabel = event.currentTarget
+  const computed = getComputedStyle(sourceLabel)
+  const ghost = document.createElement('div')
+  ghost.textContent = node.name ?? ''
+  ghost.style.cssText = [
+    'position:fixed', 'top:-1000px', 'left:-1000px', 'pointer-events:none',
+    // Horizontal padding only — no vertical padding/space; the chip hugs the text.
+    'padding:0 12px', 'line-height:1.2', 'border-radius:6px', 'white-space:nowrap',
+    'background:#fff', 'border:1px solid rgba(0,0,0,0.12)',
+    'box-shadow:0 4px 14px rgba(0,0,0,0.18)',
+  ].join(';')
+  // Inherit the label's actual text styling so the ghost matches the active theme.
+  ghost.style.color = computed.color
+  ghost.style.fontFamily = computed.fontFamily
+  ghost.style.fontSize = computed.fontSize
+  ghost.style.fontWeight = computed.fontWeight
+  document.body.appendChild(ghost)
+  // Anchor the ghost under the cursor at the same point where it grabbed the
+  // original label, so the ghost stays on the source row's X level instead of
+  // jumping sideways. (+12 compensates for the ghost's left padding, which the
+  // label itself doesn't have.)
+  const labelRect = sourceLabel.getBoundingClientRect()
+  const anchorX = event.clientX - labelRect.left + 12
+  const anchorY = event.clientY - labelRect.top
+  event.dataTransfer.setDragImage(ghost, anchorX, anchorY)
+  setTimeout(() => ghost.remove(), 0)
+}
+const onDragOver = (node, event) => {
+  if (!isCategory(node)) return
+  event.preventDefault() // preventDefault here is what marks the row a valid drop target
+  event.dataTransfer.dropEffect = 'move'
+  dragOverId.value = node.id
+}
+const onDragLeave = (node) => {
+  if (dragOverId.value === node.id) dragOverId.value = null
+}
+const onDrop = (node, event) => {
+  if (!isCategory(node)) return
+  event.preventDefault()
+  const draggedId = event.dataTransfer.getData('text/plain')
+  dragOverId.value = null
+  if (draggedId && draggedId !== node.id) emit('reparent', { id: draggedId, parentId: node.id })
+}
+
+// Inline rename: a row swaps its label for an input. Per-instance state is fine —
+// each row is rendered by exactly one NodeTree instance (its depth level).
+const renamingId = ref(null)
+const renameDraft = ref('')
+const renameInput = ref(null)
+const startRename = async (node) => {
+  renamingId.value = node.id
+  renameDraft.value = node.name ?? ''
+  await nextTick()
+  // A ref on an element inside v-for is collected as an array; only one input
+  // renders at a time, so focus the first (and only) entry.
+  const input = Array.isArray(renameInput.value) ? renameInput.value[0] : renameInput.value
+  input?.focus()
+}
+const commitRename = (node) => {
+  if (renamingId.value !== node.id) return
+  const name = renameDraft.value.trim()
+  if (name && name !== node.name) emit('rename', { id: node.id, name })
+  renamingId.value = null
+}
+
+// Delete is immediate (no confirm step) — the store keeps removed nodes in an undo
+// pool, so a "Recently deleted" restore is the safety net instead of a confirm click.
 </script>
 
 <template>
@@ -22,8 +103,11 @@ const isCategory = (n) => n.type === 'category'
     <template v-for="n in nodes" :key="n.id">
       <div
         class="row"
-        :class="{ active: n.id === activeId }"
+        :class="{ active: n.id === activeId, 'drop-target': dragOverId === n.id }"
         :style="{ paddingLeft: `${depth * 14 + 6}px` }"
+        @dragover="onDragOver(n, $event)"
+        @dragleave="onDragLeave(n)"
+        @drop="onDrop(n, $event)"
       >
         <svg
           v-if="n.children.length"
@@ -43,9 +127,30 @@ const isCategory = (n) => n.type === 'category'
         </svg>
         <span v-else class="caret caret--empty"></span>
 
-        <span class="label" @click="emit('select', n.id)">
+        <input
+          v-if="renamingId === n.id"
+          ref="renameInput"
+          class="rename-input"
+          v-model="renameDraft"
+          @keyup.enter="commitRename(n)"
+          @keyup.esc="renamingId = null"
+          @blur="commitRename(n)"
+        />
+        <span
+          v-else
+          class="label"
+          draggable="true"
+          @click="emit('select', n.id)"
+          @dragstart="onDragStart(n, $event)"
+        >
           <span v-if="isCategory(n)" class="folder">▦</span>
           {{ n.name }}
+        </span>
+
+        <span v-if="renamingId !== n.id" class="actions">
+          <button v-if="isCategory(n)" class="act" title="New child node" @click.stop="emit('create', n.id)">+</button>
+          <button class="act" title="Rename" @click.stop="startRename(n)">✎</button>
+          <button class="act act--danger" title="Delete" @click.stop="emit('remove', n.id)">🗑</button>
         </span>
       </div>
 
@@ -56,6 +161,10 @@ const isCategory = (n) => n.type === 'category'
         :depth="depth + 1"
         @select="emit('select', $event)"
         @toggle="emit('toggle', $event)"
+        @create="emit('create', $event)"
+        @rename="emit('rename', $event)"
+        @remove="emit('remove', $event)"
+        @reparent="emit('reparent', $event)"
       />
     </template>
   </div>
@@ -71,6 +180,11 @@ const isCategory = (n) => n.type === 'category'
 }
 .row.active {
   background: rgba(255, 255, 255, 0.08);
+}
+/* Highlight a category row while a node is dragged over it (valid drop target). */
+.row.drop-target {
+  background: rgba(61, 126, 255, 0.22);
+  outline: 1px solid #3d7eff;
 }
 .caret {
   width: 14px;
@@ -96,5 +210,46 @@ const isCategory = (n) => n.type === 'category'
 .folder {
   opacity: 0.6;
   margin-right: 2px;
+}
+.rename-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  border-radius: 3px;
+  outline: 1.5px solid #3d7eff;
+  padding: 0 2px;
+}
+/* Actions are hidden until row hover (or while a confirm is pending), so the
+   tree stays clean. flex-shrink:0 keeps them from being squeezed by long names. */
+.actions {
+  display: flex;
+  gap: 1px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+.row:hover .actions {
+  opacity: 1;
+}
+.act {
+  background: none;
+  border: none;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+  font-size: 0.85em;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+.act:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+.act--danger:hover {
+  background: rgba(255, 80, 80, 0.25);
 }
 </style>

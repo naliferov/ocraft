@@ -1,0 +1,6 @@
+{
+  "name": "promise",
+  "type": "html",
+  "text": "<p>pending &gt; settle (fulfilled via resolve or rejected via reject)</p>\n<h5>concurrency</h5>\n<p>Promise.all\nPromise.allSettled()\nPromise.any()\nPromise.race() - settles when <strong>any</strong> of the promises settles. In other words, fulfills when any of the promises fulfills; rejects when any of the promises rejects</p>",
+  "parentId": "144"
+}

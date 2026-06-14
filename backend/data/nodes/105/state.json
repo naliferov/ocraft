@@ -1,0 +1,6 @@
+{
+  "name": "ubuntu",
+  "type": "html",
+  "text": "<p><strong>ярлыки</strong> хранить в папке ~/.local/share/applications</p>\n<h3>пример ярлыка</h3>\n<p>[Desktop Entry]\nType=Application\nName=Cursor\nExec=/usr/bin/cursor --class=Cursor\nIcon=/home/deconstruct/Downloads/img/cursor.png\nTerminal=false\nCategories=Development;\nStartupWMClass=Cursor</p>\n<p><strong>Terminal:</strong> hotkey вставки можно на ctrl + v</p>\n<h2>systemd — шаблон сервиса</h2>\n<pre><code class=\"language-ini\"># /etc/systemd/system/myapp.service\n[Unit]\nDescription=My App\n\n[Service]\nType=notify\nExecStart=/usr/bin/node /home/user/app/index.js\nRestart=on-failure\n\n[Install]\nWantedBy=multi-user.target\n</code></pre>\n<pre><code class=\"language-sh\">sudo systemctl daemon-reload\nsudo systemctl start myapp.service\nsudo systemctl enable myapp.service  # автозапуск после ребута\n</code></pre>\n<h2>Запуск процесса в фоне (shell)</h2>\n<pre><code class=\"language-sh\">./node s.js &amp;&gt; s.log &amp; disown\n</code></pre>",
+  "parentId": "26"
+}

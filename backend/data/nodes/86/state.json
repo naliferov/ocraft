@@ -1,0 +1,6 @@
+{
+  "name": "other libs",
+  "type": "html",
+  "text": "<p>effect.js\nrxjs\nquokkajs prototype and testing tool for js, ts </p>\n<p><strong>animation</strong>\n<a href=\"https://gsap.com\">https://gsap.com</a></p>\n<p><strong>processing.js</strong>\n<a href=\"https://processing.org\">https://processing.org</a></p>\n<p><strong>state</strong>\n<a href=\"https://www.reatom.dev\">reatom</a>\n<a href=\"https://stately.ai/docs/xstate\">xstate</a></p>\n<p><strong>web worker</strong>\n<a href=\"https://partytown.qwik.dev\">https://partytown.qwik.dev</a></p>",
+  "parentId": "144"
+}

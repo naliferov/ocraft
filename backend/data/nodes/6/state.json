@@ -28,10 +28,20 @@
     {
       "type": "phrase",
       "props": {
-          "character": "adult",
-          "steps": [0, 4, 8, 12],
-          "text": ["stay", "with", "the", "experience"]
-        },
+        "character": "adult",
+        "steps": [
+          0,
+          4,
+          8,
+          12
+        ],
+        "text": [
+          "stay",
+          "with",
+          "the",
+          "experience"
+        ]
+      },
       "state": {},
       "events": []
     },
@@ -56,8 +66,16 @@
       "props": {
         "grainSize": 1,
         "rangeColor": {
-          "min": [180, 180, 180],
-          "max": [255, 255, 255]
+          "min": [
+            180,
+            180,
+            180
+          ],
+          "max": [
+            255,
+            255,
+            255
+          ]
         },
         "amount": 0.06,
         "intensity": 0.2
@@ -69,12 +87,21 @@
       "props": {
         "grainSize": 10,
         "rangeColor": {
-          "min": [150, 150, 150],
-          "max": [255, 255, 255]
+          "min": [
+            150,
+            150,
+            150
+          ],
+          "max": [
+            255,
+            255,
+            255
+          ]
         },
-        "amount": 0.00010,
+        "amount": 0.0001,
         "intensity": 1
       }
     }
-  ]
+  ],
+  "parentId": "12"
 }

@@ -20,6 +20,23 @@ For future direction (planned features, infrastructure ideas, learning goals), s
 ## Conventions
 
 - **Never use the `.mjs` extension.** Every package here is ESM already (`"type": "module"` in package.json), so plain `.js` is ESM. Use `.js` for all JavaScript files — scripts, helpers, one-offs, everything.
+- **Develop on `main` — don't create feature branches.** Build features directly on `main`; do not `git checkout -b` a feature/topic branch for development. (This overrides the generic "branch before committing on the default branch" default for this repo.)
+
+## Coding rules
+
+Numbered rules for code in this repo. Follow them when writing or editing any `.js` here.
+
+1. **No single-letter variable names.** Use a descriptive name for every binding — including callback parameters, `.map`/`.filter`/`.find` args, loop counters, and regex matches. Write `const droplet = await getDroplet(id)`, not `const d = …`; `images.filter((image) => …)`, not `(i) => …`; `for (let attempt = 0; …)`, not `for (let i = 0; …)`. The name should say what the value *is*.
+
+2. **No boolean flag parameters.** A `fn(…, true)` call site is opaque — the reader can't tell what `true` selects. When a flag would switch between two behaviours, prefer the most minimal split that removes the boolean: usually **two intention-named functions**, otherwise a named mode/strategy (e.g. a string `'rich'`/`'source'`, a passed-in handler, or a small factory). Write `editRich()` / `editSource()`, not `enterEdit(true)` / `enterEdit(false)`. This applies to new code and to flags you touch while editing.
+
+## ThinkTank → ocraft migration (IMPORTANT — ocraft nodes are now the source of truth)
+
+The **ThinkTank** Obsidian vault (`../ThinkTank/`) has been migrated into ocraft **nodes**: each note is an `html` node, organised by `parentId` under a top **`notes`** category, names lowercased, wikilinks rewritten to `/node/:id` links, embedded images served from `data/assets/img/optimized/`. **These ocraft nodes are now the source of truth for that content** — edit them in ocraft (the editor UI, or `backend/data/nodes/<id>/state.json` directly). Do **not** edit the ThinkTank `.md` source expecting it to flow through.
+
+- **The importer `backend/entries/import-thinktank.js` was a one-time migration — do NOT re-run it to tweak content.** A re-run is destructive: it deletes the previous import (tracked in `backend/data/thinktank-import.json`) and regenerates everything from the `.md` source, **discarding any in-place edits to the migrated nodes and reassigning node ids**. To change a migrated note, edit the node, not the source + re-run.
+- **Never migrate credential/private notes** into this (public) repo. The importer's `EXCLUDED` set skips them; keep it that way. New sensitive notes belong in a private space, not here.
+- Manifest (`thinktank-import.json`) records what was migrated; it can go stale if nodes are later deleted/renamed in the UI, so treat the **live node tree** (the `notes` subtree) as authoritative, not the manifest.
 
 ## Life-management vision (direction, not yet built)
 

@@ -30,22 +30,24 @@ Suggested order (foundations → leaves):
    └─ Backend stream run-model               (exposes scheduler/nodes/procs)
 
 3. Brain & memory                    4. Cloud & mobile
-   ├─ ThinkTank MCP (durable home)      ├─ Cloud WS exchange
-   ├─ Chat node ("brain" endpoint)      │     └─ Flutter mobile control
-   └─ Daily briefing                    │
-        (= MCP inputs + brain +         5. Execution safety
-           ThinkTank memory)               ├─ yo as node medium
-                                           └─ Sandboxed execution
+   └─ ThinkTank MCP (memory organ)      ├─ Cloud WS exchange
+                                        │     └─ Flutter mobile control
+                                        │
+                                     5. Execution safety
+                                        ├─ yo as node medium
+                                        └─ Sandboxed execution
 
 6. Exploratory: WASM · Generative Art (Music / Visuals / Creative MCP tools)
 ```
 
+> The **chat node** (now the `ai-chat` node type + `/api/ai-chat` Agent-SDK brain)
+> and the *interactive* **daily briefing** (the `morning-report` skill) have
+> shipped, so their plans were removed. The remaining open thread is the
+> [[autonomous-dev-loop]] and the **ThinkTank MCP** memory organ below.
+
 Key edges:
-- **Daily briefing** is a *composition* — it needs the MCP inputs (have them),
-  a judgment step (chat node / self-MCP / cloud code), and a durable home
-  (**ThinkTank MCP**). Don't start it until those three exist.
-- **Chat node** needs a "brain" endpoint; the brain gets *good* once **ocraft
-  self-MCP** lets it operate the system.
+- **ThinkTank MCP** is the memory organ the headless scheduler (and any backend
+  brain) needs, since it can't borrow Claude Code's filesystem tools.
 - **Flutter mobile** is blocked on the **cloud WS exchange** existing first.
 - **Process-management UI** sits directly on **supervisor coverage**.
 - **Sandboxed execution** pairs with **yo as a node medium** (a safe interpreter
@@ -86,6 +88,56 @@ hot path that needs it.
 
 # Project ideas
 
+## Autonomous dev loop — *Build-ready (with one honest caveat)*
+
+**Goal.** Close the loop on AI-driven development of ocraft: the model proposes a
+sequenced weekly plan, then executes it task-by-task on branches with PRs for human
+review. The planning half already exists as the **`ocraft-dev-plan` skill**; this
+plan is about the *execution* arm.
+
+**Status today.** Planning half ✓ (`.claude/skills/ocraft-dev-plan/` writes
+`dev-plans/<date>-week.md`). The Agent SDK is wired into the backend, but only via
+`POST /api/ai-chat` — which is **bypassPermissions + no-auth + localhost-only** and
+must never run git/PR work. `origin` is set (`git@github.com:naliferov/ocraft`); **`gh`
+is not installed yet**. No test/behavior gate exists (only `node --check` + `npm run
+build` + manual screenshots).
+
+**The one honest caveat (read first).** There is no real verification gate, so the
+loop *cannot* safely auto-merge. Every PR needs a human to confirm behavior until a
+test harness exists. That makes "human-in-the-loop PR review" the design, not a
+limitation to engineer away. The acceptance check in each planned task is a smoke
+test, not a correctness proof.
+
+**Plan:**
+1. **`dev-task` entry (the executor).** Add `backend/entries/dev-task.js`: reads one
+   task from the current `dev-plans/<date>-week.md`, runs the Agent SDK
+   (`query({ cwd: ROOT_DIR, permissionMode: 'bypassPermissions' })`) with an explicit
+   git workflow in the prompt — **branch → implement → run the task's acceptance
+   check → commit → push → `gh pr create`**. One task per run; never `main`; never
+   auto-merge. This is a *separate surface* from `/api/ai-chat` precisely because it
+   does git/PR work; the chat endpoint stays interactive-only.
+2. **Prereqs.** Install + authenticate `gh` (`brew install gh && gh auth login`).
+   Confirm push works on a throwaway branch before trusting the loop.
+3. **Self-verification "eyes".** Visual changes are checked via the
+   **claude-in-chrome MCP** (screenshot + DOM of the running editor) — that capability
+   already exists, so no separate "render-and-return" build is needed here.
+4. **Gate honestly.** Until a real `npm test` exists, the acceptance check is a smoke
+   test and the PR waits for human review. Building that test harness is itself a
+   high-value early task the planner can schedule.
+
+**Open questions.** How the `dev-task` entry selects *which* task (next-undone in the
+plan file vs. an explicit arg)? Where run output/PR links are recorded (an
+`executions/`-style log, or back into the plan file as a checkbox)? Whether the entry
+should refuse to run with a dirty working tree.
+
+**Dependencies.** Uses the same Agent-SDK auth as `ai-chat` (the user's Claude
+subscription, no API key). A future **ocraft self-MCP** + **ThinkTank MCP** would give
+the loop hands on the system and durable memory. Sequencing favors building a test
+gate early so the loop's PRs become trustworthy.
+
+**Effort/risk.** Low–medium to wire the entry; the risk is *trusting* it past its
+verification — keep human review mandatory until a behavior gate exists.
+
 ## Flutter for cloud-driven mobile control — *Design-open (blocked)*
 
 **Goal.** A Flutter mobile app driven from "cloud code" — trigger actions, push
@@ -121,8 +173,8 @@ worth the learning cost vs. a PWA wrapping the existing Vue app over the same WS
 Settle this before writing Dart.
 
 **Dependencies.** **Hard:** cloud WS exchange (transport) — do not start before
-it exists. **Soft:** daily briefing / proc UI / self-MCP supply the *content* the
-app displays and the *commands* it sends.
+it exists. **Soft:** proc UI / self-MCP supply the *content* the app displays and
+the *commands* it sends.
 
 **Effort/risk.** High — new language, new platform, networked + authed. Lowest-
 risk path: prove the loop with a PWA over the WS exchange first; only reach for
@@ -204,13 +256,13 @@ whole address.) Shipped:
   non-editable pills); that's the CodeMirror 6 step. The picker covers
   authoring-time readability for now.
 - **Backend mirror** — a matching `x.x` for headless node execution. Not needed
-  until the chat-node/daily-briefing brain runs node scripts server-side; the
-  `x` shape was kept simple so it can be reimplemented then.
+  until a backend brain (e.g. the [[autonomous-dev-loop]] `dev-task` entry or the
+  `ai-chat` brain run server-side) runs node scripts headlessly; the `x` shape was
+  kept simple so it can be reimplemented then.
 
-**Dependencies.** Foundation for **chat node** brains and **daily briefing**
-composition. The `x.x` boundary is the natural seam where **sandboxed execution**
-later plugs in (args/returns become a serialization contract once a call crosses
-a sandbox).
+**Dependencies.** The `x.x` boundary is the natural seam where **sandboxed
+execution** later plugs in (args/returns become a serialization contract once a
+call crosses a sandbox).
 
 ---
 
@@ -301,96 +353,6 @@ diff vs raw text)? Retention policy (keep last N, or last N + daily)?
 versioning onto the same save action.
 
 **Effort/risk.** Medium, low risk. Self-contained; no other idea blocks on it.
-
----
-
-## Chat node type — *Design-open*
-
-**Goal.** A node whose editor is a chat thread (messages + pinned input, like web
-Claude); a `POST /api/nodes/:id/chat` endpoint is the "brain."
-
-**Status today.** Doesn't exist (confirmed: no `chat` in server routes or
-editors). But the *pattern* is well-trodden — `category`/`stream` show how a new
-`type` plugs in: a `state.json` shape + a matching `*Editor.vue` + (optionally) a
-route.
-
-**The real design fork is the brain, staged:**
-1. **Echo stub.** `POST /api/nodes/:id/chat` appends the user message + a canned
-   reply to `state.json`'s `messages[]`. Proves the UI + persistence end-to-end.
-2. **Claude API.** Swap the stub to call the Anthropic API (the root
-   `package.json` already depends on `@modelcontextprotocol/sdk`; add the
-   Anthropic SDK). Now it's a real assistant, but blind — no tools.
-3. **Tool-using brain.** Give the brain hands via **ocraft self-MCP** (operate
-   the system) and eyes via **ThinkTank MCP** (read/write memory). *This* is the
-   "conversation with cloud code" payoff. Until those MCPs exist, the brain is
-   just chat.
-
-**Plan (build the UI against the stub, swap the brain later):**
-1. **Type plumbing.** `chat` node `state.json`: `{ type:"chat", messages:[
-   {role, text, ts} ] }`. Add `ChatEditor.vue` (thread + pinned input;
-   `track-mp3`/`StreamEditor` are the layout references). Register the type in
-   the editor switch in `NodeItem.vue`.
-2. **Endpoint.** `POST /api/nodes/:id/chat` in `server.js`: append user msg,
-   produce a reply (stub → API → tool-brain), persist, return the new messages.
-3. **Streaming (later).** Swap the request/response for SSE or the cloud WS
-   exchange so replies stream token-by-token.
-
-**Open questions.** Where does the brain run — in `server.js` (simple, but mixes
-the data server with LLM calls), as a scheduler/entry, or behind the cloud WS
-exchange? History/token budget management. Per-node system prompt?
-
-**Dependencies.** Gets *good* only with **ocraft self-MCP** + **ThinkTank MCP**.
-Is the natural host for **daily briefing**'s judgment step.
-
-**Effort/risk.** UI+stub is low effort. The brain is where scope balloons — keep
-the stub→API→tools staging strict so each stage ships independently.
-
----
-
-## Daily briefing — *Design-open (composition)*
-
-**Goal.** One morning summary folding unread email + today's calendar + overnight
-Telegram, pushed to Telegram — the life-management judgment step made concrete.
-
-**Status today.** Inputs exist as **MCP servers** (telegram, gcal, gmail). The
-core tension: a headless scheduler **entry cannot call MCP tools** — MCP tools
-are an interactive-Claude affordance. So this is *not* a plain `entries/*.js`
-cron job. It's a composition that needs a brain + a memory.
-
-**The fork is "who is the brain":**
-- **(a) Scheduled cloud-code session.** A scheduled Claude Code run (see the
-  `schedule`/routines mechanism) that *has* the MCP tools, assembles the
-  briefing, writes it to ThinkTank, and sends Telegram. Most aligned with the
-  vision; least code.
-- **(b) ocraft self-MCP + direct APIs.** A backend entry that calls the
-  underlying APIs directly (not via MCP) — reimplements slices of each MCP's data
-  access inside an entry. More code, no Claude judgment unless it also calls the
-  Anthropic API.
-- **(c) Chat-node brain.** The briefing is a scheduled message into a `chat` node
-  whose brain has the MCP/self-MCP tools.
-
-Recommend **(a)** first — it's the smallest path and exactly what the
-life-management vision describes (Claude as the judgment/language step).
-
-**Plan (assuming (a)):**
-1. **Sources.** Define the briefing inputs precisely: unread Gmail since
-   yesterday, today's gcal events, Telegram messages overnight from chosen chats.
-2. **Composer.** A prompt/routine that pulls those three, dedupes, ranks, writes
-   a tight summary.
-3. **Durable home.** Append the briefing to the ThinkTank daily note — needs
-   **ThinkTank MCP** (the "remember" organ) so the summary survives and links.
-4. **Delivery.** Send via Telegram (`api/telegram.js` send helper already
-   exists; the `telegram-reminder` entry is the template).
-5. **Schedule.** A morning cron via the routines/`schedule` mechanism.
-
-**Open questions.** Quiet-hours / dedupe across days; how much summarization vs
-raw list; whether the briefing is two-way (reply to act).
-
-**Dependencies.** **Hard:** ThinkTank MCP (memory). **Soft:** chat node /
-self-MCP (richer judgment). Don't start before ThinkTank MCP exists.
-
-**Effort/risk.** Medium. Risk is starting it before the memory organ exists and
-producing briefings that evaporate.
 
 ---
 
@@ -603,14 +565,14 @@ reserved IP, and the **DigitalOcean MCP** can provision/operate it.
 3. **Backend client.** The local backend connects as a client, publishes node/
    proc/execution events, subscribes to commands.
 4. **Editor client.** The frontend subscribes for live updates (replaces polling
-   in the **proc UI** and **chat node** streaming).
+   in the **proc UI** and `ai-chat` reply streaming).
 
 **Open questions.** Reconnection/backpressure; message schema/versioning;
 whether to use raw `ws` vs. a managed pub/sub (Redis, NATS) behind it.
 
 **Dependencies.** **Unblocks Flutter mobile.** Becomes the live transport for
-**proc UI**, **chat node**, **stream nodes**. Deploy story overlaps the Varcraft
-git-pull deploy idea.
+**proc UI**, `ai-chat` streaming, **stream nodes**. Deploy story overlaps the
+Varcraft git-pull deploy idea.
 
 **Effort/risk.** Medium-high — first real *hosted, networked, authed* service in
 the project. Risk concentrates in auth + reconnection; the relay itself is small.
@@ -621,8 +583,8 @@ the project. Risk concentrates in auth + reconnection; the relay itself is small
 
 **Goal.** Programmatic search + modify across the ThinkTank vault (append to daily
 note, create/link, resolve `[[wikilinks]]`, read backlinks) — the **memory
-organ** that ocraft (headless scheduler, chat-node brain) needs, since it can't
-borrow Claude Code's filesystem tools.
+organ** that ocraft's headless side (the scheduler, a backend brain) needs, since
+it can't borrow Claude Code's filesystem tools.
 
 **Status today.** None. But there's a clean template: `mcp-servers/gcal-mcp/` is
 the canonical pattern — `McpServer` + `StdioServerTransport` + `zod` tool schemas,
@@ -647,8 +609,9 @@ existing scheme — inspect before coding). Conflict handling on concurrent writ
 Does it index (embeddings) or just grep? Start with grep; add an index only if
 search quality demands it.
 
-**Dependencies.** **Hard prerequisite for daily briefing** (its durable home).
-Gives the **chat node** brain long-term memory.
+**Dependencies.** The durable-memory home any backend brain wants — gives the
+`ai-chat` brain and the [[autonomous-dev-loop]] long-term memory, and would be the
+home for a future headless briefing if that's ever revisited.
 
 **Effort/risk.** Low–medium — the MCP pattern is established; the work is the
 vault-write semantics. Risk: writing outside the vault or corrupting notes —
@@ -678,17 +641,18 @@ over the same calls.
    - `list_executions` / `read_execution(id)` → storage
    - `list_nodes` / `create_node` / `delete_node` → node store (post-CRUD)
 3. **Transport decision.** stdio (like the others) is simplest for an interactive
-   Claude. If the **chat-node brain** needs to call these *from the backend*,
-   either run it over HTTP/SSE or have the brain import the functions directly
-   (no MCP hop). Note: an MCP server is for an *external* model; the backend's own
-   brain may not need the MCP indirection at all.
+   Claude. If a backend brain (the `ai-chat` endpoint, the [[autonomous-dev-loop]]
+   `dev-task` entry) needs to call these *from the backend*, either run it over
+   HTTP/SSE or have the brain import the functions directly (no MCP hop). Note: an
+   MCP server is for an *external* model; the backend's own brain may not need the
+   MCP indirection at all.
 
 **Open questions.** Write-tool guardrails (a `run_entry` can do anything an entry
 can — and entries aren't sandboxed yet; ties to **sandboxed execution**).
 Overlap/duplication with the CLI — keep them thin over shared functions so they
 can't drift.
 
-**Dependencies.** Makes the **chat node** a real operator. Its danger surface is
+**Dependencies.** Makes the `ai-chat` brain a real operator. Its danger surface is
 exactly why **sandboxed execution** matters. Benefits from **supervisor
 coverage** (proc tools become more useful).
 
@@ -705,8 +669,8 @@ player. An API MCP would only pay off for the **data** side (listening history,
 building playlists as data) — a weaker, speculative need.
 
 **Revisit trigger.** Build it only if a concrete history/logging use case appears
-(e.g. you want listening data folded into the **daily briefing** or logged to
-ThinkTank). At that point it's a thin read-only MCP over the Spotify Web API,
+(e.g. you want listening data logged to ThinkTank or folded into a future
+briefing). At that point it's a thin read-only MCP over the Spotify Web API,
 same `gcal-mcp` shape. Until then: park.
 
 ---

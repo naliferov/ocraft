@@ -1,24 +1,13 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { spawn } from 'node:child_process'
-import path from 'node:path'
 
-const backendPlugin = () => {
-  let proc
-
-  const start = () => {
-    proc?.kill()
-    proc = spawn('node', [path.resolve('../backend/server.js')], { stdio: 'inherit' })
-  }
-
-  return {
-    name: 'backend',
-    buildStart: start
-  }
-}
-
+// The backend API server (port 3001) runs as its own managed process now —
+// see backend/procs/backend.js (`node cli.js proc start backend`). Vite only
+// proxies /api to it; it no longer spawns the backend itself. (The old
+// backendPlugin spawned it once and never respawned, so a single backend death
+// took /api down for the whole session.)
 export default defineConfig({
-  plugins: [vue(), backendPlugin()],
+  plugins: [vue()],
   server: {
     proxy: {
       '/api': 'http://localhost:3001'

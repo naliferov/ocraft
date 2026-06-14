@@ -17,10 +17,28 @@ become concrete, code-relevant work.
   state, or receive commands from a backend service). Explore how this could
   connect to the existing ocraft backend/scheduler.
 
-- **Backend run model for `stream` nodes** — the frontend `StreamEditor` and a
-  `sample-stream` node now exist, but the backend has no notion of how a stream
-  node actually *runs* (it's just stored JSON like any other node). Define how
-  stream nodes are configured and executed on the backend side.
+- **Autonomous dev loop** — close the loop on AI-driven development of ocraft:
+  the `ocraft-dev-plan` skill writes a sequenced weekly plan
+  (`dev-plans/<date>-week.md`), then a dedicated **`dev-task` entry** executes
+  *one* task per run on a branch (Agent SDK), gates on the task's acceptance
+  check, and opens a PR for human review — never `main`, never auto-merge.
+  Execution must be the `dev-task` entry, **not** `POST /api/ai-chat` (that
+  endpoint is bypassPermissions + no-auth + localhost-only, must never do
+  git/PR). Visual changes can be self-verified via the claude-in-chrome MCP
+  (screenshots + DOM of the running editor) — the "eyes" already exist.
+  Prereqs: `gh` installed + authenticated (`origin` is already set). Honest
+  caveat: ocraft has no real test/behavior gate yet (only `node --check` +
+  `npm run build` + screenshots), so PRs genuinely need human review until one
+  exists.
+
+- **`stream` node type (removed — reimplement later)** — the `stream` node type
+  was removed (frontend `Stream.vue` preview, its type registration, and the
+  `sample stream` node) to keep the type list to things that actually work. When
+  revisiting, it needs two halves: (1) a real **frontend** editor/preview — the
+  old one was a placeholder black canvas using the shared `Stage` chrome; and
+  (2) a **backend run model** — today nodes are just stored JSON with no run
+  semantics, so define how a stream node is configured and actually *executed*
+  on the backend side.
 
 - **Scripts calling other scripts by name** — let every script in the editor
   invoke another script by its name (composition / reuse between nodes). Open
@@ -45,20 +63,6 @@ become concrete, code-relevant work.
   overwrites it today. Instead, each save could write a new version (keep
   history, allow diff/rollback) rather than clobbering the previous one. (From
   the old Varcraft notes — "need fx versioning, i.e. a new save.")
-
-- **Chat node type ("conversation with cloud code")** — a new node type with a
-  chat UI (message thread + input pinned at bottom, like web Claude). Messages
-  persist in the node's `state.json`; a `POST /api/nodes/:id/chat` endpoint is
-  the "brain" — start as an echo stub, later swap to the Claude API or the cloud
-  WS exchange. Same node-type pattern as `category`/`stream`.
-
-- **Daily briefing** — the inputs for a single morning briefing now all exist
-  (telegram + gcal + gmail MCPs). Fold unread email + today's calendar +
-  overnight Telegram into one summary pushed to Telegram. Open question mirrors
-  the [[thinktank-mcp]] note: a headless scheduler entry can't call MCP tools,
-  so this likely lives in the judgment step (the [[chat-node-type]] brain /
-  cloud code) rather than a plain entry — and wants a durable home for the
-  result.
 
 - **`yo` as a node scripting medium** — `js-engine/` already holds `yo`, a tiny
   async-first toy interpreter (lexer -> parser -> evaluator, `@`-keyword

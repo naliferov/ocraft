@@ -1,0 +1,1010 @@
+{
+  "importedAt": "2026-06-14T07:36:25.303Z",
+  "vault": "/Users/varcraft/projects/ThinkTank",
+  "rootId": "13",
+  "counts": {
+    "notes": 124,
+    "categories": 7,
+    "images": 5,
+    "skipped": 18
+  },
+  "nodes": [
+    {
+      "id": "13",
+      "name": "ThinkTank",
+      "type": "category",
+      "parentId": null
+    },
+    {
+      "id": "138",
+      "name": "Projects",
+      "type": "category",
+      "parentId": "13"
+    },
+    {
+      "id": "139",
+      "name": "Applied Science",
+      "type": "category",
+      "parentId": "13"
+    },
+    {
+      "id": "140",
+      "name": "Humanities",
+      "type": "category",
+      "parentId": "13"
+    },
+    {
+      "id": "141",
+      "name": "Social",
+      "type": "category",
+      "parentId": "13"
+    },
+    {
+      "id": "142",
+      "name": "Art",
+      "type": "category",
+      "parentId": "13"
+    },
+    {
+      "id": "143",
+      "name": "Media",
+      "type": "category",
+      "parentId": "13"
+    },
+    {
+      "id": "144",
+      "name": "unsorted",
+      "type": "category",
+      "parentId": "13"
+    },
+    {
+      "id": "14",
+      "source": "CRDT.md",
+      "name": "CRDT",
+      "type": "html",
+      "parentId": "26"
+    },
+    {
+      "id": "15",
+      "source": "GOF design patterns.md",
+      "name": "GOF design patterns",
+      "type": "html",
+      "parentId": "26"
+    },
+    {
+      "id": "16",
+      "source": "IoC inversion of control.md",
+      "name": "IoC inversion of control",
+      "type": "html",
+      "parentId": "26"
+    },
+    {
+      "id": "17",
+      "source": "RabbitMQ.md",
+      "name": "RabbitMQ",
+      "type": "html",
+      "parentId": "26"
+    },
+    {
+      "id": "18",
+      "source": "UAV.md",
+      "name": "UAV",
+      "type": "html",
+      "parentId": "26"
+    },
+    {
+      "id": "19",
+      "source": "architecture !main.md",
+      "name": "architecture !main",
+      "type": "html",
+      "parentId": "26"
+    },
+    {
+      "id": "20",
+      "source": "art sources.md",
+      "name": "art sources",
+      "type": "html",
+      "parentId": "142"
+    },
+    {
+      "id": "21",
+      "source": "authentication and authorization.md",
+      "name": "authentication and authorization",
+      "type": "html",
+      "parentId": "26"
+    },
+    {
+      "id": "22",
+      "source": "books.md",
+      "name": "books",
+      "type": "html",
+      "parentId": "140"
+    },
+    {
+      "id": "23",
+      "source": "chemistry.md",
+      "name": "chemistry",
+      "type": "html",
+      "parentId": "95"
+    },
+    {
+      "id": "24",
+      "source": "cinema.md",
+      "name": "cinema",
+      "type": "html",
+      "parentId": "138"
+    },
+    {
+      "id": "25",
+      "source": "clipart.md",
+      "name": "clipart",
+      "type": "html",
+      "parentId": "84"
+    },
+    {
+      "id": "26",
+      "source": "computer science.md",
+      "name": "computer science",
+      "type": "html",
+      "parentId": "13"
+    },
+    {
+      "id": "27",
+      "source": "concept db.md",
+      "name": "concept db",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "28",
+      "source": "core.md",
+      "name": "core",
+      "type": "html",
+      "parentId": "13"
+    },
+    {
+      "id": "29",
+      "source": "data structures.md",
+      "name": "data structures",
+      "type": "html",
+      "parentId": "26"
+    },
+    {
+      "id": "30",
+      "source": "db index.md",
+      "name": "db index",
+      "type": "html",
+      "parentId": "26"
+    },
+    {
+      "id": "31",
+      "source": "desktop-assemble.md",
+      "name": "desktop-assemble",
+      "type": "html",
+      "parentId": "138"
+    },
+    {
+      "id": "32",
+      "source": "dev tools.md",
+      "name": "dev tools",
+      "type": "html",
+      "parentId": "98"
+    },
+    {
+      "id": "33",
+      "source": "encoding unicode.md",
+      "name": "encoding unicode",
+      "type": "html",
+      "parentId": "26"
+    },
+    {
+      "id": "34",
+      "source": "english.md",
+      "name": "english",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "35",
+      "source": "essay.md",
+      "name": "essay",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "36",
+      "source": "event loop (browser).md",
+      "name": "event loop (browser)",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "37",
+      "source": "event loop (node).md",
+      "name": "event loop (node)",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "38",
+      "source": "ffmpeg.md",
+      "name": "ffmpeg",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "39",
+      "source": "fiction.md",
+      "name": "fiction",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "40",
+      "source": "food.md",
+      "name": "food",
+      "type": "html",
+      "parentId": "28"
+    },
+    {
+      "id": "41",
+      "source": "frontend.md",
+      "name": "frontend",
+      "type": "html",
+      "parentId": "26"
+    },
+    {
+      "id": "42",
+      "source": "functional.md",
+      "name": "functional",
+      "type": "html",
+      "parentId": "26"
+    },
+    {
+      "id": "43",
+      "source": "games.md",
+      "name": "games",
+      "type": "html",
+      "parentId": "142"
+    },
+    {
+      "id": "44",
+      "source": "generative art.md",
+      "name": "generative art",
+      "type": "html",
+      "parentId": "84"
+    },
+    {
+      "id": "45",
+      "source": "geo.md",
+      "name": "geo",
+      "type": "html",
+      "parentId": "141"
+    },
+    {
+      "id": "46",
+      "source": "glossary.md",
+      "name": "glossary",
+      "type": "html",
+      "parentId": "26"
+    },
+    {
+      "id": "47",
+      "source": "hardware tools.md",
+      "name": "hardware tools",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "48",
+      "source": "hardware.md",
+      "name": "hardware",
+      "type": "html",
+      "parentId": "139"
+    },
+    {
+      "id": "49",
+      "source": "heap and stack.md",
+      "name": "heap and stack",
+      "type": "html",
+      "parentId": "26"
+    },
+    {
+      "id": "50",
+      "source": "ideas.md",
+      "name": "ideas",
+      "type": "html",
+      "parentId": "13"
+    },
+    {
+      "id": "51",
+      "source": "images.md",
+      "name": "images",
+      "type": "html",
+      "parentId": "143"
+    },
+    {
+      "id": "52",
+      "source": "img creation prompts.md",
+      "name": "img creation prompts",
+      "type": "html",
+      "parentId": "84"
+    },
+    {
+      "id": "53",
+      "source": "inbox.md",
+      "name": "inbox",
+      "type": "html",
+      "parentId": "13"
+    },
+    {
+      "id": "54",
+      "source": "infrastructure as code.md",
+      "name": "infrastructure as code",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "55",
+      "source": "it books.md",
+      "name": "it books",
+      "type": "html",
+      "parentId": "26"
+    },
+    {
+      "id": "56",
+      "source": "javascript changelog.md",
+      "name": "javascript changelog",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "57",
+      "source": "javascript engines and runtimes.md",
+      "name": "javascript engines and runtimes",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "58",
+      "source": "javascript frameworks.md",
+      "name": "javascript frameworks",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "59",
+      "source": "javascript snippets.md",
+      "name": "javascript snippets",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "60",
+      "source": "javascript оглавление.md",
+      "name": "javascript оглавление",
+      "type": "html",
+      "parentId": "26"
+    },
+    {
+      "id": "61",
+      "source": "javascript.md",
+      "name": "javascript",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "62",
+      "source": "jazz.md",
+      "name": "jazz",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "63",
+      "source": "js 00. history.md",
+      "name": "js 00. history",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "64",
+      "source": "js 01. types.md",
+      "name": "js 01. types",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "65",
+      "source": "js features.md",
+      "name": "js features",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "66",
+      "source": "law of demeter.md",
+      "name": "law of demeter",
+      "type": "html",
+      "parentId": "26"
+    },
+    {
+      "id": "67",
+      "source": "life strategy core.md",
+      "name": "life strategy core",
+      "type": "html",
+      "parentId": "28"
+    },
+    {
+      "id": "68",
+      "source": "logic.md",
+      "name": "logic",
+      "type": "html",
+      "parentId": "140"
+    },
+    {
+      "id": "69",
+      "source": "machine learning.md",
+      "name": "machine learning",
+      "type": "html",
+      "parentId": "26"
+    },
+    {
+      "id": "70",
+      "source": "management.md",
+      "name": "management",
+      "type": "html",
+      "parentId": "141"
+    },
+    {
+      "id": "71",
+      "source": "math.md",
+      "name": "math",
+      "type": "html",
+      "parentId": "95"
+    },
+    {
+      "id": "72",
+      "source": "media.md",
+      "name": "media",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "73",
+      "source": "modules type.md",
+      "name": "modules type",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "74",
+      "source": "movies screencaps.md",
+      "name": "movies screencaps",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "75",
+      "source": "movies.md",
+      "name": "movies",
+      "type": "html",
+      "parentId": "142"
+    },
+    {
+      "id": "76",
+      "source": "mr robot.md",
+      "name": "mr robot",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "77",
+      "source": "music production ideas.md",
+      "name": "music production ideas",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "78",
+      "source": "music theory.md",
+      "name": "music theory",
+      "type": "html",
+      "parentId": "140"
+    },
+    {
+      "id": "79",
+      "source": "music.md",
+      "name": "music",
+      "type": "html",
+      "parentId": "142"
+    },
+    {
+      "id": "80",
+      "source": "navigation.md",
+      "name": "navigation",
+      "type": "html",
+      "parentId": "13"
+    },
+    {
+      "id": "81",
+      "source": "node.js.md",
+      "name": "node.js",
+      "type": "html",
+      "parentId": "26"
+    },
+    {
+      "id": "82",
+      "source": "ocraft-constructor-env.md",
+      "name": "ocraft-constructor-env",
+      "type": "html",
+      "parentId": "84"
+    },
+    {
+      "id": "83",
+      "source": "ocraft-fronend-backend.md",
+      "name": "ocraft-fronend-backend",
+      "type": "html",
+      "parentId": "84"
+    },
+    {
+      "id": "84",
+      "source": "ocraft.md",
+      "name": "ocraft",
+      "type": "html",
+      "parentId": "138"
+    },
+    {
+      "id": "85",
+      "source": "ontology.md",
+      "name": "ontology",
+      "type": "html",
+      "parentId": "28"
+    },
+    {
+      "id": "86",
+      "source": "other libs.md",
+      "name": "other libs",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "87",
+      "source": "postgreSQL.md",
+      "name": "postgreSQL",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "88",
+      "source": "programming languages.md",
+      "name": "programming languages",
+      "type": "html",
+      "parentId": "26"
+    },
+    {
+      "id": "89",
+      "source": "promise.md",
+      "name": "promise",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "90",
+      "source": "queue on linked list.md",
+      "name": "queue on linked list",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "91",
+      "source": "radio.md",
+      "name": "radio",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "92",
+      "source": "random notes.md",
+      "name": "random notes",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "93",
+      "source": "reactive.md",
+      "name": "reactive",
+      "type": "html",
+      "parentId": "26"
+    },
+    {
+      "id": "94",
+      "source": "rsync.md",
+      "name": "rsync",
+      "type": "html",
+      "parentId": "98"
+    },
+    {
+      "id": "95",
+      "source": "science.md",
+      "name": "science",
+      "type": "html",
+      "parentId": "13"
+    },
+    {
+      "id": "96",
+      "source": "scp.md",
+      "name": "scp",
+      "type": "html",
+      "parentId": "26"
+    },
+    {
+      "id": "97",
+      "source": "series.md",
+      "name": "series",
+      "type": "html",
+      "parentId": "142"
+    },
+    {
+      "id": "98",
+      "source": "software.md",
+      "name": "software",
+      "type": "html",
+      "parentId": "139"
+    },
+    {
+      "id": "99",
+      "source": "survival and edc.md",
+      "name": "survival and edc",
+      "type": "html",
+      "parentId": "13"
+    },
+    {
+      "id": "100",
+      "source": "tech ideas.md",
+      "name": "tech ideas",
+      "type": "html",
+      "parentId": "138"
+    },
+    {
+      "id": "101",
+      "source": "techno (minimal) production.md",
+      "name": "techno (minimal) production",
+      "type": "html",
+      "parentId": "138"
+    },
+    {
+      "id": "102",
+      "source": "the night of (2016).md",
+      "name": "the night of (2016)",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "103",
+      "source": "todo.md",
+      "name": "todo",
+      "type": "html",
+      "parentId": "13"
+    },
+    {
+      "id": "104",
+      "source": "transport.md",
+      "name": "transport",
+      "type": "html",
+      "parentId": "13"
+    },
+    {
+      "id": "105",
+      "source": "ubuntu.md",
+      "name": "ubuntu",
+      "type": "html",
+      "parentId": "26"
+    },
+    {
+      "id": "106",
+      "source": "vue 3 features.md",
+      "name": "vue 3 features",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "107",
+      "source": "vue.md",
+      "name": "vue",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "108",
+      "source": "web.md",
+      "name": "web",
+      "type": "html",
+      "parentId": "98"
+    },
+    {
+      "id": "109",
+      "source": "words.md",
+      "name": "words",
+      "type": "html",
+      "parentId": "13"
+    },
+    {
+      "id": "110",
+      "source": "yhelper.md",
+      "name": "yhelper",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "111",
+      "source": "yolang.md",
+      "name": "yolang",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "112",
+      "source": "аєродинаміка.md",
+      "name": "аєродинаміка",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "113",
+      "source": "бодрийяр.md",
+      "name": "бодрийяр",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "114",
+      "source": "велосипед.md",
+      "name": "велосипед",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "115",
+      "source": "гурджиев.md",
+      "name": "гурджиев",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "116",
+      "source": "деррида.md",
+      "name": "деррида",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "117",
+      "source": "дзогчен.md",
+      "name": "дзогчен",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "118",
+      "source": "динаміка польоту.md",
+      "name": "динаміка польоту",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "119",
+      "source": "кант.md",
+      "name": "кант",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "120",
+      "source": "китайская философия.md",
+      "name": "китайская философия",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "121",
+      "source": "лакан и желание.md",
+      "name": "лакан и желание",
+      "type": "html",
+      "parentId": "127"
+    },
+    {
+      "id": "122",
+      "source": "лао-цзы.md",
+      "name": "лао-цзы",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "123",
+      "source": "мамардашвили.md",
+      "name": "мамардашвили",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "124",
+      "source": "мерло-понти.md",
+      "name": "мерло-понти",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "125",
+      "source": "метеорологія.md",
+      "name": "метеорологія",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "126",
+      "source": "протагор (софист).md",
+      "name": "протагор (софист)",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "127",
+      "source": "психоанализ.md",
+      "name": "психоанализ",
+      "type": "html",
+      "parentId": "140"
+    },
+    {
+      "id": "128",
+      "source": "развитие разработчика.md",
+      "name": "развитие разработчика",
+      "type": "html",
+      "parentId": "26"
+    },
+    {
+      "id": "129",
+      "source": "ричард робб.md",
+      "name": "ричард робб",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "130",
+      "source": "руднев вадим.md",
+      "name": "руднев вадим",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "131",
+      "source": "структура философии.md",
+      "name": "структура философии",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "132",
+      "source": "уайтхед.md",
+      "name": "уайтхед",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "133",
+      "source": "философия.md",
+      "name": "философия",
+      "type": "html",
+      "parentId": "140"
+    },
+    {
+      "id": "134",
+      "source": "фихте.md",
+      "name": "фихте",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "135",
+      "source": "фуко.md",
+      "name": "фуко",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "136",
+      "source": "хайдеггер.md",
+      "name": "хайдеггер",
+      "type": "html",
+      "parentId": "144"
+    },
+    {
+      "id": "137",
+      "source": "части психики.md",
+      "name": "части психики",
+      "type": "html",
+      "parentId": "140"
+    }
+  ],
+  "images": [
+    "machine learning main concepts.jpeg",
+    "ai.jpeg",
+    "machine learning map.jpeg",
+    "types of ML.jpeg",
+    "classical ML.jpeg"
+  ],
+  "skipped": [
+    {
+      "file": "CLAUDE.md",
+      "reason": "non-content (tooling)"
+    },
+    {
+      "file": "body.md",
+      "reason": "excluded (sensitive/private)"
+    },
+    {
+      "file": "contacts.md",
+      "reason": "excluded (sensitive/private)"
+    },
+    {
+      "file": "finance.md",
+      "reason": "excluded (sensitive/private)"
+    },
+    {
+      "file": "home.md",
+      "reason": "excluded (sensitive/private)"
+    },
+    {
+      "file": "job accounts.md",
+      "reason": "excluded (sensitive/private)"
+    },
+    {
+      "file": "job contacts.md",
+      "reason": "excluded (sensitive/private)"
+    },
+    {
+      "file": "job interview.md",
+      "reason": "excluded (sensitive/private)"
+    },
+    {
+      "file": "job ownership.md",
+      "reason": "excluded (sensitive/private)"
+    },
+    {
+      "file": "job productivity.md",
+      "reason": "excluded (sensitive/private)"
+    },
+    {
+      "file": "job todo.md",
+      "reason": "excluded (sensitive/private)"
+    },
+    {
+      "file": "job.md",
+      "reason": "excluded (sensitive/private)"
+    },
+    {
+      "file": "medicine.md",
+      "reason": "excluded (sensitive/private)"
+    },
+    {
+      "file": "женщины.md",
+      "reason": "excluded (sensitive/private)"
+    },
+    {
+      "file": "знакомства.md",
+      "reason": "excluded (sensitive/private)"
+    },
+    {
+      "file": "моя комната.md",
+      "reason": "excluded (sensitive/private)"
+    },
+    {
+      "file": "самоанализ.md",
+      "reason": "excluded (sensitive/private)"
+    },
+    {
+      "file": "тревога.md",
+      "reason": "excluded (sensitive/private)"
+    }
+  ]
+}

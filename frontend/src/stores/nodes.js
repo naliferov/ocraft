@@ -1,9 +1,18 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 
+// A deleted node's script.js rides along on the pooled node under this Symbol key.
+// JSON.stringify skips symbol-keyed props, so it never leaks back into state.json
+// when the node is re-saved on restore.
+const SCRIPT = Symbol('script')
+
 export const useNodesStore = defineStore('nodes', () => {
   const nodes = ref([])
   const activeNodeId = ref(null)
+  // Undo pool: node snapshots removed in this session, newest first. A node that
+  // had a script.js carries it on the snapshot under the SCRIPT symbol, so `restore`
+  // can switch it back into `nodes` whole.
+  const deletedNodes = ref([])
 
   const activeNode = computed(() => nodes.value.find(n => n.id === activeNodeId.value) ?? null)
 
@@ -17,6 +26,11 @@ export const useNodesStore = defineStore('nodes', () => {
       if (parent) parent.children.push(node)
       else roots.push(node)
     }
+    // Sort siblings alphabetically by name (instead of fs-readdir / id order).
+    // localeCompare handles unicode (Cyrillic) + numbers; case-insensitive.
+    const byName = (a, b) => (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' })
+    for (const node of byId.values()) node.children.sort(byName)
+    roots.sort(byName)
     return roots
   })
 
@@ -52,6 +66,100 @@ export const useNodesStore = defineStore('nodes', () => {
     })
   }
 
+  // Create a node with a server-minted id. `parentId` nests it under a category;
+  // omitting `type` makes a plain scene node. Pushes the returned node into
+  // `nodes` so `tree` recomputes and the sidebar shows it immediately.
+  const create = async ({ type, parentId = null, name = 'new node' } = {}) => {
+    const body = { name }
+    if (type) body.type = type
+    if (parentId) body.parentId = parentId
+    const res = await fetch('/api/nodes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    const node = await res.json()
+    nodes.value.push(node)
+    return node
+  }
+
+  // Delete a node. The server refuses with 409 if it still has children — surface
+  // that as an error so the caller can tell the user instead of silently failing.
+  // On success, stash the node's full data (plus its script.js, if any) in the undo
+  // pool, drop it locally (tree recomputes), and move selection off it.
+  const remove = async (id) => {
+    const node = nodes.value.find(n => n.id === id)
+    // Script nodes (incl. wasm) keep their code in script.js (outside state.json),
+    // so grab it before deleting — restore needs it to bring the node back whole.
+    // Only script nodes have one; probing other types would just 404 the console.
+    let script = null
+    if (node?.type === 'script') {
+      const scriptRes = await fetch(`/api/nodes/${id}/script`)
+      if (scriptRes.ok) script = await scriptRes.text()
+    }
+
+    const res = await fetch(`/api/nodes/${id}`, { method: 'DELETE' })
+    if (res.status === 409) {
+      const { children = [] } = await res.json().catch(() => ({}))
+      throw new Error(`Can't delete: node has ${children.length} child node(s)`)
+    }
+    if (!res.ok) throw new Error('Delete failed')
+
+    if (node) {
+      const snapshot = { ...node }
+      if (script != null) snapshot[SCRIPT] = script
+      deletedNodes.value.unshift(snapshot)
+    }
+    nodes.value = nodes.value.filter(n => n.id !== id)
+    if (activeNodeId.value === id) activeNodeId.value = nodes.value[0]?.id ?? null
+  }
+
+  // Switch a deleted node back into the store. POST /api/nodes/:id is an upsert, so
+  // re-saving recreates the folder at the *same* id (path/identity preserved); a
+  // deleted node never had children (delete 409s otherwise), so nothing is orphaned.
+  // Restores script.js too (from the SCRIPT symbol), then drops it from the pool.
+  const restore = async (id) => {
+    const index = deletedNodes.value.findIndex(node => node.id === id)
+    if (index === -1) return null
+    const node = deletedNodes.value[index]
+    const script = node[SCRIPT]
+    await save(id, node) // SCRIPT symbol is ignored by JSON.stringify — never hits state.json
+    if (script != null) {
+      await fetch(`/api/nodes/${id}/script`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: script,
+      })
+    }
+    delete node[SCRIPT]
+    nodes.value.push(node)
+    deletedNodes.value.splice(index, 1)
+    return node
+  }
+
+  // Rename in place (mutates `node.name` so the tree updates live) and persist.
+  const rename = async (id, name) => {
+    const node = nodes.value.find(n => n.id === id)
+    if (!node) return
+    node.name = name
+    await save(id, node)
+  }
+
+  // Move a node under `parentId` (null/undefined = back to root). Mutating
+  // `parentId` recomputes the tree live. Cycle guard: a node can't move into its
+  // own subtree — `pathOf(parentId)` is the target's root→target id chain, so if
+  // the dragged id appears in it, the target is the node itself or a descendant.
+  const reparent = async (id, parentId) => {
+    if (id === parentId) return
+    const node = nodes.value.find(n => n.id === id)
+    if (!node) return
+    if (parentId && pathOf(parentId).split('/').includes(id)) {
+      throw new Error("Can't move a node into its own descendant")
+    }
+    node.parentId = parentId || undefined
+    await save(id, node)
+  }
+
   // Flip a node's `collapsed` flag and persist it. Mutating the real node in
   // `nodes` (not the tree copy) reactively recomputes `tree`, so the sidebar
   // updates instantly; the save just makes the choice survive reloads.
@@ -72,5 +180,5 @@ export const useNodesStore = defineStore('nodes', () => {
     }
   })
 
-  return { nodes, activeNodeId, activeNode, tree, childrenOf, pathOf, load, save, toggleCollapsed }
+  return { nodes, activeNodeId, activeNode, deletedNodes, tree, childrenOf, pathOf, load, save, create, remove, restore, rename, reparent, toggleCollapsed }
 })

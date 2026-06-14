@@ -1,7 +1,6 @@
-// Frontend dev server (Vite). Runs `npm run dev` in frontend/, which also
-// auto-spawns the backend API server on port 3001. Stopping this proc kills the
-// whole group (npm + vite + the spawned backend), since procs are killed by
-// process group.
+// Frontend dev server (Vite, port 5173). Runs `npm run dev` in frontend/ and
+// proxies /api to the backend proc on port 3001 (started separately — see
+// backend/procs/backend.js). Vite no longer spawns the backend itself.
 export default {
   cmd: 'npm',
   args: ['run', 'dev'],

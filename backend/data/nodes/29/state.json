@@ -1,0 +1,6 @@
+{
+  "name": "data structures",
+  "type": "html",
+  "text": "<p>boolean\ninteger\nchar\nstring</p>\n<p>list\nmap\ngraph\nstack\nqueue\ndistributed hash table</p>",
+  "parentId": "26"
+}

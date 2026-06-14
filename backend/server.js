@@ -4,10 +4,56 @@ import path from 'node:path'
 import { getDirname } from './lib/path.js'
 
 const currentDir = getDirname(import.meta.url)
+const ROOT_DIR = path.join(currentDir, '..') // repo root — the cwd the ai-chat agent works in
 const NODES_DIR = path.join(currentDir, 'data/nodes')
 const ASSETS_DIR = path.join(currentDir, 'data/assets')
 
+// Render prior chat turns as plain context so each ai-chat request carries the
+// conversation (the endpoint is stateless; the node stores the history).
+const buildChatPrompt = (history, message) => {
+  if (!history?.length) return message
+  const transcript = history
+    .map((turn) => `${turn.role === 'user' ? 'User' : 'Assistant'}: ${turn.text}`)
+    .join('\n\n')
+  return `Continuing our conversation. History so far:\n\n${transcript}\n\nUser: ${message}`
+}
+
 const nodePath = (id) => path.join(NODES_DIR, id, 'state.json')
+
+// Resolve a node's folder under NODES_DIR, rejecting anything that escapes it
+// (an `id` of `..` would otherwise let DELETE rm a folder outside the data store).
+const nodeDirSafe = (id) => {
+  const full = path.resolve(NODES_DIR, id)
+  if (full !== NODES_DIR && full.startsWith(NODES_DIR + path.sep)) return full
+  return null
+}
+
+// Mint the next node id: the smallest unused positive integer (folder names are
+// numeric strings, `"1"`, `"2"`, …). Scans existing folders for the max and +1.
+const mintNodeId = async () => {
+  const dirs = await fs.readdir(NODES_DIR)
+  const maxId = dirs.reduce((max, dir) => {
+    const num = Number(dir)
+    return Number.isInteger(num) && num > max ? num : max
+  }, 0)
+  return String(maxId + 1)
+}
+
+// Ids of nodes whose `parentId` is `id` (children block a delete). Reads every
+// node's state.json — fine at this scale; the store does the same on load.
+const childrenOf = async (parentId) => {
+  const dirs = await fs.readdir(NODES_DIR)
+  const children = []
+  for (const dir of dirs) {
+    try {
+      const { parentId: nodeParentId } = JSON.parse(await fs.readFile(nodePath(dir), 'utf-8'))
+      if (nodeParentId === parentId) children.push(dir)
+    } catch {
+      // skip unreadable/partial node dirs
+    }
+  }
+  return children
+}
 
 // Static asset serving (GET /api/assets/<relpath>). Used by the scene renderer to
 // load clipart SVGs from data/assets/. Read-only; guarded against path traversal.
@@ -119,6 +165,80 @@ const routes = {
     await fs.mkdir(dir, { recursive: true })
     await fs.writeFile(nodePath(id), JSON.stringify(body, null, 2))
     res.writeHead(200).end('Saved')
+  },
+
+  // Create a node with a server-minted id (the body carries no id — that's what
+  // distinguishes this from the upsert above). Returns the new node incl. its id.
+  'POST /api/nodes': async (req, res) => {
+    const body = await readBody(req)
+    const id = await mintNodeId()
+    await fs.mkdir(path.join(NODES_DIR, id), { recursive: true })
+    await fs.writeFile(nodePath(id), JSON.stringify(body, null, 2))
+    res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ id, ...body }))
+  },
+
+  // Delete a node's folder. Refuses with 409 if it still has children (no silent
+  // orphaning — the caller must reparent/delete them first). Path-guarded so an
+  // `id` like `..` can't escape the data store.
+  'DELETE /api/nodes/:id': async (req, res, { id }) => {
+    const dir = nodeDirSafe(id)
+    if (!dir) {
+      res.writeHead(403).end('Forbidden')
+      return
+    }
+    const children = await childrenOf(id)
+    if (children.length) {
+      res.writeHead(409, { 'Content-Type': 'application/json' })
+        .end(JSON.stringify({ error: 'Node has children', children }))
+      return
+    }
+    try {
+      await fs.rm(dir, { recursive: true, force: true })
+      res.writeHead(200).end('Deleted')
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: error.message }))
+    }
+  },
+
+  // ⚠️ SECURITY: this runs the Claude Agent SDK with permissionMode 'bypassPermissions'
+  // and full Read/Write/Edit/Bash tools, cwd = repo root. Anything that can reach
+  // this endpoint (localhost:3001 / the Vite proxy) can make Claude edit files and
+  // run shell commands on this machine. It's intended for local single-user dev only —
+  // do NOT expose this server to a network. Auth is the user's own Claude Code login
+  // (Pro/Max subscription via ~/.claude or CLAUDE_CODE_OAUTH_TOKEN); no API key is used.
+  'POST /api/ai-chat': async (req, res) => {
+    const { message, history = [] } = await readBody(req)
+    if (!message || typeof message !== 'string') {
+      res.writeHead(400, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: 'message (string) required' }))
+      return
+    }
+
+    const { query } = await import('@anthropic-ai/claude-agent-sdk') // lazy: server boots without loading the SDK
+    const prompt = buildChatPrompt(history, message)
+
+    let text = ''
+    const toolUses = []
+    let result = null
+    try {
+      for await (const event of query({
+        prompt,
+        options: { cwd: ROOT_DIR, permissionMode: 'bypassPermissions', maxTurns: 30 },
+      })) {
+        if (event.type === 'assistant') {
+          for (const block of event.message.content) {
+            if (block.type === 'text') text += block.text
+            else if (block.type === 'tool_use') toolUses.push({ name: block.name, input: block.input })
+          }
+        } else if (event.type === 'result') {
+          result = { subtype: event.subtype, cost: event.total_cost_usd, turns: event.num_turns, sessionId: event.session_id }
+        }
+      }
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: error.message }))
+      return
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ text: text.trim(), toolUses, result }))
   },
 }
 

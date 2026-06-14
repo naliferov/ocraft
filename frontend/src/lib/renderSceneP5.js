@@ -218,3 +218,54 @@ export const renderSceneP5 = (s, { width, height }, node) => {
     }
   }
 }
+
+// --- Interaction (hit-testing for dragging elements) ------------------------
+// The same letterbox transform renderSceneP5 uses, factored out so screen↔logical
+// conversions and hit-testing stay in sync with what's actually drawn.
+const viewportTransform = (canvasWidth, canvasHeight, node) => {
+  const { width: vw, height: vh } = node.viewport ?? { width: 160, height: 90 }
+  const scale = Math.min(canvasWidth / vw, canvasHeight / vh)
+  return { scale, offsetX: (canvasWidth - vw * scale) / 2, offsetY: (canvasHeight - vh * scale) / 2 }
+}
+
+// Canvas pixel coords -> logical viewport units (the space element x/y live in).
+export const screenToLogical = (canvasWidth, canvasHeight, node, screenX, screenY) => {
+  const { scale, offsetX, offsetY } = viewportTransform(canvasWidth, canvasHeight, node)
+  return { x: (screenX - offsetX) / scale, y: (screenY - offsetY) / scale }
+}
+
+// Axis-aligned bounds of a draggable element in logical units, mirroring the
+// sizing the renderer applies. Returns null for non-draggable elements
+// (background) so they're never picked. Rotation isn't accounted for — the box is
+// the unrotated extent, which is good enough for grabbing.
+const elementBounds = (element) => {
+  if (element.type === 'shape') {
+    const { x = 0, y = 0, width = 10, height = 10 } = element.props ?? {}
+    return { left: x, top: y, right: x + width, bottom: y + height }
+  }
+  if (element.type === 'clipart') {
+    const { src, x = 0, y = 0, width, height, scale = 1 } = element.props ?? {}
+    const aspect = (src ? clipartCache.get(src)?.aspect : null) ?? 1
+    const baseWidth = width ?? (height != null ? height * aspect : 40)
+    const baseHeight = height ?? baseWidth / aspect
+    const halfWidth = (baseWidth / 2) * scale
+    const halfHeight = (baseHeight / 2) * scale // x,y is the clipart's center
+    return { left: x - halfWidth, top: y - halfHeight, right: x + halfWidth, bottom: y + halfHeight }
+  }
+  return null
+}
+
+// Topmost draggable element at a canvas point, or null. Front-to-back is the
+// render order (by z, stable) reversed, so the visually top element wins.
+export const pickElement = (canvasWidth, canvasHeight, node, screenX, screenY) => {
+  const { x, y } = screenToLogical(canvasWidth, canvasHeight, node, screenX, screenY)
+  const ordered = [...(node.elements ?? [])].sort((a, b) => (a.z ?? 0) - (b.z ?? 0))
+  for (let index = ordered.length - 1; index >= 0; index--) {
+    const element = ordered[index]
+    if (element.enabled === false) continue
+    const bounds = elementBounds(element)
+    if (!bounds) continue
+    if (x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom) return element
+  }
+  return null
+}

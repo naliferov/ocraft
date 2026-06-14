@@ -1,0 +1,6 @@
+{
+  "name": "generative art",
+  "type": "html",
+  "text": "<p>Hydra\nosc(150, -0.1).rotate(1.57).out(o0)</p>\n<p>SupperCollider</p>",
+  "parentId": "84"
+}

@@ -1,0 +1,6 @@
+{
+  "name": "reactive",
+  "type": "html",
+  "text": "<p><a href=\"https://en.m.wikipedia.org/wiki/Reactive_programming#Glitches\">https://en.m.wikipedia.org/wiki/Reactive_programming#Glitches</a></p>\n<p>push &amp; pull-based reactivity</p>\n<p>Райана (автор солида) есть стрим, разбирает эволюцию подходов реактивности\n<a href=\"https://www.youtube.com/live/R5AcOtxIdMk?feature=shared\">https://www.youtube.com/live/R5AcOtxIdMk?feature=shared</a></p>\n<p>Открой обычный плейграунд и напиши чет тип \n{{ (() =&gt; { console.log(“test”)})() }}\nВ темплейт, повызывай изменение реактивной переменной</p>",
+  "parentId": "26"
+}

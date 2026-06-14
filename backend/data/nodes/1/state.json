@@ -5,16 +5,6 @@
     "height": 90,
     "aspectRatio": "16:9"
   },
-  "grid": 8,
-  "scale": 4,
-  "tempo": {
-    "bpm": 120,
-    "beatsPerBar": 4
-  },
-  "structure": {
-    "bars": 4,
-    "loop": true
-  },
   "elements": [
     {
       "name": "bg",
@@ -47,8 +37,8 @@
       "z": 1,
       "props": {
         "src": "tree2.svg",
-        "x": 50,
-        "y": 45,
+        "x": 64.87,
+        "y": 43.47,
         "width": 32,
         "height": 63,
         "scale": 1,
@@ -63,8 +53,8 @@
       "z": 2,
       "props": {
         "src": "car.svg",
-        "x": 30,
-        "y": 77,
+        "x": 23.96,
+        "y": 74.36,
         "width": 46,
         "height": 23,
         "scale": 1,
@@ -74,6 +64,5 @@
       "events": []
     }
   ],
-  "tracks": [],
-  "effects": []
+  "parentId": "12"
 }

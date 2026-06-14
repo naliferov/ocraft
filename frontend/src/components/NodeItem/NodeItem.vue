@@ -2,11 +2,11 @@
 import { computed, ref, nextTick } from 'vue'
 import { NSelect, NButton } from 'naive-ui'
 import { useNodesStore } from '../../stores/nodes.js'
-import SceneEditor from './editors/SceneEditor.vue'
-import ScriptEditor from './editors/ScriptEditor.vue'
-import HtmlEditor from './editors/HtmlEditor.vue'
-import StreamEditor from './editors/StreamEditor.vue'
-import CategoryEditor from './editors/CategoryEditor.vue'
+import Scene from './nodeTypes/Scene.vue'
+import Script from './nodeTypes/Script.vue'
+import Html from './nodeTypes/Html.vue'
+import Category from './nodeTypes/Category.vue'
+import AiChat from './nodeTypes/AiChat.vue'
 
 const props = defineProps({
   node: { type: Object, required: true }
@@ -14,29 +14,29 @@ const props = defineProps({
 
 const store = useNodesStore()
 // The single Save: persists state.json (name, type, and whatever the active
-// editor mutated on `node`), then asks the active editor to persist anything it
-// owns separately — e.g. ScriptEditor's script.js. Editors that keep everything
-// on `node` (html, scene, …) expose no save() and are covered by the write above.
-const editorRef = ref(null)
+// node-type component mutated on `node`), then asks that component to persist
+// anything it owns separately — e.g. Script's script.js. Components that keep
+// everything on `node` (Html, Scene, …) expose no save() and are covered above.
+const componentRef = ref(null)
 const save = async () => {
   await store.save(props.node.id, props.node)
-  await editorRef.value?.save?.()
+  await componentRef.value?.save?.()
 }
 
-// Registry of node type -> editor: the single source of truth for both the type
-// picker and which component renders. Adding a node type = one entry here.
-// `hidden: true` keeps the component mapping (so existing nodes of that type still
-// render) but drops it from the type picker — used to park a not-yet-ready type.
-const EDITORS = {
-  scene: { label: 'scene', component: SceneEditor },
-  script: { label: 'script', component: ScriptEditor },
-  html: { label: 'html', component: HtmlEditor },
-  stream: { label: 'stream', component: StreamEditor, hidden: true }, // parked — see IDEAS.md
-  category: { label: 'category', component: CategoryEditor },
+// Registry of node type -> component: the single source of truth for both the
+// type picker and which component renders. Adding a node type = one entry here.
+// `hidden: true` keeps the mapping (so existing nodes of that type still render)
+// but drops it from the type picker — used to park a not-yet-ready type.
+const NODE_TYPES = {
+  scene: { label: 'scene', component: Scene },
+  script: { label: 'script', component: Script },
+  html: { label: 'html', component: Html },
+  category: { label: 'category', component: Category },
+  'ai-chat': { label: 'ai-chat', component: AiChat },
 }
 
-const typeOptions = Object.entries(EDITORS)
-  .filter(([, e]) => !e.hidden)
+const typeOptions = Object.entries(NODE_TYPES)
+  .filter(([, nodeTypeDef]) => !nodeTypeDef.hidden)
   .map(([value, { label }]) => ({ label, value }))
 
 const nodeType = computed({
@@ -44,7 +44,7 @@ const nodeType = computed({
   set: (val) => { props.node.type = val === 'scene' ? undefined : val }
 })
 
-const editor = computed(() => (EDITORS[nodeType.value] ?? EDITORS.scene).component)
+const activeComponent = computed(() => (NODE_TYPES[nodeType.value] ?? NODE_TYPES.scene).component)
 
 // Click the name to rename. `name` is just a display label — a node's id is its
 // folder name and never changes. Editing only mutates node.name in place (the
@@ -103,7 +103,7 @@ const commitName = () => {
       <span class="desc">{{ node.description }}</span>
     </div>
 
-    <component :is="editor" :node="node" ref="editorRef" />
+    <component :is="activeComponent" :node="node" ref="componentRef" />
   </div>
 </template>
 

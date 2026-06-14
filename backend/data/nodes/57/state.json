@@ -1,0 +1,6 @@
+{
+  "name": "javascript engines and runtimes",
+  "type": "html",
+  "text": "<p><strong>JS Engine</strong> – interpretate and exec JS (V8, JavaScriptCore, SpiderMonkey).\n<strong>JS Runtime</strong> – env, which use JS Engine and expose some API (Node.js, Deno, Bun)</p>\n<h3>Engines</h3>\n<p><strong>V8</strong> (Standalone) – V8 is the engine inside Chrome, Node.js and Deno\n<strong>ChakraCore</strong> – Microsoft&#39;s JavaScript engine, originally used in the Edge browser.\n<strong>SpiderMonkey</strong> – Mozilla’s JavaScript engine, used in Firefox\n<strong>quickJS</strong> - легковесный, без JIT\n<strong>hermes</strong> - Meta, React Native</p>\n<p><strong>Engine internals</strong> – parses JS → bytecode, runs it on a heap + call stack, then JIT-compiles hot code into machine code.</p>\n<h3>JS Runtimes</h3>\n<p>browser\n<a href=\"/node/81\" class=\"wikilink\">node.js</a>\nbun\ndeno</p>\n<h4>WebAssembly (Wasm) Runtimes</h4>\n<p>Wasmtime\nWasmEdge\nWasmer</p>",
+  "parentId": "144"
+}

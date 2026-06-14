@@ -14,70 +14,14 @@
 // https://cloud.digitalocean.com/account/api/tokens and set it in
 // digitalocean-mcp/.env as DIGITALOCEAN_API_TOKEN (DIGITALOCEAN_TOKEN /
 // DO_API_TOKEN also accepted). Uses Node's built-in fetch — no HTTP dependency.
-import path from 'node:path'
-import dotenv from 'dotenv'
-dotenv.config({ path: path.join(import.meta.dirname, '.env') })
 import { z } from 'zod'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import { doFetch, summarize, summarizeReservedIp, requireToken } from './do-api.js'
 
-const TOKEN =
-  process.env.DIGITALOCEAN_API_TOKEN ||
-  process.env.DIGITALOCEAN_TOKEN ||
-  process.env.DO_API_TOKEN
-
-if (!TOKEN) {
-  // stderr only — stdout is the MCP stdio channel and must stay clean.
-  console.error(
-    'digitalocean-mcp: missing DIGITALOCEAN_API_TOKEN.\n' +
-    'Create a read+write token at https://cloud.digitalocean.com/account/api/tokens\n' +
-    'and set DIGITALOCEAN_API_TOKEN in mcp-servers/digitalocean-mcp/.env'
-  )
-  process.exit(1)
-}
-
-const API = 'https://api.digitalocean.com'
-
+// MCP response shapers. All API logic lives in do-api.js (shared with backend entries).
 const ok = (data) => ({ content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] })
 const fail = (msg) => ({ isError: true, content: [{ type: 'text', text: String(msg) }] })
-
-// Drop undefined keys so optional fields aren't sent as nulls.
-const clean = (obj) => Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined))
-
-// One request to the DO API. Adds auth + JSON headers, parses the body, and turns
-// a non-2xx into a thrown Error carrying DigitalOcean's own message.
-async function doFetch(pathname, { method = 'GET', query, body } = {}) {
-  const url = new URL(pathname, API)
-  if (query) for (const [k, v] of Object.entries(query)) if (v != null) url.searchParams.set(k, String(v))
-  const res = await fetch(url, {
-    method,
-    headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(clean(body)) : undefined,
-  })
-  const text = await res.text()
-  const data = text ? JSON.parse(text) : null // DELETE / actions can return 204
-  if (!res.ok) {
-    const msg = data?.message || data?.id || `${res.status} ${res.statusText}`
-    throw new Error(`DigitalOcean API ${res.status}: ${msg}`)
-  }
-  return data
-}
-
-// Compact view of a droplet — the full object is large and mostly noise.
-const summarize = (d) => ({
-  id: d.id,
-  name: d.name,
-  status: d.status,
-  region: d.region?.slug ?? null,
-  size: d.size_slug,
-  memory_mb: d.memory,
-  vcpus: d.vcpus,
-  disk_gb: d.disk,
-  image: d.image ? (d.image.slug || `${d.image.distribution ?? ''} ${d.image.name ?? ''}`.trim()) : null,
-  ipv4: (d.networks?.v4 ?? []).map((n) => ({ ip: n.ip_address, type: n.type })),
-  tags: d.tags ?? [],
-  created_at: d.created_at,
-})
 
 const server = new McpServer({ name: 'digitalocean', version: '1.0.0' })
 
@@ -249,13 +193,6 @@ server.registerTool(
 
 // --- Reserved IPs (stable, movable addresses) ------------------------------
 
-const summarizeReservedIp = (r) => ({
-  ip: r.ip,
-  region: r.region?.slug ?? null,
-  droplet: r.droplet ? { id: r.droplet.id, name: r.droplet.name } : null,
-  locked: r.locked ?? null,
-})
-
 server.registerTool(
   'do_list_reserved_ips',
   {
@@ -340,6 +277,7 @@ server.registerTool(
 )
 
 async function main() {
+  requireToken() // fail fast with a helpful message if the token is missing
   const transport = new StdioServerTransport()
   await server.connect(transport)
   console.error('digitalocean-mcp: connected and ready.')
