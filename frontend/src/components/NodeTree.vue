@@ -7,6 +7,10 @@ const props = defineProps({
   nodes: { type: Array, required: true },
   activeId: { type: String, default: null },
   depth: { type: Number, default: 0 },
+  // Active search needle (already trimmed). Highlights matching rows and, with
+  // `expandAll`, forces every branch open so matches aren't hidden by collapse.
+  query: { type: String, default: '' },
+  expandAll: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['select', 'toggle', 'create', 'rename', 'remove', 'reparent'])
@@ -14,9 +18,11 @@ const emit = defineEmits(['select', 'toggle', 'create', 'rename', 'remove', 'rep
 // Collapse state is the node's own `collapsed` flag (from state.json). Toggling
 // is emitted up to the store, which flips the flag and persists it, so the choice
 // survives reloads; the tree re-renders reactively once the flag changes.
-const isCollapsed = (n) => !!n.collapsed
+// While searching, ignore the stored collapse flag so matched branches show.
+const isCollapsed = (n) => props.expandAll ? false : !!n.collapsed
 const toggle = (n) => emit('toggle', n.id)
 const isCategory = (n) => n.type === 'category'
+const isMatch = (node) => !!props.query && (node.name || '').toLowerCase().includes(props.query.toLowerCase())
 
 // Drag a node onto a category to reparent it. Native HTML5 DnD carries the dragged
 // id in dataTransfer, so it crosses recursive NodeTree instances without shared
@@ -139,6 +145,7 @@ const commitRename = (node) => {
         <span
           v-else
           class="label"
+          :class="{ match: isMatch(n) }"
           draggable="true"
           @click="emit('select', n.id)"
           @dragstart="onDragStart(n, $event)"
@@ -159,6 +166,8 @@ const commitRename = (node) => {
         :nodes="n.children"
         :active-id="activeId"
         :depth="depth + 1"
+        :query="query"
+        :expand-all="expandAll"
         @select="emit('select', $event)"
         @toggle="emit('toggle', $event)"
         @create="emit('create', $event)"
@@ -210,6 +219,11 @@ const commitRename = (node) => {
 .folder {
   opacity: 0.6;
   margin-right: 2px;
+}
+/* Search hit: tint the matching row's name so it stands out in the pruned tree. */
+.label.match {
+  color: #ffd56b;
+  font-weight: 600;
 }
 .rename-input {
   flex: 1;

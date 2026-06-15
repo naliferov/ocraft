@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { NConfigProvider, NLayout, NLayoutSider, NLayoutContent } from 'naive-ui'
 import { useNodesStore } from './stores/nodes.js'
@@ -15,6 +15,25 @@ watch(() => route.params.id, (id) => {
 }, { immediate: true })
 
 const navigate = (id) => router.push(`/node/${id}`)
+
+// Search the tree by node name. Prune to branches that contain a match (keeping
+// ancestors so the path stays visible); while searching, NodeTree force-expands
+// and highlights matches. Case-insensitive; localeCompare-free `includes` handles
+// unicode (Cyrillic) fine.
+const searchQuery = ref('')
+const pruneBySearch = (nodes, needle) => {
+  const kept = []
+  for (const node of nodes) {
+    const children = pruneBySearch(node.children, needle)
+    const selfMatches = (node.name || '').toLowerCase().includes(needle)
+    if (selfMatches || children.length) kept.push({ ...node, children })
+  }
+  return kept
+}
+const displayTree = computed(() => {
+  const needle = searchQuery.value.trim().toLowerCase()
+  return needle ? pruneBySearch(store.tree, needle) : store.tree
+})
 
 // Create a node (root-level when no parentId), select it so the user lands on it.
 const createNode = async (parentId = null) => {
@@ -59,8 +78,25 @@ const reparentNode = async ({ id, parentId }) => {
     <n-layout has-sider content-style="height: 100vh;">
       <n-layout-sider :width="240" bordered content-style="padding: 10px 8px 0 8px;">
         <div class="tree-toolbar">
-          <span class="tree-title">Nodes</span>
+          <div class="tree-brand">
+            <span class="tree-logo">ocraft</span>
+            <span class="tree-title">Nodes</span>
+          </div>
           <button class="new-node" title="New root node" @click="createNode()">+ node</button>
+        </div>
+        <div class="tree-search">
+          <input
+            v-model="searchQuery"
+            class="tree-search-input"
+            type="search"
+            placeholder="Search nodes…"
+          />
+          <button
+            v-if="searchQuery"
+            class="tree-search-clear"
+            title="Clear search"
+            @click="searchQuery = ''"
+          >×</button>
         </div>
         <div v-if="deleteError" class="tree-error" @click="deleteError = ''">{{ deleteError }}</div>
         <div v-if="store.deletedNodes.length" class="trash-pool">
@@ -70,9 +106,14 @@ const reparentNode = async ({ id, parentId }) => {
             <button class="trash-restore" title="Restore" @click="restoreNode(entry.id)">↩</button>
           </div>
         </div>
+        <div v-if="searchQuery.trim() && !displayTree.length" class="tree-empty">
+          No nodes match “{{ searchQuery.trim() }}”.
+        </div>
         <NodeTree
-          :nodes="store.tree"
+          :nodes="displayTree"
           :active-id="store.activeNodeId"
+          :query="searchQuery.trim()"
+          :expand-all="!!searchQuery.trim()"
           @select="navigate"
           @toggle="store.toggleCollapsed"
           @create="createNode"
@@ -96,11 +137,69 @@ const reparentNode = async ({ id, parentId }) => {
   justify-content: space-between;
   padding: 0 4px 6px 6px;
 }
+.tree-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.tree-logo {
+  flex: none;
+  font-weight: 700;
+  font-size: 0.95em;
+  letter-spacing: -0.02em;
+}
 .tree-title {
   font-size: 0.8em;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   opacity: 0.5;
+}
+.tree-search {
+  position: relative;
+  margin: 0 4px 8px 6px;
+}
+.tree-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 26px;
+  padding: 0 22px 0 8px;
+  font: inherit;
+  font-size: 0.85em;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 4px;
+  outline: none;
+}
+.tree-search-input:focus {
+  border-color: #3d7eff;
+}
+/* Hide the browser's native search clear (×) — we render our own .tree-search-clear. */
+.tree-search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+.tree-search-clear {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: inherit;
+  opacity: 0.5;
+  cursor: pointer;
+  font-size: 1.1em;
+  line-height: 1;
+  padding: 0 4px;
+}
+.tree-search-clear:hover {
+  opacity: 1;
+}
+.tree-empty {
+  font-size: 0.8em;
+  opacity: 0.5;
+  padding: 4px 8px;
 }
 .new-node {
   background: none;

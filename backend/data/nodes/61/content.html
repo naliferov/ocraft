@@ -1,0 +1,53 @@
+<p><a href="/node/57" class="wikilink">javascript engines and runtimes</a></p>
+<p>Reactivity - отложенный пересчёт (MeteorJS подход)
+Проблема: атом A зависит от B и C; при изменении B и C — A пересчитывается дважды.
+Решение: отложить пересчёт зависимых атомов до конца текущего обработчика события.
+При линковке атомов запоминать максимальную глубину + 1. При итерации по отложенным — обновлять атомы с меньшей глубиной первыми. Так к моменту пересчёта все прямые зависимости уже актуальны.</p>
+<p><strong>CSS flex — перенос на следующую строку</strong></p>
+<pre><code class="language-css">flex: 1 0 100%;
+</code></pre>
+<h2>Интерпретация vs компиляция</h2>
+<p>Парсинг → AST → (Байт-код | JIT | Шитый код). Шитый код (threaded code) — способ реализации промежуточной VM наряду с байт-кодом.
+<a href="/node/59" class="wikilink">javascript snippets</a>
+<a href="/node/56" class="wikilink">javascript changelog</a></p>
+<p><strong>Code structure:</strong>
+Statements
+Semicolons. A semicolon may be omitted in most cases when a line break exists.
+But this wouldn’t work:</p>
+<pre><code>alert(&quot;Hello&quot;)
+[1,2].forEach(alert)
+</code></pre>
+<p><strong>“use strict”</strong> directive effects:</p>
+<ul>
+<li>Disallows implicit globals</li>
+<li>Makes this undefined in functions</li>
+<li>Prevents duplicate parameters</li>
+<li>Makes certain silent errors throw exceptions</li>
+<li>Disallows with</li>
+<li>Restricts eval</li>
+</ul>
+<h3>types:</h3>
+<p>Number, BigInt, String, Boolean, Null,
+symbol, object
+<strong>typeof operator</strong></p>
+<p><strong>type conversions</strong>
+String conversion is mostly obvious. A <code>false</code> becomes <code>&quot;false&quot;</code>, <code>null</code> becomes <code>&quot;null&quot;</code>, etc.</p>
+<p>Numeric conversion in mathematical functions and expressions happens automatically
+If the string is not a valid number, the result of such a conversion is <code>NaN</code></p>
+<p>Boolean conversion is the simplest one.
+Values that are intuitively “empty”, like <code>0</code>, an empty string, <code>null</code>, <code>undefined</code>, and <code>NaN</code>, become <code>false</code>.
+Other values become true.</p>
+<p>var, let, const
+control flow
+loop
+function</p>
+<h5>async programming</h5>
+<p>callback
+<a href="/node/89" class="wikilink">promise</a>
+async await</p>
+<p>setTimeout
+setInterval</p>
+<h5>meta programming</h5>
+<p>proxy, reflect</p>
+<h5>Internals</h5>
+<p><a href="/node/36" class="wikilink">event loop (browser)</a></p>

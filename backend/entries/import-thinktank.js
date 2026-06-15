@@ -354,7 +354,10 @@ export const run = async (ctx) => {
   for (const note of notes) {
     const html = markdown.parse(note.raw).trim()
     const name = note.base.toLowerCase()
-    await writeNode(note.id, { name, type: 'html', text: html, parentId: note.parentId })
+    // The HTML body lives in a content.html sidecar (kept out of state.json so the
+    // node-list endpoint stays tiny), mirroring how script nodes store script.js.
+    await writeNode(note.id, { name, type: 'html', parentId: note.parentId })
+    await fs.writeFile(path.join(NODES_DIR, String(note.id), 'content.html'), html)
     manifestNodes.push({ id: note.id, source: note.file, name, type: 'html', parentId: note.parentId })
   }
 

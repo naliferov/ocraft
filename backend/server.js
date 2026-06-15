@@ -1,6 +1,7 @@
 import http from 'node:http'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import zlib from 'node:zlib'
 import { getDirname } from './lib/path.js'
 
 const currentDir = getDirname(import.meta.url)
@@ -84,6 +85,24 @@ const serveAsset = async (res, relPath) => {
   }
 }
 
+// Send a text/JSON body, gzipped when the client accepts it. The text-heavy reads
+// here (the node list, html content bodies, script source) compress ~4-5×; tiny
+// bodies skip it (the gzip header overhead isn't worth it). Single-user local dev
+// server, so synchronous gzip is fine.
+const sendText = (req, res, body, contentType) => {
+  const buffer = Buffer.from(body)
+  const acceptsGzip = (req.headers['accept-encoding'] || '').includes('gzip')
+  if (acceptsGzip && buffer.length > 512) {
+    res.writeHead(200, {
+      'Content-Type': contentType,
+      'Content-Encoding': 'gzip',
+      'Vary': 'Accept-Encoding',
+    }).end(zlib.gzipSync(buffer))
+  } else {
+    res.writeHead(200, { 'Content-Type': contentType }).end(buffer)
+  }
+}
+
 const readBody = async (req) => {
   const chunks = []
   for await (const chunk of req) chunks.push(chunk)
@@ -96,6 +115,25 @@ const readText = async (req) => {
   return Buffer.concat(chunks).toString('utf-8')
 }
 
+// A node's body lives in a sidecar file (kept out of state.json so the node list
+// stays tiny). Which file + content-type is decided by node type — both are served
+// through the single /body endpoint below. Add a type here to give it a body.
+const NODE_BODY = {
+  script: { file: 'script.js', contentType: 'text/javascript' },
+  html: { file: 'content.html', contentType: 'text/html; charset=utf-8' },
+}
+
+// Resolve a node's body-sidecar spec from its type, or null if the node is missing
+// or its type carries no body. Reads state.json (small — metadata only now).
+const bodySpecOf = async (id) => {
+  try {
+    const { type } = JSON.parse(await fs.readFile(nodePath(id), 'utf-8'))
+    return NODE_BODY[type] ?? null
+  } catch {
+    return null
+  }
+}
+
 const routes = {
   'GET /api/nodes': async (req, res) => {
     const dirs = await fs.readdir(NODES_DIR)
@@ -106,7 +144,7 @@ const routes = {
         return { id, ...data }
       })
     )
-    res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(nodes))
+    sendText(req, res, JSON.stringify(nodes), 'application/json')
   },
 
   'GET /api/nodes/:id': async (req, res, { id }) => {
@@ -118,20 +156,31 @@ const routes = {
     }
   },
 
-  'GET /api/nodes/:id/script': async (req, res, { id }) => {
+  // A node's body sidecar — a script node's script.js, an html node's content.html.
+  // One CRUD pair for both: the file + content-type come from the node's type (see
+  // NODE_BODY). Kept out of state.json so the node list stays tiny (GET /api/nodes);
+  // gzipped on read since bodies are the heavy part.
+  'GET /api/nodes/:id/body': async (req, res, { id }) => {
+    const spec = await bodySpecOf(id)
+    if (!spec) {
+      res.writeHead(404).end('Not found')
+      return
+    }
     try {
-      const scriptPath = path.join(NODES_DIR, id, 'script.js')
-      const raw = await fs.readFile(scriptPath, 'utf-8')
-      res.writeHead(200, { 'Content-Type': 'text/javascript' }).end(raw)
+      const raw = await fs.readFile(path.join(NODES_DIR, id, spec.file), 'utf-8')
+      sendText(req, res, raw, spec.contentType)
     } catch {
       res.writeHead(404).end('Not found')
     }
   },
 
-  'POST /api/nodes/:id/script': async (req, res, { id }) => {
-    const code = await readText(req)
-    const scriptPath = path.join(NODES_DIR, id, 'script.js')
-    await fs.writeFile(scriptPath, code)
+  'POST /api/nodes/:id/body': async (req, res, { id }) => {
+    const spec = await bodySpecOf(id)
+    if (!spec) {
+      res.writeHead(400).end('Node type has no body')
+      return
+    }
+    await fs.writeFile(path.join(NODES_DIR, id, spec.file), await readText(req))
     res.writeHead(200).end('Saved')
   },
 
@@ -142,7 +191,7 @@ const routes = {
   'GET /api/nodes/:id/wasm': async (req, res, { id }) => {
     let source
     try {
-      source = await fs.readFile(path.join(NODES_DIR, id, 'script.js'), 'utf-8')
+      source = await fs.readFile(path.join(NODES_DIR, id, NODE_BODY.script.file), 'utf-8')
     } catch {
       res.writeHead(404).end('Not found')
       return

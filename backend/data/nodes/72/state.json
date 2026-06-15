@@ -1,6 +1,5 @@
 {
   "name": "media",
   "type": "html",
-  "text": "<p>audio\n<a href=\"/node/22\" class=\"wikilink\">books</a>\n<a href=\"/node/51\" class=\"wikilink\">images</a>\ngames\n<a href=\"/node/75\" class=\"wikilink\">movies</a>\n<a href=\"/node/97\" class=\"wikilink\">series</a>\n<a href=\"/node/79\" class=\"wikilink\">music</a></p>",
   "parentId": "144"
 }

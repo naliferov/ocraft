@@ -32,7 +32,7 @@ Numbered rules for code in this repo. Follow them when writing or editing any `.
 
 ## ThinkTank → ocraft migration (IMPORTANT — ocraft nodes are now the source of truth)
 
-The **ThinkTank** Obsidian vault (`../ThinkTank/`) has been migrated into ocraft **nodes**: each note is an `html` node, organised by `parentId` under a top **`notes`** category, names lowercased, wikilinks rewritten to `/node/:id` links, embedded images served from `data/assets/img/optimized/`. **These ocraft nodes are now the source of truth for that content** — edit them in ocraft (the editor UI, or `backend/data/nodes/<id>/state.json` directly). Do **not** edit the ThinkTank `.md` source expecting it to flow through.
+The **ThinkTank** Obsidian vault (`../ThinkTank/`) has been migrated into ocraft **nodes**: each note is an `html` node, organised by `parentId` under a top **`notes`** category, names lowercased, wikilinks rewritten to `/node/:id` links, embedded images served from `data/assets/img/optimized/`. **These ocraft nodes are now the source of truth for that content** — edit them in ocraft (the editor UI, or the node's `backend/data/nodes/<id>/content.html` body file directly; `state.json` holds only metadata). Do **not** edit the ThinkTank `.md` source expecting it to flow through.
 
 - **The importer `backend/entries/import-thinktank.js` was a one-time migration — do NOT re-run it to tweak content.** A re-run is destructive: it deletes the previous import (tracked in `backend/data/thinktank-import.json`) and regenerates everything from the `.md` source, **discarding any in-place edits to the migrated nodes and reassigning node ids**. To change a migrated note, edit the node, not the source + re-run.
 - **Never migrate credential/private notes** into this (public) repo. The importer's `EXCLUDED` set skips them; keep it that way. New sensitive notes belong in a private space, not here.
@@ -94,7 +94,7 @@ Uses `withLock('scheduler', fn)` (`backend/lib/lock.js`) — a PID-file lock tha
 
 **API helpers (`backend/api/`)** — thin wrappers (e.g. `telegram.js` for sending messages).
 
-**Node API server (`backend/server.js`)** — minimal Node.js HTTP server on port 3001 (no framework) that reads/writes node JSON under `backend/data/nodes/`. Serves `GET/POST /api/nodes[/:id]` and `GET /api/nodes/:id/script`. Auto-spawned by the frontend's Vite dev server; can also be run standalone with `node backend/server.js`.
+**Node API server (`backend/server.js`)** — minimal Node.js HTTP server on port 3001 (no framework) that reads/writes node JSON under `backend/data/nodes/`. Serves `GET/POST /api/nodes[/:id]` and `GET/POST /api/nodes/:id/body` — a node's sidecar body, resolved by type (script nodes → `script.js`, html nodes → `content.html`), kept out of state.json so the node-list payload stays tiny. Text reads (the list, node bodies) are gzipped. Auto-spawned by the frontend's Vite dev server; can also be run standalone with `node backend/server.js`.
 
 **Data store (`backend/data/`)** — `nodes/` (one folder per node), `assets/` (img/audio/text), `catalogs/`. Owned by the backend; the frontend reaches it only via `/api`.
 

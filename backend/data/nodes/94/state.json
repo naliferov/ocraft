@@ -1,6 +1,5 @@
 {
   "name": "rsync",
   "type": "html",
-  "text": "<pre><code class=\"language-bash\">rsync -azP --rsync-path=&quot;sudo -u netplov -H rsync&quot; index.php chat:/home/netplov\n\nrsync -azP --rsync-path=&quot;sudo -n -u netplov -H rsync&quot; &quot;$FilePath$&quot; chat:/home/netplov/&quot;$FileName$&quot;\n\nrsync -azP --rsync-path=&quot;sudo -u godforsaken -H rsync&quot; app/customer/controller/Customer.php chat:/home/godforsaken/htdocs/chat/app/customer/controller/Customer.php\n\nrsync -azP --rsync-path=&quot;sudo -u rel-uassist -H rsync&quot; app/customer/controller/Customer.php rel:/home/rel-uassist/htdocs/chat/app/customer/controller/Customer.php\n\nrsync -azP --rsync-path=&quot;sudo -u rel-uassist -H rsync&quot; app/chat/service/ChatStatsService.php rel:/home/rel-uassist/htdocs/app/chat/service/ChatStatsService.php\n\nrsync -azP --rsync-path=&quot;sudo -u rel-uassist -H rsync&quot; public/js/customer/components/customer.report/[customer.report.ts](http://customer.report.ts/) rel:/home/rel-uassist/htdocs/public/js/customer/components/customer.report/[customer.report.ts](http://customer.report.ts/)\n</code></pre>",
   "parentId": "98"
 }

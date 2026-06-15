@@ -1,5 +1,6 @@
 {
-  "name": "test-websocket-connection",
+  "name": "websocket-tester",
   "type": "script",
-  "parentId": "3"
+  "parentId": "3",
+  "runOnOpen": true
 }

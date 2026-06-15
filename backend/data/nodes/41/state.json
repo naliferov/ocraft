@@ -1,6 +1,5 @@
 {
   "name": "frontend",
   "type": "html",
-  "text": "<p>html\ncss\n<a href=\"/node/61\" class=\"wikilink\">javascript</a></p>\n<p><strong>Web APIs</strong>\nweb worker, worklet\nservice worker</p>",
   "parentId": "26"
 }

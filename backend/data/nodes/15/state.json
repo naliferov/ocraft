@@ -1,6 +1,5 @@
 {
   "name": "gof design patterns",
   "type": "html",
-  "text": "<p><a href=\"https://refactoring.guru/design-patterns\">https://refactoring.guru/design-patterns</a></p>\n<p><strong>creational</strong>\nfactory method\nabstract factory\nbuilder\nprototype\nsingleton</p>\n<p><strong>structural</strong>\nadapter\nbridge\ncomposite\ndecorator\nfacade\nflyweight\nproxy</p>\n<p><strong>behavioral</strong>\nchain of responsibility\ncommand\niterator\nmediator\nmemento\nobserver\nstate\nstrategy\ntemlate method\nvisitor</p>\n<p><strong>other</strong>\nreactor\ntransaction script</p>",
   "parentId": "26"
 }

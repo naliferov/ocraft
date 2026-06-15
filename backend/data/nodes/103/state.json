@@ -1,6 +1,5 @@
 {
   "name": "todo",
   "type": "html",
-  "text": "<ul>\n<li><input disabled=\"\" type=\"checkbox\"> Сдать медицинские анализы</li>\n</ul>",
   "parentId": "13"
 }

@@ -1,0 +1,67 @@
+<p>Composition API</p>
+<ul>
+<li><code>setup()</code>, <code>ref</code>, <code>reactive</code>, <code>computed</code>, <code>watch</code></li>
+<li>Логика группируется по функциональности, а не по секциям <code>data/methods</code></li>
+<li>Удобный реюз через composables</li>
+<li>Максимально дружелюбен к TypeScript</li>
+</ul>
+<p>Новая система реактивности (Proxy)</p>
+<ul>
+<li>Основана на <code>Proxy</code>, а не <code>Object.defineProperty</code></li>
+<li>❌ Больше не нужен <code>Vue.set</code> / <code>this.$set</code></li>
+<li>Любые новые свойства становятся реактивными автоматически</li>
+</ul>
+<p>Улучшенная поддержка TypeScript</p>
+<ul>
+<li>Полная типизация компонентов</li>
+<li><code>defineComponent</code>, <code>defineProps</code>, <code>defineEmits</code></li>
+<li>Предсказуемые типы для props, emits, slots</li>
+</ul>
+<p><strong>fragments</strong>
+Несколько корневых элементов в шаблоне без обёртки
+<code>&lt;template&gt; &lt;span&gt;A&lt;/span&gt;   &lt;span&gt;B&lt;/span&gt; &lt;/template&gt;</code></p>
+<h3>5. Teleport</h3>
+<p>Рендер компонента вне текущего DOM-дерева</p>
+<pre><code class="language-html">&lt;teleport to=&quot;body&quot;&gt;
+	&lt;Modal /&gt;
+&lt;/teleport&gt;
+</code></pre>
+<p>Хорошо для:</p>
+<ul>
+<li>модалок</li>
+<li>тултипов</li>
+<li>дропдаунов</li>
+</ul>
+<h2>6. Suspense</h2>
+<p>Асинхронные компоненты с fallback UI
+<code>&lt;Suspense&gt;   &lt;template #default&gt;     &lt;AsyncComponent /&gt;   &lt;/template&gt;   &lt;template #fallback&gt;     Loading...   &lt;/template&gt; &lt;/Suspense&gt;</code></p>
+<h2>7. Новый v-model</h2>
+<ul>
+<li>Поддержка нескольких <code>v-model</code></li>
+<li>Кастомные имена
+<code>&lt;MyInput v-model:title=&quot;title&quot; /&gt;</code></li>
+</ul>
+<p>Связка:</p>
+<ul>
+<li><code>modelValue</code></li>
+<li><code>update:modelValue</code></li>
+</ul>
+<h2>8. Производительность</h2>
+<ul>
+<li>Быстрее рендер</li>
+<li>Меньше лишних перерисовок</li>
+<li>Tree-shaking → меньше бандл</li>
+</ul>
+<h2>9. Новые lifecycle хуки</h2>
+<p>Вместо старых:
+<code>beforeCreate, created</code></p>
+<p>Используются:
+<code>onMounted() onUpdated() onUnmounted() onActivated() onDeactivated()</code></p>
+<h2>10. <code>&lt;script setup&gt;</code></h2>
+<p>Новый синтаксис SFC:
+<code>&lt;script setup&gt; import { ref } from &#39;vue&#39; const count = ref(0) &lt;/script&gt;</code></p>
+<ul>
+<li>Меньше шаблонного кода</li>
+<li>Автоэкспорт</li>
+<li>Быстрее компиляция</li>
+</ul>

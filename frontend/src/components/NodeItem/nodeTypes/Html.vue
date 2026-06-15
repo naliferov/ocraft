@@ -1,9 +1,11 @@
 <script setup>
-// Editor for `text` nodes. The body is HTML stored on the node (`node.text`).
-// Two modes: open → VIEW (renders the HTML read-only); hit Edit → EDIT (a
-// contenteditable surface + a toolbar of "parts"). The header's Save persists
-// node.text, like before. No height calculation — the body just fills the area.
-import { ref, nextTick } from 'vue'
+// Editor for `html` nodes. The body lives in a content.html sidecar (fetched/saved
+// via /api/nodes/:id/body), NOT on the node — keeping it out of state.json is
+// what keeps the node-list endpoint tiny. Loaded on open, like a script node's
+// script.js. Two modes: open → VIEW (renders the HTML read-only); hit Edit → EDIT
+// (a contenteditable surface + a toolbar of "parts"). The header's Save persists
+// the content via save() below. No height calculation — the body just fills the area.
+import { ref, watch, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton } from 'naive-ui'
 
@@ -11,7 +13,38 @@ const props = defineProps({
   node: { type: Object, required: true }
 })
 
+// The node's HTML body, lazy-loaded from its content.html sidecar. `savedContent`
+// is the last-persisted copy so save() can skip no-op writes.
+const content = ref('')
+const savedContent = ref('')
+onMounted(async () => {
+  const res = await fetch(`/api/nodes/${props.node.id}/body`)
+  if (res.ok) {
+    content.value = await res.text()
+    savedContent.value = content.value
+  }
+})
+
+// Persist the body to the content.html sidecar — called by NodeItem's single Save.
+// No-ops when unchanged so saving metadata-only edits doesn't rewrite the file.
+const save = async () => {
+  if (content.value === savedContent.value) return
+  await fetch(`/api/nodes/${props.node.id}/body`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: content.value,
+  })
+  savedContent.value = content.value
+}
+defineExpose({ save })
+
 const editing = ref(false)
+// Read mode (view only): constrain the rendered HTML to a comfortable measure
+// instead of full window width, so long paragraphs don't run edge-to-edge on
+// wide screens. Preference is per-browser and sticks across nodes/sessions.
+const READ_MODE_KEY = 'ocraft.html.readMode'
+const readMode = ref(localStorage.getItem(READ_MODE_KEY) !== 'false') // default on
+watch(readMode, (on) => localStorage.setItem(READ_MODE_KEY, String(on)))
 const source = ref(false)  // within edit: false = rich (contenteditable), true = raw HTML
 const bodyRef = ref(null)  // the contenteditable element (rich edit mode only)
 
@@ -30,14 +63,14 @@ const onViewClick = (event) => {
 }
 
 // Two ways into edit mode, picked from the view bar. editRich seeds the
-// contenteditable from node.text imperatively (not v-html) so Vue never re-renders
+// contenteditable from `content` imperatively (not v-html) so Vue never re-renders
 // it out from under the cursor while typing; the source textarea is v-model-bound
-// to node.text, so editSource needs no seeding.
+// to `content`, so editSource needs no seeding.
 const editRich = async () => {
   source.value = false
   editing.value = true
   await nextTick()
-  if (bodyRef.value) bodyRef.value.innerHTML = props.node.text || ''
+  if (bodyRef.value) bodyRef.value.innerHTML = content.value || ''
 }
 const editSource = () => {
   source.value = true
@@ -45,21 +78,7 @@ const editSource = () => {
 }
 
 const syncFromDom = () => {
-  if (bodyRef.value) props.node.text = bodyRef.value.innerHTML
-}
-
-// Toggle the rich surface <-> raw HTML source. Going to source: flush the live
-// DOM into node.text (the textarea is bound to it). Coming back: re-seed the
-// contenteditable from whatever the textarea left in node.text.
-const toggleSource = async () => {
-  if (!source.value) {
-    syncFromDom()
-    source.value = true
-  } else {
-    source.value = false
-    await nextTick()
-    if (bodyRef.value) bodyRef.value.innerHTML = props.node.text || ''
-  }
+  if (bodyRef.value) content.value = bodyRef.value.innerHTML
 }
 
 // The one "insert a part" primitive: execCommand inserts HTML/format at the
@@ -137,6 +156,7 @@ const applyLink = () => {
   <div class="html-node">
     <div class="bar">
       <template v-if="editing">
+        <n-button size="small" @click="editing = false">Done</n-button>
         <template v-if="!source">
           <button
             v-for="p in PARTS"
@@ -147,18 +167,16 @@ const applyLink = () => {
           >{{ p.label }}</button>
           <button class="tool" title="Link" @mousedown.prevent="openLink">🔗 Link</button>
         </template>
-        <button
-          class="tool"
-          :class="{ active: source }"
-          title="Edit raw HTML"
-          @mousedown.prevent="toggleSource"
-        >&lt;/&gt; HTML</button>
-        <span class="spacer" />
-        <n-button size="small" @click="editing = false">Done</n-button>
       </template>
       <template v-else>
         <n-button size="small" @click="editRich">Edit</n-button>
         <n-button size="small" @click="editSource">&lt;/&gt; HTML</n-button>
+        <n-button
+          size="small"
+          :type="readMode ? 'primary' : 'default'"
+          :title="readMode ? 'Reading width on — click for full width' : 'Reading width off — click to constrain'"
+          @click="readMode = !readMode"
+        >Read mode: {{ readMode ? 'on' : 'off' }}</n-button>
       </template>
     </div>
 
@@ -186,15 +204,16 @@ const applyLink = () => {
     <textarea
       v-else-if="editing && source"
       class="body source"
-      v-model="node.text"
+      v-model="content"
       spellcheck="false"
       placeholder="<p>Raw HTML…</p>"
     />
     <div
       v-else
       class="body view"
+      :class="{ readable: readMode }"
       @click="onViewClick"
-      v-html="node.text || '<p class=&quot;empty&quot;>Empty — hit Edit to write.</p>'"
+      v-html="content || '<p class=&quot;empty&quot;>Empty — hit Edit to write.</p>'"
     />
   </div>
 </template>
@@ -215,7 +234,6 @@ const applyLink = () => {
   margin-bottom: 8px;
 }
 
-.spacer { flex: 1; }
 
 .link-bar {
   display: flex;
@@ -248,7 +266,6 @@ const applyLink = () => {
   cursor: pointer;
 }
 .tool:hover { background: #2c2c2c; border-color: #444; }
-.tool.active { background: #2d4a3a; border-color: #3a6; color: #cfe; }
 
 .body {
   flex: 1;
@@ -268,6 +285,14 @@ const applyLink = () => {
   border-radius: 4px;
 }
 .body.edit { outline: none; border-color: #3a6; }
+/* Read mode: cap the page at a comfortable measure and center it, so long
+   paragraphs don't span the full window on wide screens. The body is also the
+   scroll container, so narrowing it gives a centered "document page" look. */
+.body.view.readable {
+  width: 100%;
+  max-width: 760px;
+  margin-inline: 0;
+}
 /* Raw HTML source: a light editor too (inherits .body's white page), just monospace. */
 .body.source {
   width: 100%;

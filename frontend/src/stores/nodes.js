@@ -1,10 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 
-// A deleted node's script.js rides along on the pooled node under this Symbol key.
-// JSON.stringify skips symbol-keyed props, so it never leaks back into state.json
-// when the node is re-saved on restore.
-const SCRIPT = Symbol('script')
+// A deleted node's body sidecar (a script node's script.js, an html node's
+// content.html — both served by /body) rides along on the pooled node under this
+// Symbol key. JSON.stringify skips symbol-keyed props, so it never leaks back into
+// state.json when the node is re-saved on restore.
+const BODY = Symbol('body')
 
 export const useNodesStore = defineStore('nodes', () => {
   const nodes = ref([])
@@ -89,13 +90,14 @@ export const useNodesStore = defineStore('nodes', () => {
   // pool, drop it locally (tree recomputes), and move selection off it.
   const remove = async (id) => {
     const node = nodes.value.find(n => n.id === id)
-    // Script nodes (incl. wasm) keep their code in script.js (outside state.json),
-    // so grab it before deleting — restore needs it to bring the node back whole.
-    // Only script nodes have one; probing other types would just 404 the console.
-    let script = null
-    if (node?.type === 'script') {
-      const scriptRes = await fetch(`/api/nodes/${id}/script`)
-      if (scriptRes.ok) script = await scriptRes.text()
+    // Script/html nodes keep their body in a sidecar file (script.js / content.html,
+    // outside state.json), so grab it before deleting — restore needs it to bring the
+    // node back whole. /body serves whichever type has one; skip the fetch for types
+    // that don't (no needless 404 on scene/category deletes).
+    let body = null
+    if (node?.type === 'script' || node?.type === 'html') {
+      const bodyRes = await fetch(`/api/nodes/${id}/body`)
+      if (bodyRes.ok) body = await bodyRes.text()
     }
 
     const res = await fetch(`/api/nodes/${id}`, { method: 'DELETE' })
@@ -107,7 +109,7 @@ export const useNodesStore = defineStore('nodes', () => {
 
     if (node) {
       const snapshot = { ...node }
-      if (script != null) snapshot[SCRIPT] = script
+      if (body != null) snapshot[BODY] = body
       deletedNodes.value.unshift(snapshot)
     }
     nodes.value = nodes.value.filter(n => n.id !== id)
@@ -117,21 +119,21 @@ export const useNodesStore = defineStore('nodes', () => {
   // Switch a deleted node back into the store. POST /api/nodes/:id is an upsert, so
   // re-saving recreates the folder at the *same* id (path/identity preserved); a
   // deleted node never had children (delete 409s otherwise), so nothing is orphaned.
-  // Restores script.js too (from the SCRIPT symbol), then drops it from the pool.
+  // Restores the body sidecar too (from the BODY symbol), then drops it from the pool.
   const restore = async (id) => {
     const index = deletedNodes.value.findIndex(node => node.id === id)
     if (index === -1) return null
     const node = deletedNodes.value[index]
-    const script = node[SCRIPT]
-    await save(id, node) // SCRIPT symbol is ignored by JSON.stringify — never hits state.json
-    if (script != null) {
-      await fetch(`/api/nodes/${id}/script`, {
+    const body = node[BODY]
+    await save(id, node) // symbol keys are ignored by JSON.stringify — never hit state.json
+    if (body != null) {
+      await fetch(`/api/nodes/${id}/body`, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
-        body: script,
+        body,
       })
     }
-    delete node[SCRIPT]
+    delete node[BODY]
     nodes.value.push(node)
     deletedNodes.value.splice(index, 1)
     return node

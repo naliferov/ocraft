@@ -1,6 +1,5 @@
 {
   "name": "food",
   "type": "html",
-  "text": "безглютеновая диета<br>\nсвоя готовка<br>\n<p><strong>углеводы</strong></p>\n<ul>\n<li>рис</li>\n<li>гречка</li>\n<li>картофель</li>\n<li>кукуруза</li>\n<li>киноа</li>\n<li>рисовые хлебцы</li>\n</ul>\n<p><strong>белок</strong></p>\n<ul>\n<li>курица</li>\n<li>куриные бёдра</li>\n<li>куриный стейк</li>\n<li>рыба</li>\n<li>яйца</li>\n<li>индейка</li>\n<li>протеин</li>\n<li>пельмени</li>\n</ul>\n<h3>Овощи</h3>\n<ul>\n<li>кабачки</li>\n<li>морковь</li>\n<li>огурцы</li>\n<li>тыква</li>\n</ul>\n<h3>Прочее</h3>\n<ul>\n<li>банан</li>\n<li>орехи</li>\n<li>тыквенное масло</li>\n<li>соус / масло</li>\n<li>молоко</li>\n<li>чай</li></ul>",
   "parentId": "28"
 }

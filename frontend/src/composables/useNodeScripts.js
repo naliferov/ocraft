@@ -46,7 +46,7 @@ async function loadWasmExports(id) {
 async function loadModule(id) {
   if (!moduleCache.has(id)) {
     moduleCache.set(id, (async () => {
-      const res = await fetch(`/api/nodes/${id}/script`)
+      const res = await fetch(`/api/nodes/${id}/body`)
       if (!res.ok) throw new Error(`node "${id}": no script found`)
       const code = await res.text()
       const url = URL.createObjectURL(new Blob([code], { type: 'application/javascript' }))
@@ -66,13 +66,35 @@ const nodeLabel = (id) => {
   return node?.name ? `${node.name} (${id})` : `node ${id}`
 }
 
+// Auth tokens shared across scripts (x.auth). A token entered once via the "auth"
+// node persists in localStorage and any script can read it by name — e.g. the
+// websocket tester grabbing a bearer for the cloud exchange. Named slots keep
+// multiple tokens apart ('default' when unnamed). Browser-only and guarded, so a
+// future headless runner (no localStorage) just sees empty tokens instead of
+// throwing.
+const AUTH_PREFIX = 'ocraft.auth.'
+const authStore = {
+  get: (name = 'default') => {
+    try { return globalThis.localStorage?.getItem(AUTH_PREFIX + name) ?? '' } catch { return '' }
+  },
+  set: (name = 'default', token = '') => {
+    try { globalThis.localStorage?.setItem(AUTH_PREFIX + name, token) } catch { /* no storage */ }
+  },
+  clear: (name = 'default') => {
+    try { globalThis.localStorage?.removeItem(AUTH_PREFIX + name) } catch { /* no storage */ }
+  },
+}
+
 // Build the `x` context passed to a running script. `stack` carries the chain
 // of node ids currently executing, so a re-entry is caught as a cycle instead of
-// recursing forever.
-function makeCtx(selfId, args, stack) {
+// recursing forever. `ui` is the browser UI surface (see useScriptUi.js); it's
+// present only for the top-level editor run and omitted for nested x.x calls.
+function makeCtx(selfId, args, stack, ui) {
   return {
     args,
     log: (...a) => console.log(`[${nodeLabel(selfId)}]`, ...a),
+    auth: authStore,
+    ...(ui ? { ui } : {}),
     // x.x(id, ...args) — run another node's script by its bare id.
     // x.x(id, args?) — args is an ARRAY of arguments (it becomes the callee's
     // x.args, or is spread into a wasm main()).
@@ -101,8 +123,9 @@ function makeCtx(selfId, args, stack) {
 
 // Run a raw source string as node `selfId` (e.g. the current editor buffer,
 // which may be unsaved). Its ctx.call resolves OTHER nodes from their saved
-// scripts via the loader.
-export async function runNodeCode(code, selfId) {
+// scripts via the loader. `ui` (optional) is the browser UI surface exposed to
+// the script as `x.ui` — passed by the editor, absent for headless runs.
+export async function runNodeCode(code, selfId, ui) {
   const id = String(selfId)
   const url = URL.createObjectURL(new Blob([code], { type: 'application/javascript' }))
   try {
@@ -110,7 +133,7 @@ export async function runNodeCode(code, selfId) {
     if (typeof mod.default !== 'function') {
       throw new Error('script has no default export')
     }
-    return await mod.default(makeCtx(id, [], [id]))
+    return await mod.default(makeCtx(id, [], [id], ui))
   } finally {
     URL.revokeObjectURL(url)
   }

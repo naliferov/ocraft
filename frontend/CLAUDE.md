@@ -20,12 +20,12 @@ This is a **visual scene editor** — a Vue 3 + p5.js app for composing and prev
 
 ### Data (owned by the backend)
 
-Nodes, assets, and catalogs live under `../backend/data/` and are served via the API — see `../backend/CLAUDE.md` (or `../CLAUDE.md`). Each node is `../backend/data/nodes/<id>/state.json`, plus a `script.js` when `type === "script"`.
+Nodes, assets, and catalogs live under `../backend/data/` and are served via the API — see `../backend/CLAUDE.md` (or `../CLAUDE.md`). Each node is `../backend/data/nodes/<id>/state.json`, plus a sidecar body file when applicable: `script.js` for `type === "script"`, `content.html` for `type === "html"`. Sidecars are kept out of `state.json` (and the node-list payload) and fetched on open.
 
 ### Node state (`state.json`)
 
 Each node has a `type` field that changes what the editor renders:
-- `"script"` — runs `script.js` via dynamic import (fetched from `GET /api/nodes/:id/script`); no p5 canvas
+- `"script"` — runs `script.js` via dynamic import (fetched from `GET /api/nodes/:id/body`); no p5 canvas
 - _(default/scene)_ — p5.js scene with `elements[]`, `effects[]`, `viewport`, `tempo`, `structure`
 
 Scene node fields:
@@ -38,8 +38,8 @@ Scene node fields:
 
 - `GET /api/nodes` — list all nodes (reads every `state.json`)
 - `GET /api/nodes/:id` — read one node
-- `GET /api/nodes/:id/script` — raw `script.js` for a script node
-- `POST /api/nodes/:id` — overwrite `state.json` for a node
+- `GET/POST /api/nodes/:id/body` — a node's sidecar body, resolved by type (`script.js` for script nodes, `content.html` for html nodes)
+- `POST /api/nodes/:id` — overwrite `state.json` (metadata only) for a node
 
 ### Frontend (`src/`)
 

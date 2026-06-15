@@ -1,0 +1,31 @@
+<p><strong>ярлыки</strong> хранить в папке ~/.local/share/applications</p>
+<h3>пример ярлыка</h3>
+<p>[Desktop Entry]
+Type=Application
+Name=Cursor
+Exec=/usr/bin/cursor --class=Cursor
+Icon=/home/deconstruct/Downloads/img/cursor.png
+Terminal=false
+Categories=Development;
+StartupWMClass=Cursor</p>
+<p><strong>Terminal:</strong> hotkey вставки можно на ctrl + v</p>
+<h2>systemd — шаблон сервиса</h2>
+<pre><code class="language-ini"># /etc/systemd/system/myapp.service
+[Unit]
+Description=My App
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/node /home/user/app/index.js
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+</code></pre>
+<pre><code class="language-sh">sudo systemctl daemon-reload
+sudo systemctl start myapp.service
+sudo systemctl enable myapp.service  # автозапуск после ребута
+</code></pre>
+<h2>Запуск процесса в фоне (shell)</h2>
+<pre><code class="language-sh">./node s.js &amp;&gt; s.log &amp; disown
+</code></pre>

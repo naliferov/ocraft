@@ -1,6 +1,5 @@
 {
   "name": "web",
   "type": "html",
-  "text": "<p><strong>supabase</strong>\ndb pull / migrate → session pooler (5432)\nruntime → transaction pooler (6543)</p>\n<h5>gaming remote</h5>\n<p><a href=\"https://boosteroid.com\">https://boosteroid.com</a></p>\n<h5>music</h5>\n<p><a href=\"https://www.spotify.com/ua-en/premium\">https://www.spotify.com/ua-en/premium</a></p>\n<p>diagram + ai\n<a href=\"https://www.mermaidchart.com\">https://www.mermaidchart.com</a></p>\n<p>plain text\n<a href=\"http://plaintext.ing\">http://plaintext.ing</a></p>\n<p>pixel icons\n<a href=\"https://pixeliconlibrary.com\">https://pixeliconlibrary.com</a></p>",
   "parentId": "98"
 }

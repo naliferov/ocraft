@@ -1,6 +1,5 @@
 {
   "name": "desktop-assemble",
   "type": "html",
-  "text": "<ul>\n<li>Asus PRIME B650M-K (sAM5, AMD B650)</li>\n<li>Ryzen 5 7500F</li>\n<li>Cooler: Thermalright Peerless Assassin 120 SE</li>\n<li>MSI GeForce RTX5060Ti 8Gb GAMING TRIO OC</li>\n<li>KINGSTON FURY Beast EXPO Black DDR5 6000MHz 32GB Kit 2x16GB  </li>\n<li>1TB PCIe 4.0 NVMe</li>\n<li>Be Quiet! Pure Base 501 Airflow</li>\n<li><ul>\n<li>PSU: 650W 80+ Gold</li>\n</ul>\n</li>\n<li>Windows 11 license - <a href=\"https://global-soft.com.ua/Windows11home.html\">https://global-soft.com.ua/Windows11home.html</a></li>\n</ul>",
   "parentId": "138"
 }

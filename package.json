@@ -1,5 +1,8 @@
 {
   "type": "module",
+  "scripts": {
+    "yolo": "node claude-yolo.js"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "dotenv": "^17.4.1"

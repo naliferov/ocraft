@@ -1,6 +1,6 @@
 {
   "name": "software",
   "type": "html",
-  "text": "<p><a href=\"/node/32\" class=\"wikilink\">dev tools</a>\n<a href=\"/node/94\" class=\"wikilink\">rsync</a>\n<a href=\"/node/108\" class=\"wikilink\">web</a>\n<a href=\"https://www.nltk.org/howto/wordnet.html\">wordnet</a></p>",
-  "parentId": "139"
+  "parentId": "139",
+  "collapsed": true
 }

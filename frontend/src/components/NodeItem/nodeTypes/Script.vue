@@ -1,8 +1,9 @@
 <script setup>
-import { ref, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, nextTick } from 'vue'
 import { NButton, NPopselect, NCheckbox } from 'naive-ui'
 import { useNodesStore } from '../../../stores/nodes.js'
 import { runNodeCode, runWasmNode, clearCache } from '../../../composables/useNodeScripts.js'
+import { createScriptUi } from '../../../composables/useScriptUi.js'
 
 const props = defineProps({
   node: { type: Object, required: true }
@@ -13,6 +14,12 @@ const scriptCode = ref('')
 const savedCode = ref('')       // last persisted script.js — lets save() skip no-op writes
 const txtAreaRef = ref(null)
 const insertTarget = ref(null) // bound model for the picker; reset after each pick
+
+// Host for the script's own controls (x.ui). The panel lives above the editor;
+// a run fills it, and we tear down the previous run's UI/sockets first.
+const uiHostRef = ref(null)
+let uiHost = null
+const teardownUi = () => { uiHost?.cleanup(); uiHost = null }
 
 // Live name hints. On load we inject `/*→name*/` right after each x.x("id") so
 // the editor shows what the id points at; they're stripped before save so the
@@ -35,12 +42,15 @@ const callableOptions = computed(() =>
 )
 
 onMounted(async () => {
-  const res = await fetch(`/api/nodes/${props.node.id}/script`)
+  const res = await fetch(`/api/nodes/${props.node.id}/body`)
   if (res.ok) {
     const raw = await res.text()
     savedCode.value = stripMarks(raw)   // clean baseline for the dirty check
     scriptCode.value = annotate(raw)    // shown with name hints
   }
+  // Run-on-open: nodes that are really mini-apps (auth token field, the WS
+  // tester) auto-run when opened, so their x.ui panel is there without a click.
+  if (props.node.runOnOpen) await runScript()
 })
 
 const runScript = async () => {
@@ -50,19 +60,25 @@ const runScript = async () => {
       await save()
       await runWasmNode(props.node.id)
     } else {
-      await runNodeCode(scriptCode.value, props.node.id)
+      // Fresh UI surface each run: drop the prior run's controls + cleanups
+      // (e.g. open sockets) before building anew.
+      teardownUi()
+      uiHost = createScriptUi(uiHostRef.value)
+      await runNodeCode(scriptCode.value, props.node.id, uiHost.ui)
     }
   } catch (err) {
     console.error(`[node ${props.node.id}] run failed:`, err)
   }
 }
 
+onBeforeUnmount(teardownUi)
+
 // Persist script.js — called by NodeItem's single Save. Strips the injected name
 // hints so stored source stays clean ids; no-ops if unchanged.
 const save = async () => {
   const cleanStr = stripMarks(scriptCode.value)
   if (cleanStr === savedCode.value) return
-  await fetch(`/api/nodes/${props.node.id}/script`, {
+  await fetch(`/api/nodes/${props.node.id}/body`, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain' },
     body: cleanStr
@@ -115,14 +131,22 @@ const onKeydown = (e) => {
       <n-button size="small" :disabled="callableOptions.length === 0">Insert call</n-button>
     </n-popselect>
     <n-checkbox v-model:checked="node.isWasm">WASM (AssemblyScript)</n-checkbox>
+    <n-checkbox v-model:checked="node.runOnOpen" title="Run automatically when this node is opened">Run on open</n-checkbox>
   </div>
-  <textarea
-    ref="txtAreaRef"
-    class="editor"
-    v-model="scriptCode"
-    spellcheck="false"
-    @keydown="onKeydown"
-  />
+  <!-- Panel + editor split the body's height equally (see CSS). An empty panel (no
+       run yet) collapses so the editor gets it all; on short windows the body
+       scrolls so neither half collapses below its floor. -->
+  <div class="script-body">
+    <!-- Script-built controls (x.ui) mount here, above the editor. Empty until a run. -->
+    <div ref="uiHostRef" class="ui-host" />
+    <textarea
+      ref="txtAreaRef"
+      class="editor"
+      v-model="scriptCode"
+      spellcheck="false"
+      @keydown="onKeydown"
+    />
+  </div>
 </template>
 
 <style scoped>
@@ -133,9 +157,28 @@ const onKeydown = (e) => {
   flex-shrink: 0;
 }
 
-.editor {
+/* Scroll container for the (optional) x.ui panel + the editor. It fills the space
+   the actions row leaves and scrolls when the panel + editor's min-height exceed
+   it, so the editor stays reachable on short windows instead of being squeezed out. */
+.script-body {
   flex: 1;
   min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Empty when no run has populated it, so it adds no gap until used. */
+.ui-host {
+  flex-shrink: 0;
+}
+
+.editor {
+  flex: 1;
+  /* Floor the editor's height: with a tall panel above it this is what forces the
+     body to scroll (rather than the editor collapsing to 0). */
+  min-height: 220px;
   width: 100%;
   box-sizing: border-box;
   resize: none;

@@ -1,14 +1,15 @@
 ---
-name: ocraft-dev-plan
-description: Analyze the ocraft repo and produce a sequenced ONE-WEEK autonomous development plan — what to build next, in what order, and why — sized into small PR-able tasks an AI dev loop can execute. Use when the user asks to "plan ocraft dev", "what should ocraft build next", "make a weekly dev plan", or to feed the autonomous dev cycle.
+name: ocraft-dev-plan-month
+description: Analyze the ocraft repo and produce a sequenced ONE-MONTH autonomous development plan — what to build next, in what order, and why — broken into weekly milestones of small PR-able tasks an AI dev loop can execute. Use when the user asks to "plan ocraft dev", "what should ocraft build next", "make a monthly dev plan", or to feed the autonomous dev cycle.
 ---
 
-# ocraft weekly dev plan
+# ocraft monthly dev plan
 
-Produce a bounded, sequenced one-week plan for **autonomous (AI-driven) development**
+Produce a bounded, sequenced one-month plan for **autonomous (AI-driven) development**
 of ocraft: the model decides where the project should move next, then turns that into
-small, independently shippable, verifiable tasks. The plan is the *input* to the
-execution half of the loop (a per-task agent run on a branch → checks → PR).
+small, independently shippable, verifiable tasks grouped into **weekly milestones**. The
+plan is the *input* to the execution half of the loop (a per-task agent run on a branch →
+checks → PR).
 
 ## Read first (establish state, don't guess)
 
@@ -25,46 +26,59 @@ execution half of the loop (a per-task agent run on a branch → checks → PR).
 ## Method
 
 1. **Direction (judgment first).** In 3–5 sentences, state where you think ocraft should
-   move next and *why now* — grounded in the build-order and what just shipped. **Select
-   and sequence within the existing `IDEAS-PLANS.md` roadmap**; that's the human-authored
-   intent. If you think something genuinely new belongs, add it under a separate
-   **"Proposed new direction (needs sign-off)"** heading — flagged, not silently planned
-   as work. (Re-deciding direction from scratch every week drifts toward what's easy to
-   build, not what the user wants.)
-2. **Pick the week's tasks.** Choose **3–6 tasks** from the build-ready tier, ordered by:
-   *unblocks-the-most* > *high value* > *low risk*. Prefer foundations over leaves.
-   Each task must be **PR-sized** (one feature/fix, a day or less) and **independently
-   shippable + verifiable**. A `design-open` item enters the plan only as a *decision
-   spike* (output = a decision + a one-paragraph ADR), never as open-ended building.
-3. **Spec each task** with:
+   move next over the month and *why now* — grounded in the build-order and what just
+   shipped. **Select and sequence within the existing `IDEAS-PLANS.md` roadmap**; that's
+   the human-authored intent. If you think something genuinely new belongs, add it under a
+   separate **"Proposed new direction (needs sign-off)"** heading — flagged, not silently
+   planned as work. (Re-deciding direction from scratch every month drifts toward what's
+   easy to build, not what the user wants.)
+2. **Shape the month into 4 weekly milestones.** Give each week a theme that advances the
+   direction, ordered so foundations land before the leaves that depend on them. Each week
+   should be a coherent, shippable increment — not a random bag of tasks.
+3. **Pick each week's tasks.** Choose **3–6 tasks per week** from the build-ready tier,
+   ordered by: *unblocks-the-most* > *high value* > *low risk*. Prefer foundations over
+   leaves. Each task must be **PR-sized** (one feature/fix, a day or less) and
+   **independently shippable + verifiable**. A `design-open` item enters the plan only as a
+   *decision spike* (output = a decision + a one-paragraph ADR), never as open-ended building.
+4. **Spec each task** with:
    - **Title** + **why now** (value + what it unlocks)
    - **Touchpoints** — the real files/dirs it changes
    - **Acceptance check** — a concrete, observable gate (a command that passes, an
      endpoint that returns X, a screenshot of the running app showing Y). No vague "works".
    - **Size** — S / M / L
    - **Risk / guardrail** — anything that could break; always: branch, run checks, open a PR.
-4. **Sequence + defer.** Order by dependency (foundations first). List what you explicitly
-   **deferred this week and why** (so nothing silently drops).
+5. **Sequence + defer.** Order weeks and tasks by dependency (foundations first). List what
+   you explicitly **deferred this month and why** (so nothing silently drops), and note any
+   cross-week dependencies between milestones.
 
 ## Output
 
-Write the plan to **`dev-plans/<YYYY-MM-DD>-week.md`** (create the `dev-plans/` dir) so it's
+Write the plan to **`dev-plans/<YYYY-MM-DD>-month.md`** (create the `dev-plans/` dir) so it's
 durable and the execution loop can consume it — and print a short summary. Shape:
 
 ```md
-# ocraft dev plan — week of <date>
+# ocraft dev plan — month of <date>
 
 ## Direction
-<3–5 sentences: where the project should move next, and why now>
+<3–5 sentences: where the project should move next this month, and why now>
 
-## Tasks (in order)
+## Week 1 — <theme>
 1. **<title>** — <why now>
    - Touchpoints: <files>
    - Acceptance: <observable check>
    - Size: <S/M/L> · Risk: <note>
 2. …
 
-## Deferred this week
+## Week 2 — <theme>
+…
+
+## Week 3 — <theme>
+…
+
+## Week 4 — <theme>
+…
+
+## Deferred this month
 - <item> — <reason>
 ```
 
@@ -92,4 +106,5 @@ Hard rules for whoever executes a task:
 - Keep tasks bounded — open-ended "build the vision" goes off the rails; "implement task N"
   doesn't.
 
-Keep the plan tight and honest — a week of real, checkable steps, not a wishlist.
+Keep the plan tight and honest — a month of real, checkable steps grouped into weekly
+milestones, not a wishlist.

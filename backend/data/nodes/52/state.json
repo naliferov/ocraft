@@ -1,6 +1,5 @@
 {
   "name": "img creation prompts",
   "type": "html",
-  "text": "<p>Name = &#39;Mark Strong&#39;\ntake the {{Name}} image and redraw it to match the EXACT technique of the Gosling reference:</p>\n<ul>\n<li>face should be mostly WHITE with thin black outlines, not filled with black</li>\n<li>black ONLY for hair and clothing</li>\n<li>remove the heavy black shapes on the face (cheeks, around eyes, nose)</li>\n<li>keep {{Name}} likeness and the same pose\nmatch this exact technique: WHITE face, thin black outlines, black ONLY for hair and clothing, PURE WHITE background (not grey), strictly 2 tones — no grey, no third tone, no shading on the face, NOT a silhouette. keep the same person and pose. High-contrast black and white stencil portrait of Mark Strong, bold solid black shapes, smooth flowing vector curves, clean white negative space, no gradients, no grayscale, screen-print style, minimalist, front-facing symmetrical, head and shoulders, stark white background</li>\n</ul>",
   "parentId": "84"
 }

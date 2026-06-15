@@ -1,0 +1,127 @@
+<p>сравнить с очередью <a href="https://github.com/mcollina/mqemitter">https://github.com/mcollina/mqemitter</a></p>
+<pre><code class="language-javascript">class QueueSimplified {
+  constructor() {
+    this.front = null;  // Ссылка на первый элемент
+    this.rear = null;   // Ссылка на последний элемент
+    this.length = 0;    // Размер очереди
+  }
+
+  // Создание нового узла
+  createNode(data) {
+    return { data, next: null };
+  }
+
+  // Добавление элемента в конец очереди - O(1)
+  enqueue(element) {
+    const newNode = this.createNode(element);
+    
+    if (this.isEmpty()) {
+      // Если очередь пуста, новый узел становится и первым, и последним
+      this.front = newNode;
+      this.rear = newNode;
+    } else {
+      // Добавляем новый узел в конец и обновляем указатель rear
+      this.rear.next = newNode;
+      this.rear = newNode;
+    }
+    
+    this.length++;
+    return this.length;
+  }
+
+  // Удаление и возврат первого элемента очереди - O(1)
+  dequeue() {
+    if (this.isEmpty()) {
+      return null;
+    }
+    
+    const removedNode = this.front;
+    
+    // Если это был последний элемент
+    if (this.front === this.rear) {
+      this.rear = null;
+    }
+    
+    this.front = this.front.next;
+    this.length--;
+    
+    return removedNode.data;
+  }
+
+  // Возврат первого элемента без удаления - O(1)
+  peek() {
+    if (this.isEmpty()) {
+      return null;
+    }
+    return this.front.data;
+  }
+
+  // Проверка, пуста ли очередь - O(1)
+  isEmpty() {
+    return this.front === null;
+  }
+
+  // Возврат размера очереди - O(1)
+  size() {
+    return this.length;
+  }
+
+  // Очистка очереди - O(1)
+  clear() {
+    this.front = null;
+    this.rear = null;
+    this.length = 0;
+  }
+
+  // Преобразование очереди в строку для вывода - O(n)
+  print() {
+    if (this.isEmpty()) {
+      return &quot;Очередь пуста&quot;;
+    }
+    
+    let result = [];
+    let current = this.front;
+    
+    while (current) {
+      result.push(current.data);
+      current = current.next;
+    }
+    
+    return result.join(&quot;, &quot;);
+  }
+}
+
+function queueExample() {
+  const queue = new QueueSimplified();
+  
+  queue.enqueue(&quot;Первый&quot;);
+  queue.enqueue(&quot;Второй&quot;);
+  queue.enqueue(&quot;Третий&quot;);
+  
+  console.log(&quot;Очередь после добавления 3 элементов:&quot;);
+  console.log(queue.print());
+  console.log(&quot;Размер очереди:&quot;, queue.size());
+  
+  console.log(&quot;Первый элемент:&quot;, queue.peek());
+  
+  console.log(&quot;Удаленный элемент:&quot;, queue.dequeue());
+  console.log(&quot;Очередь после удаления элемента:&quot;);
+  console.log(queue.print());
+  
+  console.log(&quot;Очередь пуста?&quot;, queue.isEmpty());
+  
+  queue.enqueue(&quot;Четвертый&quot;);
+  queue.enqueue(&quot;Пятый&quot;);
+  console.log(&quot;Очередь после добавления новых элементов:&quot;);
+  console.log(queue.print());
+  
+  // Очистка очереди
+  queue.clear();
+  console.log(&quot;Очередь после очистки:&quot;);
+  console.log(queue.print());
+  console.log(&quot;Очередь пуста?&quot;, queue.isEmpty());
+}
+
+// Запуск примера
+queueExample();
+</code></pre>

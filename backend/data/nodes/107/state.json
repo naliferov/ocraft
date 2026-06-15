@@ -1,6 +1,5 @@
 {
   "name": "vue",
   "type": "html",
-  "text": "<p><strong>ref</strong></p>\n<pre><code class=\"language-js\">const count = ref(0)\n\nconsole.log(count) // { value: 0 }\nconsole.log(count.value) // 0\n\ncount.value++\nconsole.log(count.value) // 1\n</code></pre>\n<p><strong>Typing <code>ref()</code></strong></p>\n<pre><code class=\"language-ts\">import { ref } from &#39;vue&#39;\nimport type { Ref } from &#39;vue&#39;\n\nconst year: Ref&lt;string | number&gt; = ref(&#39;2020&#39;)\nyear.value = 2020 // ok!\n\n//Or, by passing a generic argument when calling `ref()`\nconst year = ref&lt;string | number&gt;(&#39;2020&#39;)\nyear.value = 2020 // ok!\n</code></pre>",
   "parentId": "144"
 }

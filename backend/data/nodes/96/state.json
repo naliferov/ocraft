@@ -1,6 +1,5 @@
 {
   "name": "scp",
   "type": "html",
-  "text": "<p>scp <a href=\"mailto:root@209.38.206.72\">root@209.38.206.72</a>:ocraft/index.html ./</p>\n<h2>scp — копирование файлов</h2>\n<pre><code class=\"language-sh\"># На сервер\nscp -r s.js user@64.227.125.21:/home/user\n\n# С сервера\nscp -r user@ssh.example.com:/path/to/remote /path/to/local\n</code></pre>",
   "parentId": "26"
 }

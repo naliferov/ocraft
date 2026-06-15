@@ -1,6 +1,5 @@
 {
   "name": "modules type",
   "type": "html",
-  "text": "<p>Common.js - require - module.exports\nAMD\nES6 Imports</p>",
   "parentId": "144"
 }

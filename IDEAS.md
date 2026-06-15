@@ -121,8 +121,9 @@ become concrete, code-relevant work.
   (replacing the poll-based proc UI and chat-node streaming); future clients
   (the Flutter/mobile idea) join the same hub. Open before that: the message
   protocol (pub/sub topics vs. direct addressing) and auth. Already have a
-  throwaway tester at `/ws` (`WsTester.vue`) and a `test-websocket-script` node
-  for poking the endpoint.
+  **`websocket-tester` script node** (id 11, under `test`) for poking the
+  endpoint — a connect/send/log panel built with the `x.ui` script-controls
+  surface (this replaced the old throwaway `/ws` `WsTester.vue` route).
 
 - **More MCP servers to build** — beyond telegram + gcal + gmail, the
   life-management loop still has no _memory organ_ and no _hands on its own

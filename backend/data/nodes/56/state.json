@@ -1,6 +1,5 @@
 {
   "name": "javascript changelog",
   "type": "html",
-  "text": "<p><strong>ES2026</strong>\nTemporal API, await using, Error.isError()</p>",
   "parentId": "144"
 }
