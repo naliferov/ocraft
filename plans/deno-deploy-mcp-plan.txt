@@ -1,0 +1,309 @@
+===============================================================================
+ PLAN — Deno Deploy MCP + relocating/securing the WS exchange point
+ (written 2026-06-17; for later review — decisions marked "CONFIRM" are yours)
+===============================================================================
+
+GOAL
+----
+Give Claude (and the headless scheduler) "hands" to deploy the cloud WebSocket
+exchange — the Deno service currently at backend/transport/ws-exchange-point/main.ts,
+live at wss://stream.x8.deno.net/ws — via an MCP server, in the same thin house
+style as mcp-servers/digitalocean-mcp. Along the way: move the code out of
+backend/transport/ (wrong home), and add a shared-secret token so only clients
+with the right token can connect.
+
+This realizes the README Roadmap item "Integrate stream.x8.deno.net (the live WS
+exchange) into ocraft" and the "ocraft self-MCP / more MCP servers" direction
+(headless code needs tools, not an interactive Read/Edit session).
+
+
+-------------------------------------------------------------------------------
+0. THE FACT THAT RESHAPES EVERYTHING — target the NEW Deno Deploy, not Classic
+-------------------------------------------------------------------------------
+stream.x8.deno.net is on the NEW Deno Deploy. The new platform's URL shape is
+<app>.<org>.deno.net, so here: app = "stream", org = "x8". (Deploy Classic used
+<project>.deno.dev.)
+
+Deploy Classic, the `deployctl` CLI, AND the subhosting v1 API (apidocs.deno.com)
+all SHUT DOWN on 2026-07-20 — about one month from now. So:
+
+  * Do NOT build this around `deployctl` or the v1 subhosting API. They're dead
+    within the month.
+  * The supported deploy mechanism on the new platform is the `deno deploy`
+    SUBCOMMAND, built into the Deno runtime (Deno >= ~2.x). Non-interactive
+    example (what our MCP will run):
+
+        DENO_DEPLOY_TOKEN=<token> \
+        deno deploy create \
+          --org x8 --app stream \
+          --source local --runtime-mode dynamic \
+          --entrypoint main.ts
+
+    "When any configuration flag is provided, the command runs non-interactively"
+    — i.e. CI/scripting friendly, exactly what an MCP needs.
+  * Auth for non-interactive use = the DENO_DEPLOY_TOKEN env var (org- or
+    user-scoped token). Create one at https://console.deno.com/account/access-tokens.
+    (Interactive `deno deploy` uses the system keyring; we want the env-var path.)
+  * There is also a v2 REST API + a programmatic management SDK
+    (docs.deno.com/sandbox/apps) — usable for pure reads (list apps, revisions,
+    logs). But the deploy-from-local-source path is far simpler via the CLI, so
+    the CLI is primary; REST is optional for read tools.
+
+  VERIFY AT IMPLEMENTATION TIME (docs were thin on exact flags):
+    - `deno deploy --help` and `deno deploy create --help` for the precise
+      subcommand to (re)deploy an existing app vs first-time create, and the
+      production-vs-preview flag.
+    - That `deno` is installed on this machine and is new enough to have the
+      `deploy` subcommand (`deno --version`). If absent: `brew install deno` or
+      the official installer. The MCP shells out to `deno`, so it's a hard dep.
+
+
+-------------------------------------------------------------------------------
+1. RELOCATE + RENAME THE CODE (it does not belong under backend/transport/)
+-------------------------------------------------------------------------------
+Why backend/transport/ws-exchange-point/ is the wrong home:
+  - RUNTIME MISMATCH: it's a Deno/TypeScript service (JSR imports, Deno.serve,
+    Deno.upgradeWebSocket). backend/ is the Node.js scheduler/API. Nesting a
+    Deno cloud service inside the Node app conflates two runtimes.
+  - DEPLOY-TARGET MISMATCH: it deploys to Deno Deploy (the cloud edge), it is
+    not part of the local Node backend. It's a sibling *deployable*, peer to
+    frontend/ and mcp-servers/*, not a backend submodule.
+  - "transport" reads like a transport-LAYER library inside the backend, not a
+    standalone hosted service. Its real role (per the README Roadmap) is the cloud
+    WebSocket EXCHANGE / relay / hub.
+  - demo.json is a misnamed deno.json: it has Deno config keys (tasks, imports,
+    lock). Deno will NOT auto-load a file called demo.json — rename to deno.json.
+
+RECOMMENDATION: a top-level directory, sibling to backend/ frontend/ mcp-servers/.
+  ws-exchange/
+    main.ts        (moved; the relay)
+    deno.json      (renamed from demo.json — tasks + imports + lock)
+    README.md      (new: what it is, how to run locally, how it's deployed,
+                    the URL, the token)
+
+  Flatten the inner "-point" folder: the parent name "ws-exchange" already says
+  it; no need for ws-exchange/ws-exchange-point/.
+
+  Naming rationale: "ws-exchange" matches vocabulary already in the repo —
+  the entry backend/entries/ws-exchange-test.js, the Roadmap term
+  "cloud-websocket-exchange" and "the live WS exchange". Consistency wins.
+
+  CONFIRM (directory name) — alternatives if you dislike "ws-exchange/":
+    - edge/         (emphasizes "runs at the edge"; room for more edge services)
+    - relay/        (accurate — it's a broadcast relay; diverges from "exchange")
+    - services/ws-exchange/  (if you expect several cloud services later)
+    AVOID "stream/" — collides with Node streams and the generative "stream"
+    node-type idea.
+
+  Local refs to update after the move (grep already done — exactly these):
+    - backend/entries/ws-exchange-test.js  (comment + DEFAULT_URL — URL only,
+      path doesn't change unless you also rename the URL, see §2)
+    - backend/data/nodes/11/script.js      (the websocket-tester UI default URL)
+    - README.md Roadmap                    (mention the new path)
+    - CLAUDE.md / README.md                (document the new top-level dir)
+  Use `git mv` so history follows the file.
+
+
+-------------------------------------------------------------------------------
+2. RENAME THE URL?  (CONFIRM — this one has real runtime cost)
+-------------------------------------------------------------------------------
+The URL is mechanically <app>.<org>.deno.net + the route path. Today:
+  host  = stream.x8.deno.net   (app "stream", org "x8")
+  path  = /ws                  (the route in main.ts: app.get("/ws", ...))
+
+"stream" is a vague app name (overloaded term). Options:
+
+  (A) KEEP stream.x8.deno.net  [RECOMMENDED — lowest risk]
+      The app already exists and is live; zero migration; nothing breaks.
+      The directory rename (§1) is independent and costs nothing here.
+
+  (B) RENAME app -> ws-exchange  => ws-exchange.x8.deno.net
+      Clearer, matches the dir. BUT: must create/deploy the app under the new
+      name on Deno Deploy, update the 3 code refs above, and the old URL dies
+      (anything pointing at stream.x8.deno.net breaks). Migration churn during
+      the same month as the Classic shutdown — avoid unless you want it.
+
+  (C) CUSTOM DOMAIN later (e.g. ws.x8core.com) — orthogonal; can add anytime via
+      Deno Deploy domain settings without touching app/org names.
+
+  Path: optionally simplify /ws -> / (serve the upgrade at root) to drop the
+  "/ws" suffix. Minor; bundle with (B) if you rename at all.
+
+  Default if you say nothing: (A) keep the URL, just relocate the dir.
+
+
+-------------------------------------------------------------------------------
+3. SECURITY — shared-secret token gate on the WS endpoint
+-------------------------------------------------------------------------------
+TWO DISTINCT SECRETS — do not conflate them:
+  1. DENO_DEPLOY_TOKEN  — authorizes DEPLOYING to Deno Deploy. Deploy-time only.
+     Lives in mcp-servers/deno-deploy-mcp/.env. NEVER shipped to any client.
+  2. WS_EXCHANGE_TOKEN   — gates CONNECTING to the running relay. Runtime secret,
+     shared with legitimate clients (the editor, the smoke-test entry). Stored
+     as a Deno Deploy ENV VAR on the app, and locally where clients read it.
+
+Server-side gate (in main.ts, BEFORE Deno.upgradeWebSocket):
+  - Read const EXPECTED = Deno.env.get("WS_EXCHANGE_TOKEN").
+  - If EXPECTED is set, require the client to present a matching token; reject
+    the upgrade with HTTP 401 otherwise. Use a constant-time compare.
+  - If EXPECTED is unset, either fail closed (refuse all — safest) or log a loud
+    warning and allow (dev). Recommend FAIL CLOSED in production.
+
+How the client presents the token — the editor is a BROWSER, and browser
+WebSocket cannot set custom headers, so "Authorization: Bearer" is out for it.
+Two browser-compatible mechanisms:
+
+  (a) QUERY PARAM:  wss://stream.x8.deno.net/ws?token=SECRET   [SIMPLEST]
+      Server checks new URL(req.url).searchParams.get("token"). Works in
+      browsers, Node global WebSocket, everything.
+      Downside: token appears in the URL (proxy/access logs, history). Mitigated
+      by: wss is encrypted in transit; rotate-able; Deno Deploy request logs are
+      private to the org. Acceptable for a shared secret.
+
+  (b) SUBPROTOCOL:  new WebSocket(url, [SECRET])               [CLEANER]
+      Token rides Sec-WebSocket-Protocol instead of the URL. Server reads it
+      from the upgrade request and MUST echo the accepted subprotocol back in
+      the response. Keeps the token out of URL/path logs. Works in browser + Node.
+
+  CONFIRM (mechanism): (a) query param [recommended for simplicity] or
+  (b) subprotocol [recommended if you want the token out of URLs].
+
+HONEST CAVEAT about the editor (browser client): any token shipped to the
+browser is discoverable by anyone with devtools — it gates CASUAL access, not a
+determined attacker. For the Vue editor the token would come in as a Vite env
+(e.g. VITE_WS_EXCHANGE_TOKEN) and is therefore semi-public. True per-user auth
+would need real auth (signed short-lived tokens minted server-side). Out of scope
+now; note it so we don't over-trust the gate.
+
+Client updates when the gate lands:
+  - backend/entries/ws-exchange-test.js — append the token (from process.env
+    WS_EXCHANGE_TOKEN) to the URL/subprotocol so the smoke test still passes.
+  - backend/data/nodes/11/script.js (websocket-tester) — add a token field /
+    read from a Vite env so the in-editor tester can connect.
+
+Set the env var on the app via the MCP's deno_set_env tool (or `deno deploy env`).
+
+
+-------------------------------------------------------------------------------
+4. THE MCP SERVER — mcp-servers/deno-deploy-mcp/ (mirror digitalocean-mcp)
+-------------------------------------------------------------------------------
+Same shape as the DO MCP so it reads as "one of the family":
+
+  mcp-servers/deno-deploy-mcp/
+    deno-api.js     shared helpers (token + ops), importable by backend entries
+    server.js       MCP tool registration (thin; logic lives in deno-api.js)
+    package.json    deps: @modelcontextprotocol/sdk, zod, dotenv (copy DO's)
+    .env            DENO_DEPLOY_TOKEN=...           (gitignored already)
+    .env.example    documents DENO_DEPLOY_TOKEN, points at console.deno.com
+
+  deno-api.js
+    - requireToken(): reads DENO_DEPLOY_TOKEN (also accept DENO_DEPLOY_ACCESS_TOKEN),
+      throws a helpful "create one at https://console.deno.com/account/access-tokens
+      and set it in mcp-servers/deno-deploy-mcp/.env" if missing. (Same pattern as
+      do-api.js requireToken.)
+    - deployWsExchange({ org, app, entrypoint, cwd }): shells out via
+      node:child_process execFile to `deno deploy create --org … --app … --source
+      local --runtime-mode dynamic --entrypoint …`, with DENO_DEPLOY_TOKEN in env
+      and cwd = the ws-exchange/ dir. Returns parsed result (use a JSON output
+      flag if `deno deploy` supports one; else return captured stdout/stderr +
+      the resulting URL). Sensible defaults: org "x8", app "stream",
+      entrypoint "main.ts".
+    - setEnv({ app, key, value }) -> `deno deploy env` (for WS_EXCHANGE_TOKEN).
+    - listApps()/listDeployments()/tailLogs() -> either `deno deploy logs/list`
+      or the v2 REST API via a small denoFetch() against https://api.deno.com.
+    - Shared so a backend entry can call the same deploy op headlessly.
+
+  server.js (tools — names prefixed deno_*, ok/fail shapers copied from DO MCP):
+    - deno_deploy        deploy the ws-exchange app from local source. Bare call
+                         "just works" via the defaults above. THE key tool.
+    - deno_set_env       set an env var on the app (e.g. WS_EXCHANGE_TOKEN).
+    - deno_list_apps     list apps in the org.
+    - deno_list_deploys  list recent deployments/revisions of an app.
+    - deno_tail_logs     fetch recent logs (debug a bad deploy).
+    - deno_rollback      (optional) promote a previous revision.
+    Fail-fast in main() with requireToken(), exactly like do-api.js.
+
+  Register in .mcp.json (same form as the others):
+    "deno-deploy": {
+      "command": "node",
+      "args": ["mcp-servers/deno-deploy-mcp/server.js"],
+      "cwd": "/Users/varcraft/projects/ocraft"
+    }
+
+ALTERNATIVE CONSIDERED (rejected): adopt the community thisisjofrank/deno-deploy-mcp.
+  It works (wraps `deno deploy` CLI + REST) but is broad — scaffolds templates,
+  provisions KV/Postgres, opens tunnels, audits. That's far more than we need and
+  doesn't match our thin, helpers-shared-with-entries house style. Build our own
+  small one; keep it consistent with digitalocean-mcp.
+
+
+-------------------------------------------------------------------------------
+5. HEADLESS MIRROR — backend entry so the scheduler can redeploy too
+-------------------------------------------------------------------------------
+The DO MCP deliberately shares do-api.js between server.js (for Claude) and
+backend entries (for cron/scripts). Do the same here:
+
+  backend/entries/deploy-ws-exchange.js
+    - import the deploy op from mcp-servers/deno-deploy-mcp/deno-api.js
+      (or factor the shared op into a place both can import).
+    - run(ctx): deploy ws-exchange/, log the result URL, then CHAIN the existing
+      backend/entries/ws-exchange-test.js as a post-deploy smoke test (it already
+      verifies the socket opens). Gate success on the smoke test.
+    - Optionally registerable as a scheduler job later (redeploy on a schedule or
+      on demand). This is the "headless side needs tools" goal made real.
+
+
+-------------------------------------------------------------------------------
+6. DOCS
+-------------------------------------------------------------------------------
+  - mcp-servers/deno-deploy-mcp/README.md — what it does, the DENO_DEPLOY_TOKEN
+    setup, the tool list (mirror gmail/gcal/telegram MCP READMEs).
+  - ws-exchange/README.md — the relay: local run (`deno task dev`), the URL,
+    the WS_EXCHANGE_TOKEN gate, how it's deployed (via the MCP / the entry).
+  - README.md (root) "MCP servers" section — add deno-deploy.
+  - CLAUDE.md (root) — add ws-exchange/ to the repo-structure table; note it's a
+    Deno service deployed to Deno Deploy, linted by Deno's own tooling (see the
+    TypeScript/ESLint plan — it is NOT covered by the Node ESLint/Prettier set).
+  - README Roadmap — update the "Integrate stream.x8.deno.net" item: code now lives in
+    ws-exchange/, deploy is via the deno-deploy MCP, token gate added.
+
+
+-------------------------------------------------------------------------------
+7. SEQUENCING (small, PR-able steps)
+-------------------------------------------------------------------------------
+  1. PREP: confirm `deno` installed + new enough (`deno --version`); create a
+     DENO_DEPLOY_TOKEN at console.deno.com.
+  2. MOVE: git mv backend/transport/ws-exchange-point/ -> ws-exchange/; rename
+     demo.json -> deno.json; flatten; add ws-exchange/README.md. Update the 3
+     local URL/path refs + CLAUDE.md/README. (No behavior change yet.)
+  3. MCP: scaffold mcp-servers/deno-deploy-mcp/ (copy DO MCP skeleton); implement
+     deno-api.js (deploy via `deno deploy` shell-out) + server.js (deno_deploy
+     first, then the read/env tools); .env.example; register in .mcp.json; README.
+  4. VERIFY DEPLOY PATH: run deno_deploy (or the entry) once; confirm it
+     redeploys stream.x8.deno.net and the ws-exchange-test entry still passes.
+  5. SECURITY: add the WS_EXCHANGE_TOKEN gate to main.ts (chosen mechanism);
+     set the env var via deno_set_env; redeploy; update the smoke-test entry +
+     node 11 tester to send the token; re-verify.
+  6. HEADLESS: add backend/entries/deploy-ws-exchange.js (deploy + smoke-test
+     chain); optionally wire a scheduler job.
+  7. Update the README Roadmap.
+
+  Steps 2 and 3 are independent and can land in either order.
+
+
+-------------------------------------------------------------------------------
+8. RISKS / OPEN QUESTIONS
+-------------------------------------------------------------------------------
+  - HARD DEP on the `deno` binary (MCP shells out). If you'd rather not depend on
+    a local deno, the fallback is the v2 REST API for everything — more code, and
+    the deploy-from-assets path is fiddlier. Recommend CLI + accept the dep.
+  - Exact `deno deploy` flags / redeploy-vs-create subcommand and any --prod flag
+    were thin in docs — verify against `--help` at build time (§0).
+  - Classic EOL 2026-07-20: make sure nothing here references deployctl or the v1
+    subhosting API; we're targeting the new platform deliberately.
+  - Browser token is semi-public (§3 caveat) — gate is anti-casual, not true auth.
+
+DECISIONS TO CONFIRM (recap):
+  [1] Directory name: ws-exchange/ (rec) | edge/ | relay/ | services/ws-exchange/
+  [2] Rename the URL? keep stream.x8.deno.net (rec) | rename to ws-exchange.x8…
+  [3] Token mechanism: query param (rec, simple) | subprotocol (token out of URL)

@@ -1,17 +1,18 @@
 ---
-name: morning-report
-description: Generate a morning briefing — recent/unread Gmail, this week's Google Calendar events, the ThinkTank todo list, and a Telegram tech/JS channel digest — in one consolidated report. Use when the user asks for a "morning report", "daily briefing", "what's on today/this week", or "catch me up".
+name: daily-report
+description: Generate a daily briefing — recent/unread Gmail, this week's Google Calendar events, the ThinkTank todo list, and a Telegram tech/JS channel digest — in one consolidated report. Run any time of day. Use when the user asks for a "daily report", "morning/evening report", "daily briefing", "what's on today/this week", or "catch me up".
 ---
 
-# Morning report
+# Daily report
 
-Pull three sources and present them as one short briefing. Gather all three first
-(the tool calls are independent — run them together), then compose the report.
+Pull four sources and present them as one short briefing — run it any time of day
+(morning, midday, or evening). Gather all four first (the tool calls are
+independent — run them together), then compose the report.
 
 ## 1. Gmail — recent / unread
 
 Use the **gmail** MCP tools (`mcp__gmail__gmail_search`, `mcp__gmail__gmail_get_message`).
-- Query for what's worth seeing this morning: unread inbox mail and anything from the
+- Query for what's worth seeing now: unread inbox mail and anything from the
   last day — e.g. `in:inbox is:unread` and/or `newer_than:1d in:inbox`.
 - Cap at ~10–15 messages. For each, show **sender · subject · time** and a one-line
   snippet (fetch via `gmail_get_message` only if the search result lacks a snippet).
@@ -25,6 +26,8 @@ first if you need the calendar id).
 - Range: **today through the end of this week (Sunday)** — `timeMin` = start of today,
   `timeMax` = end of Sunday in the user's timezone.
 - List events grouped by day, each as **day · time · title** (mark all-day events).
+  Run later in the day and the already-passed events still show — flag what's **still
+  ahead today** so the remainder of the day is clear at a glance.
 - If multiple calendars, include the user's primary (and any others that clearly hold
   real events). If the week is empty, say so.
 
@@ -56,10 +59,11 @@ if the chats had nothing technical, just say "quiet".
 
 ## Compose the report
 
-Present a single, skimmable briefing — concise, no preamble:
+Present a single, skimmable briefing — concise, no preamble. Pick the header emoji to
+match the current time of day (☀️ morning, 🌤️ midday/afternoon, 🌙 evening):
 
 ```
-☀️ Morning report — <weekday, date>
+<emoji> Daily report — <weekday, date> · <HH:MM>
 
 📬 Mail (<n> unread)
   • <sender> — <subject>   <time>
@@ -79,5 +83,5 @@ Present a single, skimmable briefing — concise, no preamble:
   …
 ```
 
-Keep it tight — a morning glance, not a dump. If a source fails (auth/empty), note it
+Keep it tight — a quick glance, not a dump. If a source fails (auth/empty), note it
 in one line and continue with the rest; don't abort the whole report.

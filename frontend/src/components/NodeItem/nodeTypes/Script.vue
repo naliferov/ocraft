@@ -120,6 +120,7 @@ const onKeydown = (e) => {
 <template>
   <div class="actions">
     <n-button size="small" @click="runScript">Run</n-button>
+    <n-checkbox v-model:checked="node.runOnOpen" title="Run automatically when this node is opened">Run on open</n-checkbox>
     <n-popselect
       v-if="!node.isWasm"
       v-model:value="insertTarget"
@@ -131,13 +132,14 @@ const onKeydown = (e) => {
       <n-button size="small" :disabled="callableOptions.length === 0">Insert call</n-button>
     </n-popselect>
     <n-checkbox v-model:checked="node.isWasm">WASM (AssemblyScript)</n-checkbox>
-    <n-checkbox v-model:checked="node.runOnOpen" title="Run automatically when this node is opened">Run on open</n-checkbox>
   </div>
-  <!-- Panel + editor split the body's height equally (see CSS). An empty panel (no
-       run yet) collapses so the editor gets it all; on short windows the body
-       scrolls so neither half collapses below its floor. -->
+  <!-- Panel + editor split the body's height equally (see CSS). The panel stays
+       collapsed (host empty) until the script adds an x.ui control, so the editor
+       gets the full height otherwise; on short windows the body scrolls so neither
+       half collapses below its floor. -->
   <div class="script-body">
-    <!-- Script-built controls (x.ui) mount here, above the editor. Empty until a run. -->
+    <!-- Script-built controls (x.ui) mount here, above the editor. Stays empty
+         unless the running script adds a control (createScriptUi mounts lazily). -->
     <div ref="uiHostRef" class="ui-host" />
     <textarea
       ref="txtAreaRef"
@@ -169,9 +171,16 @@ const onKeydown = (e) => {
   gap: 12px;
 }
 
-/* Empty when no run has populated it, so it adds no gap until used. */
+/* Empty until a run's script adds an x.ui control. While empty it collapses out
+   of the flex flow entirely (`:empty` → display:none) so it consumes no height
+   and — crucially — no `.script-body` gap above the editor. The moment
+   createScriptUi mounts the panel inside it, it's no longer empty and reappears. */
 .ui-host {
   flex-shrink: 0;
+}
+
+.ui-host:empty {
+  display: none;
 }
 
 .editor {

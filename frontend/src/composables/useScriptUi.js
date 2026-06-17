@@ -134,18 +134,35 @@ const makeLog = ({ height = '300px' } = {}) => {
 // `cleanup()` Script.vue calls before a re-run and on unmount: it runs any
 // teardown the script registered (close sockets, clear timers) and empties the
 // panel.
+//
+// The panel is built detached and only inserted into `mountElement` the first
+// time the script adds a visible control. A script that never touches `x.ui`
+// (or only registers an `onCleanup`) leaves the host empty, so no empty styled
+// box appears above the editor — the panel shows up only when it has content.
 export function createScriptUi(mountElement) {
   const panel = document.createElement('div')
   applyStyle(panel, PANEL_STYLE)
-  mountElement.replaceChildren(panel)
+
+  // Insert the panel lazily: the first added control reveals it, an unused
+  // `x.ui` never does.
+  let mounted = false
+  const ensureMounted = () => {
+    if (mounted) return
+    mountElement.replaceChildren(panel)
+    mounted = true
+  }
 
   const teardowns = []
-  const append = (built, parent) => (parent ?? panel).append(built.element ?? built)
+  const append = (built, parent) => {
+    ensureMounted()
+    ;(parent ?? panel).append(built.element ?? built)
+  }
 
   const ui = {
     // A horizontal group. Pass a builder to add controls into it; returns the
     // row element so the script can also append to it later.
     row(build) {
+      ensureMounted()
       const row = makeRow()
       panel.append(row)
       if (build) build({
@@ -169,6 +186,8 @@ export function createScriptUi(mountElement) {
       try { teardown() } catch (err) { console.error('[script ui] cleanup failed:', err) }
     }
     mountElement.replaceChildren()
+    // Symmetric with construction: a re-added control re-inserts the panel.
+    mounted = false
   }
 
   return { ui, cleanup }

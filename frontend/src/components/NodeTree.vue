@@ -100,8 +100,11 @@ const commitRename = (node) => {
   renamingId.value = null
 }
 
-// Delete is immediate (no confirm step) — the store keeps removed nodes in an undo
-// pool, so a "Recently deleted" restore is the safety net instead of a confirm click.
+// Delete asks for a native confirm first; removed nodes still go to the store's undo
+// pool, so the "Recently deleted" restore remains the safety net after confirming.
+const requestRemove = (node) => {
+  if (confirm(`Delete "${node.name}"?`)) emit('remove', node.id)
+}
 </script>
 
 <template>
@@ -157,7 +160,7 @@ const commitRename = (node) => {
         <span v-if="renamingId !== n.id" class="actions">
           <button v-if="isCategory(n)" class="act" title="New child node" @click.stop="emit('create', n.id)">+</button>
           <button class="act" title="Rename" @click.stop="startRename(n)">✎</button>
-          <button class="act act--danger" title="Delete" @click.stop="emit('remove', n.id)">🗑</button>
+          <button class="act act--danger" title="Delete" @click.stop="requestRemove(n)">🗑</button>
         </span>
       </div>
 

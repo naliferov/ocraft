@@ -44,7 +44,11 @@ const nodeType = computed({
   set: (val) => { props.node.type = val === 'scene' ? undefined : val }
 })
 
-const activeComponent = computed(() => (NODE_TYPES[nodeType.value] ?? NODE_TYPES.scene).component)
+// No silent fallback: an unknown type resolves to null so the template can show an
+// explicit "no handler for this type" card instead of masquerading as an empty Scene.
+// (Untyped nodes still resolve to 'scene' via nodeType's getter above — only a
+// genuinely unregistered type lands here as null.)
+const activeComponent = computed(() => NODE_TYPES[nodeType.value]?.component ?? null)
 
 // Click the name to rename. `name` is just a display label — a node's id is its
 // folder name and never changes. Editing only mutates node.name in place (the
@@ -103,7 +107,15 @@ const commitName = () => {
       <span class="desc">{{ node.description }}</span>
     </div>
 
-    <component :is="activeComponent" :node="node" ref="componentRef" />
+    <component v-if="activeComponent" :is="activeComponent" :node="node" ref="componentRef" />
+    <div v-else class="no-handler">
+      <p>No handler for type <code>{{ node.type }}</code>.</p>
+      <p>
+        This node exists and is addressable, but no view is registered for its type.
+        Pick a known type from the selector above, or register a handler for
+        <code>{{ node.type }}</code> in <code>NODE_TYPES</code> (NodeItem.vue).
+      </p>
+    </div>
   </div>
 </template>
 
@@ -160,5 +172,23 @@ span.name {
 .desc {
   opacity: 0.5;
   font-size: 0.85em;
+}
+
+/* Shown when a node's type has no registered handler (was a silent fallback to
+   Scene). Naming the type + pointing at the picker/registry turns the dead end
+   into an authoring cue instead of a blank canvas. */
+.no-handler {
+  margin: auto;
+  max-width: 460px;
+  padding: 20px 24px;
+  border: 1px dashed #555;
+  border-radius: 8px;
+  color: #bbb;
+  font-size: 0.9em;
+  line-height: 1.5;
+  text-align: center;
+}
+.no-handler code {
+  color: #ffd56b;
 }
 </style>

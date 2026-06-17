@@ -29,14 +29,50 @@ export function clearCache() {
   wasmCache.clear()
 }
 
+// Host functions an AssemblyScript module can import to talk to the page — this
+// is how you DEBUG INSIDE a wasm node. With these wired, your AS source can use:
+//   console.log("…")                     -> browser console (prefixed with the node)
+//   trace("label", argCount, a, b, …)    -> AS's built-in debug print (numbers)
+//   assert(cond, "msg")                  -> on failure, logs msg + source location
+// AS passes strings as pointers into linear memory, so we lift them back to text
+// once the instance's memory is known. The memory is set right after instantiate;
+// these imports aren't *called* until the module runs an export, by which point
+// `memory` is in place. `seed` backs Math.random and is harmless when unused.
+function createWasmDebugImports(id) {
+  const label = nodeLabel(id)
+  let memory = null
+  const decoder = new TextDecoder('utf-16le')
+  const liftString = (pointer) => {
+    if (!pointer || !memory) return String(pointer)
+    // AS string layout: UTF-16LE data at `pointer`, byte length in the object
+    // header one word before it.
+    const byteLength = new Uint32Array(memory.buffer)[(pointer - 4) >>> 2]
+    return decoder.decode(new Uint8Array(memory.buffer, pointer, byteLength))
+  }
+  const imports = {
+    env: {
+      abort: (messagePtr, fileNamePtr, line, column) =>
+        console.error(`[${label}] wasm abort: ${liftString(messagePtr)} (${liftString(fileNamePtr)}:${line}:${column})`),
+      trace: (messagePtr, argCount, arg0, arg1, arg2, arg3, arg4) =>
+        console.log(`[${label}] wasm trace:`, liftString(messagePtr), ...[arg0, arg1, arg2, arg3, arg4].slice(0, argCount)),
+      'console.log': (messagePtr) => console.log(`[${label}] wasm:`, liftString(messagePtr)),
+      seed: () => Date.now(),
+    },
+  }
+  return { imports, useMemory: (wasmMemory) => { memory = wasmMemory } }
+}
+
 // Compile (server-side) + instantiate a wasm node, returning its exports. Cached
-// by id like JS modules; cleared on save so edits take effect.
+// by id like JS modules; cleared on save so edits take effect. Instantiated with
+// the debug imports above so the module can console.log / trace / assert.
 async function loadWasmExports(id) {
   if (!wasmCache.has(id)) {
     wasmCache.set(id, (async () => {
       const res = await fetch(`/api/nodes/${id}/wasm`)
       if (!res.ok) throw new Error(`wasm compile failed:\n${await res.text()}`)
-      const { instance } = await WebAssembly.instantiate(await res.arrayBuffer(), {})
+      const { imports, useMemory } = createWasmDebugImports(id)
+      const { instance } = await WebAssembly.instantiate(await res.arrayBuffer(), imports)
+      useMemory(instance.exports.memory)
       return instance.exports
     })())
   }
