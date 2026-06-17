@@ -1,8 +1,8 @@
-<p>Continuous Integration (CI) - интеграция и тестирование кода в общем репозитории.<br>Continuous Delivery (CD) - автоматическая доставка кода в тестовые и предпродукционные среды.<br>Continuous Deployment (CD) - автоматическая доставка кода в продукционное окружение.</p>
+<p>Continuous Integration (CI) - integrating and testing code in a shared repository.<br>Continuous Delivery (CD) - automatic delivery of code to test and pre-production environments.<br>Continuous Deployment (CD) - automatic delivery of code to the production environment.</p>
 <p>concurrency - one resource, many consumers
 parallelism - several recources and many consumers</p>
-<p>Динамическая типизация (тип определяется во время выполнения и может меняться)
-Слабая типизация (можно выполнять операции с разными типами)</p>
+<p>Dynamic typing (the type is determined at runtime and can change)
+Weak typing (operations can be performed on different types)</p>
 <h2>SOLID</h2>
 <p>Single Responsibility Principle - A class (or module) should have only <strong>one reason to change</strong>, meaning one responsibility.</p>
 <p>Open–Closed Principle - Software entities should be <strong>open for extension</strong>, but <strong>closed for modification</strong>.</p>
@@ -11,7 +11,7 @@ parallelism - several recources and many consumers</p>
 <p>Dependency Inversion Principle - High-level modules shouldn’t depend on low-level modules; both should depend on <strong>abstractions</strong>.</p>
 <h2>GRASP</h2>
 <p>General Responsibility Assignment Software Patterns</p>
-<p>Описаны в <a href="http://en.wikipedia.org/wiki/Craig_Larman">Крейга Лармана</a> «Применение UML и шаблонов проектирования»</p>
+<p>Described in <a href="http://en.wikipedia.org/wiki/Craig_Larman">Craig Larman</a>'s «Applying UML and Patterns»</p>
 <p>Low Coupling
 High Cohesion
 Information Expert
@@ -23,42 +23,42 @@ Indirection
 Protected Variations</p>
 <h2>OOP</h2>
 <h4>encapsulation</h4>
-<p>помещения данных и методов для работы с этими данными в отдельное пространство и как правило предоставление специального для работы с этим отдельным пространством, обычно именуемым в ООП объектом.  </p>
+<p>placing data and the methods that work on that data into a separate space, and as a rule providing a dedicated means of working with this separate space, usually called an object in OOP.  </p>
 <h4>inheritance</h4>
-<p>способность создания сущности на базе другой сущности с возможностью последующего переопределение, расширения этой сущности</p>
+<p>the ability to create an entity based on another entity, with the option to subsequently override and extend that entity</p>
 <h4>polymorphism</h4>
-<p>способность функции обрабатывать данные разных типов</p>
-<p>как правило я вспоминаю высказывание, один интерфейс - разные реализации.
-то есть у нас есть parentClass и childClass
-то есть способность интерфейса работать с разными реализациями</p>
-<p><strong>ad-hoc</strong> и <strong>параметрический</strong> полиформизм</p>
+<p>the ability of a function to handle data of different types</p>
+<p>as a rule I recall the saying, one interface - different implementations.
+that is, we have a parentClass and a childClass
+that is, the ability of an interface to work with different implementations</p>
+<p><strong>ad-hoc</strong> and <strong>parametric</strong> polymorphism</p>
 <h4>abstraction</h4>
 <h2>CAP</h2>
 <ol>
-<li><p><strong>Consistency (Согласованность)</strong>: Все копии данных в системе всегда совпадают. Это означает, что если вы изменяете данные на одном узле системы, все остальные узлы в системе немедленно отразят эти изменения.</p>
+<li><p><strong>Consistency</strong>: All copies of the data in the system are always in agreement. This means that if you change data on one node of the system, all the other nodes in the system will immediately reflect those changes.</p>
 </li>
-<li><p><strong>Availability (Доступность)</strong>: Система всегда готова отвечать на запросы, даже в случае отказа некоторых компонентов. Это означает, что хотя некоторые части системы могут отказывать, другие части все еще могут быть доступны для пользователей.</p>
+<li><p><strong>Availability</strong>: The system is always ready to respond to requests, even if some components fail. This means that although some parts of the system may fail, other parts can still be available to users.</p>
 </li>
-<li><p><strong>Partition tolerance (Толерантность к разделению)</strong>: Система может продолжать работать даже в случае, если некоторые части системы потеряли связь между собой (разделенность). То есть система может работать даже в случае, когда сеть между некоторыми узлами распределенной системы недоступна.</p>
+<li><p><strong>Partition tolerance</strong>: The system can keep working even if some parts of the system have lost connection with each other (partitioning). That is, the system can work even when the network between some nodes of the distributed system is unavailable.</p>
 </li>
 </ol>
-<p>Согласно этой теореме, в распределенной системе данных можно обеспечить одновременно только два из трех свойств</p>
+<p>According to this theorem, in a distributed data system you can guarantee only two of the three properties at the same time</p>
 <h2>Consistency</h2>
-<p>понятие &quot;consistency&quot; (согласованность) охватывает более широкий спектр аспектов, чем только &quot;Referential integrity&quot; (ссылочная целостность). Вот несколько аспектов согласованности данных:  </p>
-<p>Согласованность транзакций <strong>ACID</strong>: Этот аспект обеспечивает, что операции над данными будут либо выполнены полностью, либо откатываются, в случае сбоев. Это включает в себя гарантии атомарности, согласованности, изолированности и долговечности транзакций.  </p>
-<p>Согласованность в конфигурационных данных: В контексте настроек и конфигурационных данных важно, чтобы изменения применялись согласованно и не приводили к неконсистентному состоянию системы.</p>
+<p>the notion of &quot;consistency&quot; covers a broader range of aspects than just &quot;Referential integrity&quot;. Here are several aspects of data consistency:  </p>
+<p><strong>ACID</strong> transaction consistency: This aspect ensures that operations on data are either carried out completely or rolled back in case of failures. It includes guarantees of atomicity, consistency, isolation, and durability of transactions.  </p>
+<p>Consistency in configuration data: In the context of settings and configuration data, it is important that changes are applied consistently and do not lead to an inconsistent state of the system.</p>
 <h2>Processor</h2>
-<p>У процессора есть только регистры.</p>
-<p>В регистрах храняться все те данные с которыми процессор работает в конкретный момент времени. Когда ты складываешь два числа - эти два числа выгружаются из памяти в регистры, складываются и потом выгружаются обратно в память, или кладуться на стек (стек это тоже память. просто в отличии от кучи - это не набор разрозненых указателей на куски страниц выделеныне аллокатором, а непрерывный кусок, максимальный размер которого вообще строго регламентирован и задается на этапе компиляции программы. а на некоторых архитектурах или операционных системах и вовсе нет возможности сделать его динамически изменяемым в размере). Ну и еще стек процесса обычно огражден от остальной памяти специальной guard страницей, на архитектруах с MMU, чтобы отлавливать исключения выхода за пределы стека. </p>
-<p>Есть LRU кэши, но к ним нет прямого доступа, ими управляет шина памяти.</p>
-<p>Стек процессов ОС и стеки виртуальных машин жс имеют мало общего.</p>
-<p>Рассматривай себя как процессор. Твои карманы - это твои регистры. А твой шкаф в комнате - это твоя папмять.
-Ты ходишь к шкафу. берешь что-то из него, кладешь в карманы, идешь работаешь с тем что взял и потом кладешь снова в шкаф, чтобы освободить карманы для новых данных. Потмоу что карманов у тебя намного меньше чем ящиков в шкафу. 
-При этом до карманов тебе идти не надо они всегда при тебе -  поэтому это самая быстрая память.</p>
+<p>A processor has only registers.</p>
+<p>The registers hold all the data the processor is working with at a given moment. When you add two numbers - those two numbers are loaded from memory into registers, added together, and then offloaded back into memory, or placed on the stack (the stack is also memory. it's just that, unlike the heap - it isn't a set of scattered pointers to chunks of pages allocated by the allocator, but a contiguous chunk whose maximum size is in fact strictly regulated and set at the program's compilation stage. and on some architectures or operating systems there's no way to make it dynamically resizable at all). And besides, a process's stack is usually fenced off from the rest of memory by a special guard page, on architectures with an MMU, in order to catch stack-overflow exceptions. </p>
+<p>There are LRU caches, but there is no direct access to them; they are managed by the memory bus.</p>
+<p>The stack of OS processes and the stacks of JS virtual machines have little in common.</p>
+<p>Think of yourself as a processor. Your pockets are your registers. And the cabinet in your room is your memory.
+You walk over to the cabinet, take something out of it, put it in your pockets, go and work with what you took, and then put it back in the cabinet again to free up your pockets for new data. Because you have far fewer pockets than drawers in the cabinet.
+At the same time you don't need to walk over to your pockets, they are always on you - which is why this is the fastest memory.</p>
 <h2>GraphQL</h2>
 <p>No overfetching</p>
-<p>Из преимуществ основное, что один эндпоинт в который фронт сам составляет запросы.</p>
-<p>Сложно с сложными запросами когда идут дополнительные запросы к базе с разными айдишниками, и тем более с разными сущностями, которые нельзя сджойнить с помощью sql запроса.</p>
-<p>Интроспекция (схемы и автокомплит запросов)</p>
+<p>The main advantage is that there is a single endpoint to which the frontend composes queries itself.</p>
+<p>It's hard with complex queries when there are additional queries to the database with different ids, and especially with different entities that can't be joined with a SQL query.</p>
+<p>Introspection (schemas and query autocomplete)</p>
 <h2>SOAP</h2>
-<p><strong>SOAP (Simple Object Access Protocol)</strong>: SOAP є іншим протоколом для обміну структурованими інформаційними повідомленнями у розподіленій обчислювальній системі. SOAP використовує XML для опису повідомлень, які включаються в HTTP-запити або відповіді.</p>
+<p><strong>SOAP (Simple Object Access Protocol)</strong>: SOAP is another protocol for exchanging structured information messages in a distributed computing system. SOAP uses XML to describe the messages that are included in HTTP requests or responses.</p>

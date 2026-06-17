@@ -1,43 +1,43 @@
-<p>рост &gt; сложность &gt;  необходимость структурирования
-замедление скорости изменений</p>
-<p>терм архитектура в системной инженерии ввёл профессор университета Южной Калифорнии Эберхард Рехтин в начале 1990-х годов</p>
+<p>growth &gt; complexity &gt;  the need for structuring
+slowing the rate of change</p>
+<p>The term "architecture" in systems engineering was introduced by University of Southern California professor Eberhardt Rechtin in the early 1990s</p>
 <p><strong>Clear code rules</strong>
 <a href="https://gist.github.com/wojteklu/73c6914cc446146b8b533c0988cf8d29">https://gist.github.com/wojteklu/73c6914cc446146b8b533c0988cf8d29</a></p>
-<p>Low Coupling и High Cohesion
+<p>Low Coupling and High Cohesion
 Modularity
 Inversion of Control</p>
-<p><strong>Типы архитектур</strong></p>
+<p><strong>Types of architecture</strong></p>
 <ol>
-<li>Слоеная (или луковая) архитектура</li>
-<li>Гексагональная архитектура</li>
-<li>Монолитная Микросервисная</li>
+<li>Layered (or onion) architecture</li>
+<li>Hexagonal architecture</li>
+<li>Monolithic / Microservice</li>
 <li>N-Tier (Multitier) Architecture</li>
 </ol>
 <p><a href="https://simonbrown.je/">https://simonbrown.je/</a><br><a href="https://herbertograca.com/2017/07/03/the-software-architecture-chronicles/">https://herbertograca.com/2017/07/03/the-software-architecture-chronicles/</a><br><a href="https://gtoolkit.com/">https://gtoolkit.com/</a>  </p>
 <p>CQRS<br>Clear architecture<br>Layered architecture<br>Hexagonal architecture  </p>
-<p>За последние несколько десятилетий мы Гексагональная архитектура (Hexagonal Architecture, также известна как архитектура портов и адаптеров), разработанная Алистером Кокберном и описанная Стивом Фриманом и Натом Прайсом в их замечательной книге Growing Object Oriented Software with Tests.  </p>
-<p>DCI[45], предложенная Джеймсом Коплиеном и Трюгве Реенскаугом. BCE[46], предложенная Иваром Якобсоном в книге Object Oriented Software Engineering: A Use-Case Driven Approach.  </p>
-<p>Интерфейс использования это тоже деталь реализации.  </p>
-<p>GoF, PoEAA, SOLID, GRASP, KISS, DRY, YAGNI, Закон Деметры</p>
-<p><strong>Сервис</strong> подразумевает слабое зацепление. То есть сервис не должен зависить от приложения. Сервис предоставляет конкретный интерфейс для взаимодействия.
-Условием для слабого зацепления является стабильный интерфейс.
-Сервис имеет версии. Например используя CSV and Versions.</p>
-<p><strong>Домен - это модель</strong> (не модель сущности в базе данных - модель сущности - это схема). Домен отвечает за все бизнес процессы. Он ничего не знает о том, как данные хранятся, откуда приходят, и как представляются.</p>
-<p>Все правильные паттерны сводятся к тому, что между моделью и представлением всегда есть какой-то посредник. Он и отвечает за эту связь. 
-Модель при этом не знает ни про посрединика, ни про представление. У нее есть только ручки, и она испускает события.
-А дергать эти ручки и обрабатывать поток событий ты можешь еще не одним десятком способов. Обсерверы, листенеры, мессадж пассинг, что угодно еще.</p>
-<p>В шаблонах не должно быть императивной логики, ни в каком виде, и даже если она относится к самому представлению. Только кодовые точки куда будут вставляться данные. Даже условий быть не должно. 
-Ну и ни ViewModel/Contoller, ни тем более сам View ни должны напрямую работать с вводом выводом - эти должны заниматься сервисы-посредники. Поэтому ходить в сеть напрямую из компонентов представления неправильно. 
-Разумеется это все об идеальном, а в реалиях все сводится к тем же масштабам проектов, и никогда не нужно заниматься архитектурной астронавтикой и лить паттерны ради паттернов. Но слои так или иначе выделять следует всегда, хотя бы в самом примитивном виде.</p>
-<p>Cвязывайте эстремально поздно и экстремально динамически.
-В контроллере максимум санитайз, а валидация в модели.</p>
-<h2>Системный дизайн — паттерны</h2>
+<p>Over the past few decades we have had the Hexagonal Architecture (also known as the ports and adapters architecture), developed by Alistair Cockburn and described by Steve Freeman and Nat Pryce in their excellent book Growing Object Oriented Software with Tests.  </p>
+<p>DCI[45], proposed by James Coplien and Trygve Reenskaug. BCE[46], proposed by Ivar Jacobson in the book Object Oriented Software Engineering: A Use-Case Driven Approach.  </p>
+<p>The usage interface is also an implementation detail.  </p>
+<p>GoF, PoEAA, SOLID, GRASP, KISS, DRY, YAGNI, the Law of Demeter</p>
+<p><strong>A service</strong> implies loose coupling. That is, a service must not depend on the application. A service exposes a concrete interface for interaction.
+The precondition for loose coupling is a stable interface.
+A service has versions. For example, using CSV and Versions.</p>
+<p><strong>The domain is a model</strong> (not the model of an entity in the database — the entity model is the schema). The domain is responsible for all the business processes. It knows nothing about how the data is stored, where it comes from, or how it is presented.</p>
+<p>All the correct patterns boil down to the fact that there is always some mediator between the model and the view. It is the one responsible for that link.
+The model, meanwhile, knows nothing about either the mediator or the view. It only has handles, and it emits events.
+And you can pull those handles and process the stream of events in a dozen other ways. Observers, listeners, message passing, anything else.</p>
+<p>Templates must contain no imperative logic in any form, even if it relates to the view itself. Only the code points where data will be inserted. There should not even be conditionals.
+And neither the ViewModel/Controller, nor much less the View itself, should work directly with input/output — that should be handled by mediator services. This is why going to the network directly from view components is wrong.
+Of course, this is all about the ideal, and in reality it all comes down to the same matter of project scale, and you should never engage in architecture astronautics or pour out patterns for the sake of patterns. But you should always carve out layers one way or another, at least in the most primitive form.</p>
+<p>Bind extremely late and extremely dynamically.
+In the controller, sanitize at most; validation belongs in the model.</p>
+<h2>System design — patterns</h2>
 <p>slow down, circuit breaker, bulkhead pattern, exponential backoff, adaptive throttling</p>
-<p><strong>Книги по теории систем:</strong></p>
+<p><strong>Books on systems theory:</strong></p>
 <ul>
-<li>Людвиг фон Берталанфи — Общая теория систем</li>
-<li>Норберт Винер — Кибернетика, или Управление и связь в животном и машине</li>
-<li>Джей Форрестер — Принципы систем</li>
-<li>Стаффорд Бир — Мозг фирмы</li>
-<li>Герберт Саймон — Наука о создании искусственного</li>
+<li>Ludwig von Bertalanffy — General System Theory</li>
+<li>Norbert Wiener — Cybernetics, or Control and Communication in the Animal and the Machine</li>
+<li>Jay Forrester — Principles of Systems</li>
+<li>Stafford Beer — Brain of the Firm</li>
+<li>Herbert Simon — The Sciences of the Artificial</li>
 </ul>

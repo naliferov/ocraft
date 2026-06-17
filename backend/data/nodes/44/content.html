@@ -1,3 +1,29 @@
-<p>Hydra
-osc(150, -0.1).rotate(1.57).out(o0)</p>
-<p>SupperCollider</p>
+<h2>generative art — livecoding stack</h2>
+<p>Text-driven generative audio + visuals. All of it is <em>code</em>, so it iterates fast and pairs well with an AI collaborator.</p>
+
+<h3>Strudel (audio)</h3>
+<p><strong>TidalCycles ported to JavaScript / the browser</strong> (strudel.cc). A <strong>pattern language</strong> whose sample functions are literally Prefuse-style chopping primitives:</p>
+<ul>
+  <li><code>chop</code>, <code>striate</code>, <code>slice</code>, <code>bite</code>, <code>chew</code> — granular/chop a loaded sample</li>
+  <li><code>degradeBy</code>, <code>sometimes</code>, <code>somecycles</code>, <code>rand</code>, <code>irand</code>, <code>choose</code>, <code>wchoose</code> — first-class randomization</li>
+  <li>mini-notation for Euclidean / polyrhythm / ratchets</li>
+</ul>
+<p>Load a sample and one line gives randomized, beat-locked granular chopping:</p>
+<pre><code>s("durov").slice(16, irand(16).segment(8)).sometimesBy(.3, rev).chop(4)</code></pre>
+<p>Runs on its own web-audio engine (superdough), or sends to <strong>SuperDirt / SuperCollider</strong> for sample playback. Likely the <em>shortest path</em> to the chopped-vocal aesthetic, and it is pure text.</p>
+
+<h3>SuperCollider (audio)</h3>
+<p>The heavyweight underneath: a full synthesis <strong>language + server</strong> (scsynth). <code>SynthDef</code>s, <code>Pbind</code> patterns, deep granular (<code>TGrains</code>, <code>GrainBuf</code>, <code>Warp1</code>), buffer DSP, total control. Notably it is the engine room beneath TidalCycles/Strudel: their default sample backend, <strong>SuperDirt</strong>, runs on SuperCollider. Steeper curve, highest ceiling.</p>
+
+<h3>Hydra (video)</h3>
+<p>Browser-based <strong>livecoding visuals</strong> (Olivia Jack). Analog-synth-style functional chains on WebGL:</p>
+<pre><code>osc(150, -0.1).rotate(1.57).out(o0)
+osc(20, 0.1, 0.8).kaleid(5).modulate(noise(3)).out()</code></pre>
+<p>Audio-reactive via FFT (<code>a.fft[0]</code>), and can ingest external video / webcam / screen (<code>s0.initVideo(...)</code>) — so footage can be fed in and glitched generatively.</p>
+
+<h3>How they connect</h3>
+<ul>
+  <li><strong>TidalCycles/Strudel → SuperDirt (SuperCollider)</strong> for samples.</li>
+  <li><strong>Strudel &harr; Hydra</strong> integrate; <strong>Flok</strong> is a collaborative editor hosting Strudel + Hydra + SC together.</li>
+  <li><strong>OSC</strong> is the universal glue — links SC, Tidal, Max, and Ableton (via AbletonOSC). See [[prefuse-style-glitch-chopping-tools]].</li>
+</ul>

@@ -7,11 +7,11 @@
 <a href="https://git.slygods.com/yhelper/yhelper-rest">yhelper-rest</a></p>
 <h2>Local DNS Setup</h2>
 <p>Domain: <code>*.deconstruct.dev</code> → <code>127.0.0.1</code></p>
-<pre><code class="language-sh"># systemd-resolved: создан файл
+<pre><code class="language-sh"># systemd-resolved: file created
 /etc/systemd/resolved.conf.d/deconstruct.dev.conf
 
-# Ошибка при setup:
+# Error during setup:
 # Failed to enable unit: Unit file dnsmasq.service does not exist.
 # make: *** [Makefile:36: dns-setup] Error 1
-# → dnsmasq не установлен, нужно: apt install dnsmasq
+# → dnsmasq is not installed, need to: apt install dnsmasq
 </code></pre>

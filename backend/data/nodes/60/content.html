@@ -4,18 +4,18 @@
 <a href="/node/57" class="wikilink">javascript engines and runtimes</a>
 <a href="/node/65" class="wikilink">js features</a>
 <a href="/node/73" class="wikilink">modules type</a></p>
-<p>Некоторые понятия которые следует понимать:
-Замыкание
-Прототипное наследование.
+<p>Some concepts worth understanding:
+Closures
+Prototypal inheritance.
 Shadow DOM.
-Строгий режим</p>
-<p><strong>В жс все хранится в куче</strong>. На стек кладется только то, что должно на нем быть в соответствии со стеком вызовов.</p>
+Strict mode</p>
+<p><strong>In JS everything is stored on the heap</strong>. Only what needs to be on the stack according to the call stack is placed on the stack.</p>
 <p><strong>Strings</strong>
-Строки иммутабельны. Они хранятся в пуле.<br>Это значит, что после добавления строки в пул она больше не изменится, и будет собрана сборщиком мусора только после того, когда на нее не останется ссылок. То же самое с числами которые больше чем small int.  </p>
-<p>Я писал о том, что примитивы в js - это ссылочные типы, а не значимые.<br>И что новые строки время от времени получаются выстраиванием иерархий из ссылок друг на друга - например при слайсах - а не копированием строк. И это может ударять как по производительности (доступ к произвольному индексу будет медленнее), так и памяти - в памяти могут остаться висеть огромные строки которые фактически уже не используются, но которые были ресурсом для слайсов. Хорошая статья на эту тему была на хабре <a href="https://habr.com/ru/post/449368/">https://habr.com/ru/post/449368/</a>  </p>
+Strings are immutable. They are stored in a pool.<br>This means that once a string is added to the pool it will no longer change, and it will be collected by the garbage collector only after no references to it remain. The same goes for numbers larger than a small int.  </p>
+<p>I wrote about how primitives in JS are reference types, not value types.<br>And how new strings are from time to time produced by building hierarchies of references to one another - for example on slices - rather than by copying strings. And this can hurt both performance (random index access will be slower) and memory - huge strings that are in fact no longer used but were a resource for slices may remain hanging around in memory. There was a good article on this topic on Habr <a href="https://habr.com/ru/post/449368/">https://habr.com/ru/post/449368/</a>  </p>
 <p><strong>Integers</strong>
-То же самое про числа. Числа в жс так же передаются по ссылке. Но в пуле они не меняются. Как и ссылки на них разумеется.  </p>
-<p>Ссылочная природа всего обусловлена тем, что в js движках (с самого первого написанного еще Айком в Нетскейпе) используют тегированные указатели для всего. Именно из-за этой оптимизации в свое время и появлось то, что typeof null == &#39;object&#39;
-О современных оптимизации указателей можно почитать в блоке ви эйт <a href="https://v8.dev/blog/pointer-compression">https://v8.dev/blog/pointer-compression</a></p>
-<p>Навсякий случай поясню, что такое пул в этом контексте. 
-Если говрить проще - это Set. Множество. То есть каждая строка в памяти есть только в одном экземпляре. А вот числа необязательно. Потому что это может быть неэффективно по скорости.</p>
+The same applies to numbers. Numbers in JS are likewise passed by reference. But in the pool they do not change. Neither do the references to them, of course.  </p>
+<p>The referential nature of everything stems from the fact that JS engines (from the very first one, written by Eich at Netscape) use tagged pointers for everything. It is precisely because of this optimization that, back in the day, typeof null == &#39;object&#39; came about.
+You can read about modern pointer optimizations on the V8 blog <a href="https://v8.dev/blog/pointer-compression">https://v8.dev/blog/pointer-compression</a></p>
+<p>Just in case, let me explain what a pool is in this context.
+To put it more simply - it is a Set. A set. That is, each string exists in memory in only one instance. Numbers, however, not necessarily. Because that could be inefficient in terms of speed.</p>

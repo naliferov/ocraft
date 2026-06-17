@@ -62,15 +62,15 @@ Expiry via <code>exp</code> claim</p>
 <li>Insecure token storage (localStorage vs httpOnly cookie)</li>
 </ul>
 <p>JWT (access) + Refresh tokens + Cookies
-Это базовая модель.
-Как именно:
-access JWT — 5–10 минут
-refresh token — 7–30 дней</p>
-<p>refresh хранится:
+This is the basic model.
+Specifically:
+access JWT — 5–10 minutes
+refresh token — 7–30 days</p>
+<p>refresh is stored as:
 HttpOnly
 Secure
 SameSite=Strict | Lax</p>
-<p>refresh токены:
-хранятся на сервере
-с ротацией
-привязаны к устройству / сессии</p>
+<p>refresh tokens:
+stored on the server
+with rotation
+bound to the device / session</p>

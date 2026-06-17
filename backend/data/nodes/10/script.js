@@ -1,3 +1,7 @@
-export function main(a: i32, b: i32): i32 {
+export function main(a: u8, b: u8): u8 {
   return a + b
+}
+
+export function test(a: u8): u8 {
+  return a
 }

@@ -32,7 +32,7 @@ const renderSceneOnCanvas = (params) =&gt; {
   renderScene(ctx, params, props.visual)
 }
 </code></pre>
-<p><strong>JS Pipe через Symbol.toPrimitive</strong></p>
+<p><strong>JS Pipe via Symbol.toPrimitive</strong></p>
 <pre><code class="language-js">Function.prototype[Symbol.toPrimitive] = function() {
     const symbol = Symbol();
     const f = this;

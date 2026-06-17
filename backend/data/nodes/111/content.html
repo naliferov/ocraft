@@ -29,8 +29,8 @@ that mints validated integer classes):</p>
     private constructor(public readonly value: number) {}
 
     static of(n: number): InstanceType&lt;ReturnType&lt;typeof boundedInt&gt;&gt; {
-      if (!Number.isInteger(n)) throw new TypeError(`${name} має бути цілим, отримано ${n}`)
-      if (n &lt; min || n &gt; max)   throw new RangeError(`${name} поза межами ${min}..${max}, отримано ${n}`)
+      if (!Number.isInteger(n)) throw new TypeError(`${name} must be an integer, got ${n}`)
+      if (n &lt; min || n &gt; max)   throw new RangeError(`${name} out of range ${min}..${max}, got ${n}`)
       return new this(n)
     }
 

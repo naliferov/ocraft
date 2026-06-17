@@ -1,36 +1,36 @@
-<p><strong>Примерная программа обучения:</strong></p>
-<p>Линейная алгебра: векторы, матрицы, собственные значения и собственные векторы. (для понимания алгоритмов)</p>
-<p>Теория вероятностей и статистика: понимание распределений, основных концепций оценивания параметров, методов проверки гипотез и т.д. (помогает интерпретировать модели и оценивать их качество.)</p>
-<p>основы дифференциального исчисления, градиенты, производные (важно при изучении алгоритмов оптимизации, таких как градиентный спуск)</p>
+<p><strong>Sample study program:</strong></p>
+<p>Linear algebra: vectors, matrices, eigenvalues and eigenvectors. (for understanding algorithms)</p>
+<p>Probability theory and statistics: understanding distributions, the basic concepts of parameter estimation, hypothesis testing methods, and so on. (helps interpret models and assess their quality.)</p>
+<p>basics of differential calculus, gradients, derivatives (important when studying optimization algorithms such as gradient descent)</p>
 <p><strong>Data</strong> for good datasets - big hunt. big companies sometimes open their algorithms, but datasets seldom</p>
-<p><strong>Features</strong> (data markup) — can be пробег автомобиля, user sex, price, даже счетчик частоты появления слова в тексте</p>
-<p>Good when data structured например (tables). Но если у нас GBs of cats pics? Когда фич много, модель работает неэффективно. Зачастую отбор правильных фич занимает больше времени, чем остальное обучение. Но есть ситуации, когда чел выбирает «правильные» на его взгляд признаки и вносит в модель субъективность и она начинает врать.</p>
+<p><strong>Features</strong> (data markup) — can be a car's mileage, user sex, price, even a counter for how often a word appears in a text</p>
+<p>Good when data structured for example (tables). But what if we have GBs of cats pics? When there are many features, the model works inefficiently. Often selecting the right features takes more time than the rest of the training. But there are situations where a person picks the features they consider "right" and introduces subjectivity into the model, and it starts lying.</p>
 <p><strong>Algorithms</strong>
-Одну задачу можно решить разными методами. От выбора метода зависит точность, скорость работы и размер готовой модели. Но если данные говно, даже самый лучший алгоритм не поможет. Не зацикливайтесь на процентах, лучше соберите побольше данных.</p>
+A single task can be solved by different methods. The choice of method affects accuracy, speed, and the size of the finished model. But if the data is garbage, even the best algorithm won't help. Don't fixate on percentages — better to collect more data.</p>
 <p><img src="/api/assets/img/optimized/machine%20learning%20main%20concepts.jpeg" alt="machine learning main concepts.jpeg" class="embed">
 <img src="/api/assets/img/optimized/ai.jpeg" alt="ai.jpeg" class="embed">
 <img src="/api/assets/img/optimized/machine%20learning%20map.jpeg" alt="machine learning map.jpeg" class="embed">
-Глубокое обучение — архитектура нейросетей, один из подходов к их построению и обучению. На практике сегодня мало кто отличает, где глубокие нейросети, а где не очень. Говорят название конкретной сети и всё.</p>
+Deep learning — a neural-network architecture, one of the approaches to building and training them. In practice, few people today distinguish where the networks are deep and where they aren't. They just say the name of the specific network and that's it.</p>
 <p><img src="/api/assets/img/optimized/types%20of%20ML.jpeg" alt="types of ML.jpeg" class="embed"></p>
-<h4>Классическое обучение</h4>
-<p>Первые алгоритмы пришли к нам из чистой статистики в 1950-х. Они решали формальные задачи — искали закономерности в циферках, оценивали близость точек в пространстве и вычисляли направления.</p>
-<p>Сейчас на них примерно половина интернета. Когда вы встречаете блок «Рекомендованные статьи» на сайте, или банк блокирует деньги на карточке после первой покупки кофе за границей — это почти всегда дело рук одного из этих алгоритмов.</p>
-<p>Да, крупные корпорации любят решать все проблемы нейросетями. Потому что лишние 2% точности это плюс 2 миллиарда. Остальным стоит включать голову. Когда задача решаема классическими методами, дешевле реализовать сколько-нибудь полезную для бизнеса систему на них, а потом думать об улучшениях.</p>
-<p>Классические алгоритмы просты и как основы арифметики нужны постоянно.</p>
+<h4>Classical learning</h4>
+<p>The first algorithms came to us from pure statistics back in the 1950s. They solved formal problems — they looked for patterns in numbers, estimated how close points were in space, and computed directions.</p>
+<p>Today they power roughly half of the internet. When you come across a "Recommended articles" block on a site, or the bank freezes the money on your card after your first coffee purchase abroad — it's almost always the work of one of these algorithms.</p>
+<p>Yes, big corporations love to solve every problem with neural networks. Because an extra 2% of accuracy means plus 2 billion. Everyone else should use their head. When a task is solvable by classical methods, it's cheaper to implement a system that's at least somewhat useful for the business with them, and only then think about improvements.</p>
+<p>Classical algorithms are simple, and like the basics of arithmetic, they're needed all the time.</p>
 <p><img src="/api/assets/img/optimized/classical%20ML.jpeg" alt="classical ML.jpeg" class="embed">
-<strong>Обучение с учителем</strong></p>
-<p>Классическое обучение любят делить на две категории. Часто можно встретить их английские наименования — Supervised и Unsupervised Learning</p>
-<p>В первом случае у машины есть некий учитель, который говорит ей как правильно. То есть учитель уже заранее разделил (разметил) все данные на кошек и собак, а машина учится на конкретных примерах.</p>
-<p>В обучении без учителя, машине просто вываливают кучу фотографий животных на стол и говорят «разберись, кто здесь на кого похож». Данные не размечены, у машины нет учителя, и она пытается сама найти любые закономерности. Об этих методах поговорим ниже.</p>
-<p>Очевидно, что с учителем машина обучится быстрее и точнее, потому в боевых задачах его используют намного чаще. Эти задачи делятся на два типа: <strong>классификация — предсказание категории объекта, и регрессия — предсказание места на числовой прямой</strong>.</p>
-<h3>Классификация</h3>
-<p>Сегодня используют для:</p>
+<strong>Supervised learning</strong></p>
+<p>Classical learning is usually split into two categories. You'll often see their English names — Supervised and Unsupervised Learning</p>
+<p>In the first case, the machine has a kind of teacher who tells it what's correct. That is, the teacher has already divided (labeled) all the data into cats and dogs in advance, and the machine learns from specific examples.</p>
+<p>In unsupervised learning, the machine is simply dumped a pile of animal photos on the table and told "figure out who looks like whom here." The data isn't labeled, the machine has no teacher, and it tries to find any patterns on its own. We'll talk about these methods below.</p>
+<p>Obviously, with a teacher the machine learns faster and more accurately, which is why it's used far more often in real-world tasks. These tasks are divided into two types: <strong>classification — predicting an object's category, and regression — predicting a place on the number line</strong>.</p>
+<h3>Classification</h3>
+<p>Today it's used for:</p>
 <ul>
-<li>Спам-фильтры</li>
-<li>Определение языка</li>
-<li>Поиск похожих документов</li>
-<li>Анализ тональности</li>
-<li>Распознавание рукописных букв и цифр</li>
-<li>Определение подозрительных транзакций</li>
+<li>Spam filters</li>
+<li>Language detection</li>
+<li>Finding similar documents</li>
+<li>Sentiment analysis</li>
+<li>Recognizing handwritten letters and digits</li>
+<li>Detecting suspicious transactions</li>
 </ul>
-<p>Для классификации всегда нужен учитель — размеченные данные с признаками и категориями, которые машина будет учится определять по этим признакам</p>
+<p>Classification always needs a teacher — labeled data with features and categories that the machine will learn to determine from those features</p>

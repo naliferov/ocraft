@@ -1,7 +1,7 @@
 <p><a href="https://nodejs.org/en/learn/asynchronous-work/event-loop-timers-and-nexttick">event-loop-timers-and-nexttick</a></p>
 <h3>Eventloop cycle</h3>
 <p>When Node.js starts, it initializes the event loop, processes the provided input script (or drops into the REPL). It may make async API calls, schedule timers, or call <code>process.nextTick()</code>, then begins processing the event loop.</p>
-<h2>Event Loop (libuv, 4 треда по умолчанию)</h2>
+<h2>Event Loop (libuv, 4 threads by default)</h2>
 <h4>Phases</h4>
 <p><strong>timers</strong> (this phase executes callbacks scheduled by <code>setTimeout()</code> and <code>setInterval()</code>)
 <strong>pending callbacks</strong> (executes I/O callbacks deferred to the next loop iteration, executes callbacks for system operations such as types of TCP errors. For example if a TCP socket receives <code>ECONNREFUSED</code> when attempting to connect)

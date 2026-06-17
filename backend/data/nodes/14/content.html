@@ -1,88 +1,88 @@
-<p>В контексте CRDT tombstones — это специальные метки, которые фиксируют факт удаления элемента. При удалении элемент не убирается сразу без следа, а оставляется в виде «маркера удаления». (отложенное физ удаление)</p>
-<p><strong>Operation-based CRDT:</strong><br>Здесь сами операции могут включать информацию о порядке или причинности (например, логические часы), что позволяет обеспечить их корректное применение без необходимости явного хранения версии в реплике.</p>
+<p>In the context of CRDTs, tombstones are special markers that record the fact that an element was deleted. When an element is removed, it isn't deleted immediately and without a trace; instead it is kept as a "deletion marker." (deferred physical deletion)</p>
+<p><strong>Operation-based CRDT:</strong><br>Here the operations themselves can carry information about ordering or causality (for example, logical clocks), which makes it possible to apply them correctly without having to explicitly store a version in the replica.</p>
 <ul>
-<li><strong>Гарантия каузальной доставки:</strong><br>  Для корректного применения операций необходимо, чтобы они доставлялись всем репликам в каузальном порядке. Это означает, что если операция A зависит от операции B, то все узлы увидят B до A. Обычно для этого применяются алгоритмы надежного каузального широковещания.</li>
+<li><strong>Causal delivery guarantee:</strong><br>  For operations to be applied correctly, they must be delivered to all replicas in causal order. This means that if operation A depends on operation B, then every node will see B before A. Reliable causal broadcast algorithms are usually used for this.</li>
 </ul>
-<p>протокол <strong>causal broadcast</strong> (передают векторные часы или другие идентификаторы зависимости)</p>
-<p>Например, если у вас есть три узла, то вектор может выглядеть как [2, 5, 3]. Это означает, что:</p>
+<p>the <strong>causal broadcast</strong> protocol (carries vector clocks or other dependency identifiers)</p>
+<p>For example, if you have three nodes, the vector might look like [2, 5, 3]. This means that:</p>
 <ul>
-<li>Первый узел выполнил 2 события,</li>
-<li>Второй узел — 5 событий,</li>
-<li>Третий узел — 3 события.</li>
+<li>the first node performed 2 events,</li>
+<li>the second node — 5 events,</li>
+<li>the third node — 3 events.</li>
 </ul>
-<p>L – локальный вектор времени текущей реплики (узла, который принимает операцию).
-Каждый элемент L[i] показывает, сколько операций от узла i уже применено на этой реплике.</p>
-<p>v – вектор времени, пришедший вместе с операцией.
-Каждый элемент v[i] означает, сколько операций от узла i отправитель (тот, кто сгенерировал операцию) считал уже выполненными на момент генерации этой операции.</p>
-<p>i - идентификатор любого узла в системе (например, A, B, C). Он не обязательно равен текущему узлу, который проверяет операцию.</p>
-<p>Для отправителя (узла k):
+<p>L – the local time vector of the current replica (the node that receives the operation).
+Each element L[i] shows how many operations from node i have already been applied on this replica.</p>
+<p>v – the time vector that arrived together with the operation.
+Each element v[i] indicates how many operations from node i the sender (the one who generated the operation) considered already performed at the moment that operation was generated.</p>
+<p>i - the identifier of any node in the system (for example, A, B, C). It is not necessarily equal to the current node that is checking the operation.</p>
+<p>For the sender (node k):
 L[k] == v[k] - 1
-означает, что на текущей реплике уже должны быть применены все предыдущие операции от этого же узла (k). Если, например, операция от узла k имеет метку v[k] = 2, значит, на текущей реплике должно быть применено ровно 1 операция от k (то есть L[k] равен 1), прежде чем можно применить эту новую операцию.</p>
-<p>Для остальных узлов (обозначаем их через i, где i ≠ k) правило выглядит так:
+means that all previous operations from this same node (k) must already have been applied on the current replica. If, for example, an operation from node k carries the label v[k] = 2, then exactly 1 operation from k must have been applied on the current replica (that is, L[k] equals 1) before this new operation can be applied.</p>
+<p>For the remaining nodes (denoted by i, where i ≠ k) the rule looks like this:
 L[i] &gt;= v[i]</p>
-<p>Это условие говорит, что на текущей реплике уже должны быть получены все операции от узлов i, которые отправитель зафиксировал в векторе v.</p>
-<p>Реплика B увеличивает свой собственный счётчик (L[B]) только при генерации собственной операции.</p>
+<p>This condition says that all operations from nodes i that the sender recorded in vector v must already have been received on the current replica.</p>
+<p>Replica B increments its own counter (L[B]) only when it generates its own operation.</p>
 <ul>
-<li><p><strong>Лог операций (операционный журнал):</strong><br>  В некоторых системах может применяться лог, в котором фиксируется последовательность выполненных операций. Это помогает не только в репликации, но и в отладке или восстановлении состояния в случае сбоев.</p>
+<li><p><strong>Operation log (operational journal):</strong><br>  Some systems may use a log that records the sequence of performed operations. This helps not only with replication, but also with debugging or recovering state in case of failures.</p>
 </li>
-<li><p><strong>Модель prepare/effector:</strong><br>  При выполнении операции сначала вычисляется некий подготовительный (prepare) этап, который генерирует операцию, а затем на всех узлах эта операция применяется через эффектор (effect), что гарантирует, что все реплики приходят к одному и тому же состоянию.</p>
+<li><p><strong>Prepare/effector model:</strong><br>  When an operation is performed, a preparatory (prepare) phase is first computed, which generates the operation, and then this operation is applied on all nodes via the effector (effect), which guarantees that all replicas converge to the same state.</p>
 </li>
 </ul>
-<pre><code class="language-json">{ 
-&quot;id&quot;: &quot;node1_id&quot;, 
-&quot;value&quot;: &quot;objectData&quot;, 
+<pre><code class="language-json">{
+&quot;id&quot;: &quot;node1_id&quot;,
+&quot;value&quot;: &quot;objectData&quot;,
 &quot;prev&quot;: null,
 &quot;next&quot;: &quot;node2_id&quot;,
 &quot;internal&quot;: &quot;node3&quot;
 }
 </code></pre>
-<h2>Типы CRDT</h2>
+<h2>Types of CRDT</h2>
 <ul>
-<li><strong>G-Counter</strong> — (grow-only) монотонно увеличивающийся счётчик</li>
-<li><strong>PN-Counter</strong> — (positive-negative) счётчик, который можно уменьшать</li>
-<li><strong>LWW-Register</strong> — (last-writer-wins) регистр с принципом &quot;последняя запись приоритетнее&quot;</li>
-<li><strong>MV-Register</strong> — (multi-value) регистр с несколькими значениями</li>
-<li><strong>G-Set</strong> — множество элементов без удаления</li>
-<li><strong>2P-Set</strong> — с приоритетным удалением</li>
-<li><strong>PN-Set</strong> — использует счётчик операций включения-удаления</li>
-<li><strong>LWW-Set</strong> — с приоритетом времени операции</li>
-<li><strong>OR-Set</strong> — (observed-remove) список с идентификаторами</li>
+<li><strong>G-Counter</strong> — (grow-only) a monotonically increasing counter</li>
+<li><strong>PN-Counter</strong> — (positive-negative) a counter that can be decremented</li>
+<li><strong>LWW-Register</strong> — (last-writer-wins) a register with the principle "the last write takes priority"</li>
+<li><strong>MV-Register</strong> — (multi-value) a register with multiple values</li>
+<li><strong>G-Set</strong> — a set of elements without removal</li>
+<li><strong>2P-Set</strong> — with priority removal</li>
+<li><strong>PN-Set</strong> — uses a counter of add/remove operations</li>
+<li><strong>LWW-Set</strong> — with operation-time priority</li>
+<li><strong>OR-Set</strong> — (observed-remove) a list with identifiers</li>
 </ul>
-<h2>Математическая основа</h2>
+<h2>Mathematical foundation</h2>
 <ol>
-<li><strong>Идемпотентность</strong> — защита от дублей апдейтов</li>
-<li><strong>Коммутативность</strong> — независимость от порядка апдейтов</li>
-<li><strong>Частичный порядок</strong> — Рефлексивность + Транзитивность + Антисимметричность</li>
-<li><strong>Полурешётка</strong> — частично упорядоченное множество с точной верхней (нижней) гранью</li>
-<li><strong>Вектор версий</strong> — вектор размерности равной количеству нод; каждая нода инкрементирует своё значение при событии; при синхронизации позволяет определить у какой реплики старые/новые данные</li>
+<li><strong>Idempotence</strong> — protection against duplicate updates</li>
+<li><strong>Commutativity</strong> — independence from the order of updates</li>
+<li><strong>Partial order</strong> — Reflexivity + Transitivity + Antisymmetry</li>
+<li><strong>Semilattice</strong> — a partially ordered set with a least upper (greatest lower) bound</li>
+<li><strong>Version vector</strong> — a vector whose dimension equals the number of nodes; each node increments its own value on an event; during synchronization it lets you determine which replica has the old/new data</li>
 </ol>
-<p>Ключевая идея CRDT: операции должны быть коммутативными и ассоциативными — порядок их применения не влияет на итоговое состояние. Полурешётки формально описывают эти свойства.</p>
-<h2>Надёжный протокол доставки</h2>
+<p>The key idea of CRDTs: operations must be commutative and associative — the order in which they are applied does not affect the final state. Semilattices formally describe these properties.</p>
+<h2>Reliable delivery protocol</h2>
 <ul>
-<li>Если effector доставляется на все реплики в введённом порядке — одновременные effector коммутативны</li>
-<li>Если effector доставляется без учёта порядка — все effector коммутативны</li>
-<li>Если effector может быть доставлен несколько раз — он должен быть идемпотентным</li>
-<li>Некоторые реализации используют очереди (Kafka) как часть протокола доставки</li>
+<li>If the effector is delivered to all replicas in the prescribed order — concurrent effectors are commutative</li>
+<li>If the effector is delivered without regard to order — all effectors are commutative</li>
+<li>If the effector may be delivered multiple times — it must be idempotent</li>
+<li>Some implementations use queues (Kafka) as part of the delivery protocol</li>
 </ul>
 <p><a href="https://thom.ee/blog/crdt-vs-operational-transformation">https://thom.ee/blog/crdt-vs-operational-transformation</a>
 <a href="https://inria.hal.science/inria-00629503/document">https://inria.hal.science/inria-00629503/document</a>
 <a href="https://www.bartoszsypytkowski.com/the-state-of-a-state-based-crdts/">https://www.bartoszsypytkowski.com/the-state-of-a-state-based-crdts/</a></p>
 <h2>(merged from NAMESPACE (sandbox) OPS (CAP) (CRTD) note)</h2>
-<p>Также есть Replicated State Machines (RSM).<br>Operational Transformation (OT) - техника репликации данных, которая позволяет обеспечить согласованность данных в системах совместной работы, таких как Google Docs, Microsoft Office и т.д.<br>Distributed Version Control Systems (DVCS) - это системы контроля версий, которые позволяют распределенно хранить и управлять версиями кода и других документов.  </p>
+<p>There are also Replicated State Machines (RSM).<br>Operational Transformation (OT) - a data replication technique that makes it possible to ensure data consistency in collaborative systems such as Google Docs, Microsoft Office, etc.<br>Distributed Version Control Systems (DVCS) - version control systems that allow code and other documents to be stored and their versions managed in a distributed way.  </p>
 <p>Strong, Eventual, Strong Eventual  </p>
 <p>Operation based CRDT-s<br>State based CRDT-s  </p>
-<p>Комутативность. независимость от порядка апдейтов<br>Идемпотентность. защита от дублей апдейтов  </p>
-<p>Основанные на хранении состояния (convergent: CvRDT, state-based): в этом случае отправляются не отдельные апдейты, а вся структура данных целиком (то есть, весь список, в случае списка). Структура данных должна поддерживать операции:  </p>
-<p>Структуры  </p>
-<p>G-Counter: (grow-only) монотонно увеличивающийся счётчик<br>PN-Counter: (positive-negative) счётчик, который можно уменьшать<br>LWW-Register: (last-writer-wins) регистр с принципом последняя запись приоритетнее<br>MV-Register: (multi-value) регистр с несколькими значениями<br>G-Set: множество элементов без удаления<br>2P-Set: с приоритетным удалением<br>PN-Set: использует счётчик операций включения-удаления<br>LWW-Set: с приоритетом времени операции<br>OR-Set: (observed-remove) список с идентификаторами  </p>
+<p>Commutativity. independence from the order of updates<br>Idempotence. protection against duplicate updates  </p>
+<p>State-based (convergent: CvRDT, state-based): in this case it is not individual updates that are sent, but the entire data structure as a whole (that is, the whole list, in the case of a list). The data structure must support the operations:  </p>
+<p>Structures  </p>
+<p>G-Counter: (grow-only) a monotonically increasing counter<br>PN-Counter: (positive-negative) a counter that can be decremented<br>LWW-Register: (last-writer-wins) a register with the principle that the last write takes priority<br>MV-Register: (multi-value) a register with multiple values<br>G-Set: a set of elements without removal<br>2P-Set: with priority removal<br>PN-Set: uses a counter of add/remove operations<br>LWW-Set: with operation-time priority<br>OR-Set: (observed-remove) a list with identifiers  </p>
 <ol>
-<li>Идемпотентность  </li>
-<li>Комутативность  </li>
-<li>Частичный порядок<br>Рефлексивность + Транзитивность + Антисимметричность  </li>
-<li>Полурешётка<br>Частично упорядоченное множество с точной верхней (нижней) гранью  </li>
-<li>Вектор версий<br>Вектор размерности равной количеству нод, и каждая нода при наступлении какого-то определённого события инкрементирует своё значение в векторе. При синхронизации данные передаются с этим вектором и это вводит отношение порядка, что позволяет определить у какой реплики старые/новые данные.</li>
+<li>Idempotence  </li>
+<li>Commutativity  </li>
+<li>Partial order<br>Reflexivity + Transitivity + Antisymmetry  </li>
+<li>Semilattice<br>A partially ordered set with a least upper (greatest lower) bound  </li>
+<li>Version vector<br>A vector whose dimension equals the number of nodes, and each node increments its own value in the vector when some particular event occurs. During synchronization the data is transmitted together with this vector, and this introduces an ordering relation, which makes it possible to determine which replica has the old/new data.</li>
 </ol>
-<p>Ключевой идеей CRDT является то, что операции, выполняемые над данными, должны быть коммутативными и ассоциативными, то есть порядок их применения не должен влиять на итоговое состояние данных. Полурешетки позволяют описать такие свойства и гарантируют, что любые две операции над данными будут коммутативными.  </p>
-<p>CRDT связан с полурешеткой, потому что теория полурешеток предоставляет математические инструменты для формального определения и анализа конфликтов, возникающих в распределенных системах, а также для обеспечения согласованности данных в таких системах.  </p>
-<p>Надёжный протокол доставки<br>Если effector доставляется на все реплики в соответствии с введённым порядком (для данного типа), то одновременные effector — коммутативны, или<br>Если effector доставляется на все реплики без учёта порядка, то все effector — коммутативны.<br>В случае, если effector может быть доставлен несколько раз, то он должен быть идемпотентным<br>Некоторые реализации используют очереди (Kafka) как часть протокола доставки.  </p>
-<p>Примеры: распределенные системы управления версиями.</p>
+<p>The key idea of CRDTs is that operations performed on the data must be commutative and associative, that is, the order in which they are applied should not affect the final state of the data. Semilattices make it possible to describe such properties and guarantee that any two operations on the data will be commutative.  </p>
+<p>CRDTs are connected to semilattices because the theory of semilattices provides mathematical tools for formally defining and analyzing the conflicts that arise in distributed systems, as well as for ensuring data consistency in such systems.  </p>
+<p>Reliable delivery protocol<br>If the effector is delivered to all replicas in accordance with the prescribed order (for the given type), then concurrent effectors are commutative, or<br>If the effector is delivered to all replicas without regard to order, then all effectors are commutative.<br>In the case where the effector may be delivered multiple times, it must be idempotent<br>Some implementations use queues (Kafka) as part of the delivery protocol.  </p>
+<p>Examples: distributed version control systems.</p>

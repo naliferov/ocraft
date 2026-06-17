@@ -1,5 +1,5 @@
-<p><strong>ярлыки</strong> хранить в папке ~/.local/share/applications</p>
-<h3>пример ярлыка</h3>
+<p><strong>shortcuts</strong> are stored in the ~/.local/share/applications folder</p>
+<h3>example shortcut</h3>
 <p>[Desktop Entry]
 Type=Application
 Name=Cursor
@@ -8,8 +8,8 @@ Icon=/home/deconstruct/Downloads/img/cursor.png
 Terminal=false
 Categories=Development;
 StartupWMClass=Cursor</p>
-<p><strong>Terminal:</strong> hotkey вставки можно на ctrl + v</p>
-<h2>systemd — шаблон сервиса</h2>
+<p><strong>Terminal:</strong> the paste hotkey can be set to ctrl + v</p>
+<h2>systemd — service template</h2>
 <pre><code class="language-ini"># /etc/systemd/system/myapp.service
 [Unit]
 Description=My App
@@ -24,8 +24,8 @@ WantedBy=multi-user.target
 </code></pre>
 <pre><code class="language-sh">sudo systemctl daemon-reload
 sudo systemctl start myapp.service
-sudo systemctl enable myapp.service  # автозапуск после ребута
+sudo systemctl enable myapp.service  # autostart after reboot
 </code></pre>
-<h2>Запуск процесса в фоне (shell)</h2>
+<h2>Running a process in the background (shell)</h2>
 <pre><code class="language-sh">./node s.js &amp;&gt; s.log &amp; disown
 </code></pre>

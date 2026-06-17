@@ -2,9 +2,9 @@
 <p>The routing algorithm used depends on the exchange type and rules called bindings  </p>
 <p>a bounded channel prefetch which limits the number of outstanding (&quot;in progress&quot;) deliveries on a channel. With automatic acknowledgements, however, there is no such limit by definition  </p>
 <p>basic.ack, basic.nack, basic.reject  </p>
-<p>Потеря сообщений: Сообщения могут потеряться при передачи через очередь из-за сбоев или неполадок. Чтобы избежать этой проблемы, в RabbitMQ можно использовать подтверждения доставки (acknowledgements)  </p>
-<p>Дублирование: Для решения этой проблемы можно использовать уникальные идентификаторы  </p>
-<p>Неправильный порядок: Для решения можно. установка приоритетов сообщений или использование дополнительной информации в сообщениях для определения правильного порядка обработки.  </p>
-<p>Сбой при обработке. может потребоваться повторная обработка сообщения. RabbitMQ поддерживает механизмы повторной обработки через механизмы повторной отправки сообщений или переадресацию в специальную очередь для обработки ошибок. (dead letter exchanges)  </p>
-<p>Отказы серверов: Если сервер RabbitMQ или другие сервера в системе обмена сообщениями перестают функционировать, сообщения могут быть недоставлены или обработаны некорректно. В этом случае можно использовать кластеризацию и репликацию RabbitMQ  </p>
-<p>Производительность и масштабируемость: При большом объеме транзакций может возникнуть проблема с производительностью и масштабируемостью. Для решения этой проблемы можно использовать горизонтальное масштабирование (добавление новых узлов) и оптимизацию параметров конфигурации RabbitMQ.</p>
+<p>Message loss: Messages can be lost in transit through the queue due to failures or malfunctions. To avoid this problem, RabbitMQ allows you to use delivery acknowledgements  </p>
+<p>Duplication: To solve this problem you can use unique identifiers  </p>
+<p>Wrong order: To solve this you can set message priorities or use additional information in the messages to determine the correct processing order.  </p>
+<p>Failure during processing: a message may need to be reprocessed. RabbitMQ supports reprocessing mechanisms through message redelivery mechanisms or forwarding to a special queue for error handling. (dead letter exchanges)  </p>
+<p>Server failures: If the RabbitMQ server or other servers in the messaging system stop functioning, messages may be undelivered or processed incorrectly. In this case you can use RabbitMQ clustering and replication  </p>
+<p>Performance and scalability: With a large volume of transactions, performance and scalability problems may arise. To solve this problem you can use horizontal scaling (adding new nodes) and optimizing RabbitMQ configuration parameters.</p>

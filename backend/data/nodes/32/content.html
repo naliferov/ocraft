@@ -6,13 +6,13 @@
 <p><a href="/node/86" class="wikilink">other libs</a></p>
 <p><strong>Proxy</strong>
 <a href="https://www.envoyproxy.io">https://www.envoyproxy.io</a>
-<strong>Ambient Mesh</strong> делит функции между L4-прокси (ztunnel на Rust) и L7-прокси, убирая лишние sidecar’ы</p>
+<strong>Ambient Mesh</strong> splits functions between an L4 proxy (ztunnel, written in Rust) and an L7 proxy, removing the unnecessary sidecars</p>
 <p>Cloudflare Workers</p>
 <p><strong>REST API testing</strong>
 postman
 <a href="https://hoppscotch.com">https://hoppscotch.com</a></p>
 <p><strong>Service communication</strong>
-важную роль играют <strong>сетевые mesh-решения</strong>, и здесь тоже есть новшества. Классический service mesh (Istio, Linkerd) подразумевает запуск побочного прокси-контейнера (“sidecar”) рядом с каждым сервисом для перехвата и маршрутизации трафика. Однако теперь предлагается <strong>sidecar-less service mesh</strong>: так, в 2022 году анонсирован Istio Ambient Mesh – режим работы mesh без сайдкаров, перехватывающий трафик на уровне узла (node) с помощью eBPF и специальных узловых proxy типа ztunnel​ istio.io. В Ambient Mesh одна общая прослойка на ноде обслуживает сразу все приложения, что снижает накладные расходы и упрощает внедрение безопасности и наблюдаемости.</p>
+<strong>network mesh solutions</strong> play an important role here, and there are innovations in this area too. The classic service mesh (Istio, Linkerd) involves running a sidecar proxy container next to each service to intercept and route traffic. However, a <strong>sidecar-less service mesh</strong> is now being offered: for example, in 2022 Istio Ambient Mesh was announced – a mode of mesh operation without sidecars that intercepts traffic at the node level using eBPF and special node proxies such as ztunnel​ istio.io. In Ambient Mesh, a single shared layer on the node serves all applications at once, which reduces overhead and simplifies the adoption of security and observability.</p>
 <p><strong>terminal</strong>
 <a href="https://www.warp.dev">https://www.warp.dev</a>
 <a href="https://ghostty.org">https://ghostty.org</a>
@@ -27,5 +27,5 @@ ngrok
 <a href="https://dokku.com">https://dokku.com</a>
 <a href="https://railway.com">https://railway.com</a></p>
 <p><strong>System design</strong>
-Один из заметных трендов – архитектура <strong>MACH</strong> (Microservices, API-first, Cloud-native, Headless)
-Data Mesh, Data Lakehouse (По сути, lakehouse позволяет выполнять SQL-аналитику и машинное обучение прямо на дешёвом объектном хранении данных (например, на data lake в S3), но с поддержкой ACID-транзакций и единого уровня управления метаданными.)</p>
+One of the notable trends is the <strong>MACH</strong> architecture (Microservices, API-first, Cloud-native, Headless)
+Data Mesh, Data Lakehouse (In essence, a lakehouse lets you run SQL analytics and machine learning directly on cheap object storage (for example, a data lake in S3), but with support for ACID transactions and a unified metadata management layer.)</p>

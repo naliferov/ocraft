@@ -1,54 +1,54 @@
-<p>сравнить с очередью <a href="https://github.com/mcollina/mqemitter">https://github.com/mcollina/mqemitter</a></p>
+<p>compare with the queue <a href="https://github.com/mcollina/mqemitter">https://github.com/mcollina/mqemitter</a></p>
 <pre><code class="language-javascript">class QueueSimplified {
   constructor() {
-    this.front = null;  // Ссылка на первый элемент
-    this.rear = null;   // Ссылка на последний элемент
-    this.length = 0;    // Размер очереди
+    this.front = null;  // Reference to the first element
+    this.rear = null;   // Reference to the last element
+    this.length = 0;    // Queue size
   }
 
-  // Создание нового узла
+  // Create a new node
   createNode(data) {
     return { data, next: null };
   }
 
-  // Добавление элемента в конец очереди - O(1)
+  // Add an element to the end of the queue - O(1)
   enqueue(element) {
     const newNode = this.createNode(element);
-    
+
     if (this.isEmpty()) {
-      // Если очередь пуста, новый узел становится и первым, и последним
+      // If the queue is empty, the new node becomes both the first and the last
       this.front = newNode;
       this.rear = newNode;
     } else {
-      // Добавляем новый узел в конец и обновляем указатель rear
+      // Add the new node to the end and update the rear pointer
       this.rear.next = newNode;
       this.rear = newNode;
     }
-    
+
     this.length++;
     return this.length;
   }
 
-  // Удаление и возврат первого элемента очереди - O(1)
+  // Remove and return the first element of the queue - O(1)
   dequeue() {
     if (this.isEmpty()) {
       return null;
     }
-    
+
     const removedNode = this.front;
-    
-    // Если это был последний элемент
+
+    // If this was the last element
     if (this.front === this.rear) {
       this.rear = null;
     }
-    
+
     this.front = this.front.next;
     this.length--;
-    
+
     return removedNode.data;
   }
 
-  // Возврат первого элемента без удаления - O(1)
+  // Return the first element without removing it - O(1)
   peek() {
     if (this.isEmpty()) {
       return null;
@@ -56,72 +56,72 @@
     return this.front.data;
   }
 
-  // Проверка, пуста ли очередь - O(1)
+  // Check whether the queue is empty - O(1)
   isEmpty() {
     return this.front === null;
   }
 
-  // Возврат размера очереди - O(1)
+  // Return the queue size - O(1)
   size() {
     return this.length;
   }
 
-  // Очистка очереди - O(1)
+  // Clear the queue - O(1)
   clear() {
     this.front = null;
     this.rear = null;
     this.length = 0;
   }
 
-  // Преобразование очереди в строку для вывода - O(n)
+  // Convert the queue to a string for output - O(n)
   print() {
     if (this.isEmpty()) {
-      return &quot;Очередь пуста&quot;;
+      return &quot;Queue is empty&quot;;
     }
-    
+
     let result = [];
     let current = this.front;
-    
+
     while (current) {
       result.push(current.data);
       current = current.next;
     }
-    
+
     return result.join(&quot;, &quot;);
   }
 }
 
 function queueExample() {
   const queue = new QueueSimplified();
-  
-  queue.enqueue(&quot;Первый&quot;);
-  queue.enqueue(&quot;Второй&quot;);
-  queue.enqueue(&quot;Третий&quot;);
-  
-  console.log(&quot;Очередь после добавления 3 элементов:&quot;);
+
+  queue.enqueue(&quot;First&quot;);
+  queue.enqueue(&quot;Second&quot;);
+  queue.enqueue(&quot;Third&quot;);
+
+  console.log(&quot;Queue after adding 3 elements:&quot;);
   console.log(queue.print());
-  console.log(&quot;Размер очереди:&quot;, queue.size());
-  
-  console.log(&quot;Первый элемент:&quot;, queue.peek());
-  
-  console.log(&quot;Удаленный элемент:&quot;, queue.dequeue());
-  console.log(&quot;Очередь после удаления элемента:&quot;);
+  console.log(&quot;Queue size:&quot;, queue.size());
+
+  console.log(&quot;First element:&quot;, queue.peek());
+
+  console.log(&quot;Removed element:&quot;, queue.dequeue());
+  console.log(&quot;Queue after removing an element:&quot;);
   console.log(queue.print());
-  
-  console.log(&quot;Очередь пуста?&quot;, queue.isEmpty());
-  
-  queue.enqueue(&quot;Четвертый&quot;);
-  queue.enqueue(&quot;Пятый&quot;);
-  console.log(&quot;Очередь после добавления новых элементов:&quot;);
+
+  console.log(&quot;Is the queue empty?&quot;, queue.isEmpty());
+
+  queue.enqueue(&quot;Fourth&quot;);
+  queue.enqueue(&quot;Fifth&quot;);
+  console.log(&quot;Queue after adding new elements:&quot;);
   console.log(queue.print());
-  
-  // Очистка очереди
+
+  // Clear the queue
   queue.clear();
-  console.log(&quot;Очередь после очистки:&quot;);
+  console.log(&quot;Queue after clearing:&quot;);
   console.log(queue.print());
-  console.log(&quot;Очередь пуста?&quot;, queue.isEmpty());
+  console.log(&quot;Is the queue empty?&quot;, queue.isEmpty());
 }
 
-// Запуск примера
+// Run the example
 queueExample();
 </code></pre>

@@ -1,20 +1,20 @@
 <h2>String</h2>
-<p>type is the set of all ordered sequences of zero or more 16-bit unsigned <a href="https://tc39.es/ecma262/multipage/notational-conventions.html#integer">integer</a> values (“elements”) up to a maximum length of 2 in 53 pow - 1 elements (9007199254740991). The String type is generally used to represent textual data in a running ECMAScript program, in which case each element in the String is treated as a UTF-16 code unit value</p>
+<p>type is the set of all ordered sequences of zero or more 16-bit unsigned <a href="https://tc39.es/ecma262/multipage/notational-conventions.html#integer">integer</a> values (“elements”) up to a maximum length of 2 in 53 pow - 1 elements (9007199254740991). The String type is generally used to represent textual data in a running ECMAScript program, in which case each element in the String is treated as a UTF-16 code unit value</p>
 <p>The length of a String is the number of elements (i.e., 16-bit values) within it. (HEX)</p>
 <p>ECMAScript operations that do not interpret String contents apply no further semantics. Operations that do interpret String values treat each element as a single UTF-16 code unit.</p>
-<p> Such operations apply special treatment to every code unit with a numeric value in the <a href="https://tc39.es/ecma262/multipage/notational-conventions.html#inclusive-interval">inclusive interval</a> from 0xD800 to 0xDBFF (defined by the Unicode Standard as a leading surrogate, or more formally as a high-surrogate code unit) and every code unit with a numeric value in the <a href="https://tc39.es/ecma262/multipage/notational-conventions.html#inclusive-interval">inclusive interval</a> from 0xDC00 to 0xDFFF (defined as a trailing surrogate, or more formally as a low-surrogate code unit) using the following rules:
- 
+<p> Such operations apply special treatment to every code unit with a numeric value in the <a href="https://tc39.es/ecma262/multipage/notational-conventions.html#inclusive-interval">inclusive interval</a> from 0xD800 to 0xDBFF (defined by the Unicode Standard as a leading surrogate, or more formally as a high-surrogate code unit) and every code unit with a numeric value in the <a href="https://tc39.es/ecma262/multipage/notational-conventions.html#inclusive-interval">inclusive interval</a> from 0xDC00 to 0xDFFF (defined as a trailing surrogate, or more formally as a low-surrogate code unit) using the following rules:
+
 The phrase &quot;the ASCII word characters&quot; denotes the following String value, which consists solely of every letter and number in the Unicode Basic Latin block along with U+005F (LOW LINE):<br>&quot;ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_&quot;.</p>
-<p>Все часто используемые символы имеют 2-байтовые коды (4 шестнадцатеричных разряда).  Изначально JavaScript был основан на кодировке UTF-16, которая предусматривала только 2 байта на один символ. Однако 2 байта допускают только 65536 комбинаций, и этого недостаточно для всех возможных символов Юникода.</p>
-<p>Поэтому редкие символы, требующие более 2 байт, кодируются парой 2-байтовых символов, которые называются «суррогатной парой».
-Побочным эффектом является то, что длина таких символов равна <code>2</code></p>
-<p>// charCodeAt не учитывает суррогатные пары, поэтому он выдает коды для 1-й части 𝒳: alert( &#39;𝒳&#39;.charCodeAt(0).toString(16) ); // d835 // codePointAt учитывает суррогатные пары alert( &#39;𝒳&#39;.codePointAt(0).toString(16) ); // 1d4b3, считывает обе части суррогатной пары</p>
-<p>Длина строки считается по количеству кодовых точек из которых она состоит? При подсчете длины строки надо учитывать количество графем, а не кодовых точек. Графемой мы считаем минимальную единицу письменности.</p>
-<p>В случае с 깍 (3 кодовые точки) образуют 1 графему, которая отображается в виде одного иероглифа. В unicode для таких случаев описаны алгоритмы нормализации, когда несколько символов могут быть заменены на один с отдельной кодовой точкой.
-В String.prototype есть метод normalize для этого.
-Можно реализовать подсчет длины строки без диакретических кодовых точек.</p>
-<p>\u0000 устареший и будет работать только для точек из базовой плоскости
-\u{0000} - новый</p>
+<p>All commonly used characters have 2-byte codes (4 hexadecimal digits).  Originally, JavaScript was based on the UTF-16 encoding, which allowed only 2 bytes per character. However, 2 bytes allow only 65536 combinations, and that is not enough for all possible Unicode characters.</p>
+<p>That is why rare characters requiring more than 2 bytes are encoded by a pair of 2-byte characters called a “surrogate pair”.
+A side effect is that the length of such characters equals <code>2</code></p>
+<p>// charCodeAt does not account for surrogate pairs, so it returns the codes for the 1st part of 𝒳: alert( &#39;𝒳&#39;.charCodeAt(0).toString(16) ); // d835 // codePointAt accounts for surrogate pairs alert( &#39;𝒳&#39;.codePointAt(0).toString(16) ); // 1d4b3, reads both parts of the surrogate pair</p>
+<p>Is the length of a string counted by the number of code points it consists of? When counting the length of a string you should account for the number of graphemes, not code points. We consider a grapheme to be the minimal unit of writing.</p>
+<p>In the case of 깍 (3 code points) they form 1 grapheme, which is displayed as a single character. Unicode describes normalization algorithms for such cases, where several characters can be replaced by one with a separate code point.
+String.prototype has the normalize method for this.
+It is possible to implement counting the length of a string without diacritic code points.</p>
+<p>\u0000 is deprecated and will only work for points from the basic plane
+\u{0000} - the new one</p>
 <h2>Object</h2>
 <p>Every property in JavaScript objects can be classified by three factors:</p>
 <ul>
@@ -22,4 +22,4 @@ The phrase &quot;the ASCII word characters&quot; denotes the following String va
 <li>String or symbol</li>
 <li>Own property or inherited property from the prototype chain.</li>
 </ul>
-<p>Properties are identified using key values. A property key value is either an ECMAScript String value or a Symbol value. All String and Symbol values, including the empty String, are valid as property keys. A property name is a property key that is a String value.</p>
+<p>Properties are identified using key values. A property key value is either an ECMAScript String value or a Symbol value. All String and Symbol values, including the empty String, are valid as property keys. A property name is a property key that is a String value.</p>

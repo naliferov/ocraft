@@ -1,13 +1,13 @@
 <p><a href="/node/57" class="wikilink">javascript engines and runtimes</a></p>
-<p>Reactivity - отложенный пересчёт (MeteorJS подход)
-Проблема: атом A зависит от B и C; при изменении B и C — A пересчитывается дважды.
-Решение: отложить пересчёт зависимых атомов до конца текущего обработчика события.
-При линковке атомов запоминать максимальную глубину + 1. При итерации по отложенным — обновлять атомы с меньшей глубиной первыми. Так к моменту пересчёта все прямые зависимости уже актуальны.</p>
-<p><strong>CSS flex — перенос на следующую строку</strong></p>
+<p>Reactivity - deferred recomputation (MeteorJS approach)
+Problem: atom A depends on B and C; when B and C change, A is recomputed twice.
+Solution: defer the recomputation of dependent atoms until the end of the current event handler.
+When linking atoms, record the maximum depth + 1. When iterating over the deferred ones, update atoms with the smaller depth first. That way, by the time of recomputation, all direct dependencies are already up to date.</p>
+<p><strong>CSS flex — wrapping to the next line</strong></p>
 <pre><code class="language-css">flex: 1 0 100%;
 </code></pre>
-<h2>Интерпретация vs компиляция</h2>
-<p>Парсинг → AST → (Байт-код | JIT | Шитый код). Шитый код (threaded code) — способ реализации промежуточной VM наряду с байт-кодом.
+<h2>Interpretation vs compilation</h2>
+<p>Parsing → AST → (Bytecode | JIT | Threaded code). Threaded code is a way of implementing an intermediate VM alongside bytecode.
 <a href="/node/59" class="wikilink">javascript snippets</a>
 <a href="/node/56" class="wikilink">javascript changelog</a></p>
 <p><strong>Code structure:</strong>
@@ -31,12 +31,12 @@ But this wouldn’t work:</p>
 symbol, object
 <strong>typeof operator</strong></p>
 <p><strong>type conversions</strong>
-String conversion is mostly obvious. A <code>false</code> becomes <code>&quot;false&quot;</code>, <code>null</code> becomes <code>&quot;null&quot;</code>, etc.</p>
+String conversion is mostly obvious. A <code>false</code> becomes <code>&quot;false&quot;</code>, <code>null</code> becomes <code>&quot;null&quot;</code>, etc.</p>
 <p>Numeric conversion in mathematical functions and expressions happens automatically
-If the string is not a valid number, the result of such a conversion is <code>NaN</code></p>
+If the string is not a valid number, the result of such a conversion is <code>NaN</code></p>
 <p>Boolean conversion is the simplest one.
-Values that are intuitively “empty”, like <code>0</code>, an empty string, <code>null</code>, <code>undefined</code>, and <code>NaN</code>, become <code>false</code>.
-Other values become true.</p>
+Values that are intuitively “empty”, like <code>0</code>, an empty string, <code>null</code>, <code>undefined</code>, and <code>NaN</code>, become <code>false</code>.
+Other values become true.</p>
 <p>var, let, const
 control flow
 loop
