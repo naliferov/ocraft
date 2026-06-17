@@ -52,14 +52,25 @@ function createWasmDebugImports(id) {
   const imports = {
     env: {
       abort: (messagePtr, fileNamePtr, line, column) =>
-        console.error(`[${label}] wasm abort: ${liftString(messagePtr)} (${liftString(fileNamePtr)}:${line}:${column})`),
+        console.error(
+          `[${label}] wasm abort: ${liftString(messagePtr)} (${liftString(fileNamePtr)}:${line}:${column})`,
+        ),
       trace: (messagePtr, argCount, arg0, arg1, arg2, arg3, arg4) =>
-        console.log(`[${label}] wasm trace:`, liftString(messagePtr), ...[arg0, arg1, arg2, arg3, arg4].slice(0, argCount)),
+        console.log(
+          `[${label}] wasm trace:`,
+          liftString(messagePtr),
+          ...[arg0, arg1, arg2, arg3, arg4].slice(0, argCount),
+        ),
       'console.log': (messagePtr) => console.log(`[${label}] wasm:`, liftString(messagePtr)),
       seed: () => Date.now(),
     },
   }
-  return { imports, useMemory: (wasmMemory) => { memory = wasmMemory } }
+  return {
+    imports,
+    useMemory: (wasmMemory) => {
+      memory = wasmMemory
+    },
+  }
 }
 
 // Compile (server-side) + instantiate a wasm node, returning its exports. Cached
@@ -67,31 +78,37 @@ function createWasmDebugImports(id) {
 // the debug imports above so the module can console.log / trace / assert.
 async function loadWasmExports(id) {
   if (!wasmCache.has(id)) {
-    wasmCache.set(id, (async () => {
-      const res = await fetch(`/api/nodes/${id}/wasm`)
-      if (!res.ok) throw new Error(`wasm compile failed:\n${await res.text()}`)
-      const { imports, useMemory } = createWasmDebugImports(id)
-      const { instance } = await WebAssembly.instantiate(await res.arrayBuffer(), imports)
-      useMemory(instance.exports.memory)
-      return instance.exports
-    })())
+    wasmCache.set(
+      id,
+      (async () => {
+        const res = await fetch(`/api/nodes/${id}/wasm`)
+        if (!res.ok) throw new Error(`wasm compile failed:\n${await res.text()}`)
+        const { imports, useMemory } = createWasmDebugImports(id)
+        const { instance } = await WebAssembly.instantiate(await res.arrayBuffer(), imports)
+        useMemory(instance.exports.memory)
+        return instance.exports
+      })(),
+    )
   }
   return wasmCache.get(id)
 }
 
 async function loadModule(id) {
   if (!moduleCache.has(id)) {
-    moduleCache.set(id, (async () => {
-      const res = await fetch(`/api/nodes/${id}/body`)
-      if (!res.ok) throw new Error(`node "${id}": no script found`)
-      const code = await res.text()
-      const url = URL.createObjectURL(new Blob([code], { type: 'application/javascript' }))
-      try {
-        return await import(/* @vite-ignore */ url)
-      } finally {
-        URL.revokeObjectURL(url)
-      }
-    })())
+    moduleCache.set(
+      id,
+      (async () => {
+        const res = await fetch(`/api/nodes/${id}/body`)
+        if (!res.ok) throw new Error(`node "${id}": no script found`)
+        const code = await res.text()
+        const url = URL.createObjectURL(new Blob([code], { type: 'application/javascript' }))
+        try {
+          return await import(/* @vite-ignore */ url)
+        } finally {
+          URL.revokeObjectURL(url)
+        }
+      })(),
+    )
   }
   return moduleCache.get(id)
 }
@@ -111,13 +128,25 @@ const nodeLabel = (id) => {
 const AUTH_PREFIX = 'ocraft.auth.'
 const authStore = {
   get: (name = 'default') => {
-    try { return globalThis.localStorage?.getItem(AUTH_PREFIX + name) ?? '' } catch { return '' }
+    try {
+      return globalThis.localStorage?.getItem(AUTH_PREFIX + name) ?? ''
+    } catch {
+      return ''
+    }
   },
   set: (name = 'default', token = '') => {
-    try { globalThis.localStorage?.setItem(AUTH_PREFIX + name, token) } catch { /* no storage */ }
+    try {
+      globalThis.localStorage?.setItem(AUTH_PREFIX + name, token)
+    } catch {
+      /* no storage */
+    }
   },
   clear: (name = 'default') => {
-    try { globalThis.localStorage?.removeItem(AUTH_PREFIX + name) } catch { /* no storage */ }
+    try {
+      globalThis.localStorage?.removeItem(AUTH_PREFIX + name)
+    } catch {
+      /* no storage */
+    }
   },
 }
 
@@ -189,6 +218,8 @@ export async function runWasmNode(id) {
     return result
   }
   const fns = Object.keys(ex).filter((k) => typeof ex[k] === 'function')
-  console.log(`[${nodeLabel(id)}] wasm ready — exports: ${fns.join(', ') || '(none)'}. Add a main() for Run to call one.`)
+  console.log(
+    `[${nodeLabel(id)}] wasm ready — exports: ${fns.join(', ') || '(none)'}. Add a main() for Run to call one.`,
+  )
   return ex
 }

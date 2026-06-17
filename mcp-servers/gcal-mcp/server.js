@@ -18,7 +18,7 @@ if (!keyFile) {
   // stderr only — stdout is the MCP stdio channel and must stay clean.
   console.error(
     'gcal-mcp: missing GOOGLE_APPLICATION_CREDENTIALS (path to the service-account JSON key).\n' +
-    'Set it in gcal-mcp/.env, and share the target calendar with the service account email.'
+      'Set it in gcal-mcp/.env, and share the target calendar with the service account email.',
   )
   process.exit(1)
 }
@@ -63,30 +63,39 @@ server.registerTool(
   'gcal_list_calendars',
   {
     title: 'List Google calendars',
-    description: 'List the calendars in your account (id, summary, whether primary, access role, time zone). Use a calendar id with the event tools; the default everywhere is your primary calendar.',
+    description:
+      'List the calendars in your account (id, summary, whether primary, access role, time zone). Use a calendar id with the event tools; the default everywhere is your primary calendar.',
     inputSchema: {},
   },
   async () => {
     try {
       const res = await calendar.calendarList.list()
-      return ok((res.data.items ?? []).map((c) => ({
-        id: c.id,
-        summary: c.summary,
-        primary: !!c.primary,
-        accessRole: c.accessRole,
-        timeZone: c.timeZone,
-      })))
-    } catch (e) { return fail(e?.message ?? e) }
-  }
+      return ok(
+        (res.data.items ?? []).map((c) => ({
+          id: c.id,
+          summary: c.summary,
+          primary: !!c.primary,
+          accessRole: c.accessRole,
+          timeZone: c.timeZone,
+        })),
+      )
+    } catch (e) {
+      return fail(e?.message ?? e)
+    }
+  },
 )
 
 server.registerTool(
   'gcal_list_events',
   {
     title: 'List calendar events',
-    description: 'List events within a time window (defaults to the next 7 days). Recurring events are expanded into individual instances, ordered by start time.',
+    description:
+      'List events within a time window (defaults to the next 7 days). Recurring events are expanded into individual instances, ordered by start time.',
     inputSchema: {
-      calendarId: z.string().default(DEFAULT_CAL).describe('Calendar id (default: configured GOOGLE_CALENDAR_ID). See gcal_list_calendars.'),
+      calendarId: z
+        .string()
+        .default(DEFAULT_CAL)
+        .describe('Calendar id (default: configured GOOGLE_CALENDAR_ID). See gcal_list_calendars.'),
       timeMin: z.string().optional().describe('ISO start of window (default: now)'),
       timeMax: z.string().optional().describe('ISO end of window (default: now + 7 days)'),
       maxResults: z.number().int().min(1).max(2500).default(50).describe('Max events to return'),
@@ -106,18 +115,24 @@ server.registerTool(
         maxResults,
       })
       return ok((res.data.items ?? []).map(formatEvent))
-    } catch (e) { return fail(e?.message ?? e) }
-  }
+    } catch (e) {
+      return fail(e?.message ?? e)
+    }
+  },
 )
 
 server.registerTool(
   'gcal_search_events',
   {
     title: 'Search calendar events',
-    description: 'Full-text search across events (matches summary, description, location, attendees). Optionally bounded by a time window.',
+    description:
+      'Full-text search across events (matches summary, description, location, attendees). Optionally bounded by a time window.',
     inputSchema: {
       query: z.string().min(1).describe('Text to search for'),
-      calendarId: z.string().default(DEFAULT_CAL).describe('Calendar id (default: configured GOOGLE_CALENDAR_ID)'),
+      calendarId: z
+        .string()
+        .default(DEFAULT_CAL)
+        .describe('Calendar id (default: configured GOOGLE_CALENDAR_ID)'),
       timeMin: z.string().optional().describe('ISO start of window (optional)'),
       timeMax: z.string().optional().describe('ISO end of window (optional)'),
       maxResults: z.number().int().min(1).max(2500).default(30).describe('Max results'),
@@ -135,8 +150,10 @@ server.registerTool(
         maxResults,
       })
       return ok((res.data.items ?? []).map(formatEvent))
-    } catch (e) { return fail(e?.message ?? e) }
-  }
+    } catch (e) {
+      return fail(e?.message ?? e)
+    }
+  },
 )
 
 server.registerTool(
@@ -146,26 +163,35 @@ server.registerTool(
     description: 'Fetch a single event by id from a calendar.',
     inputSchema: {
       eventId: z.string().min(1).describe('Event id (from gcal_list_events / gcal_search_events)'),
-      calendarId: z.string().default(DEFAULT_CAL).describe('Calendar id (default: configured GOOGLE_CALENDAR_ID)'),
+      calendarId: z
+        .string()
+        .default(DEFAULT_CAL)
+        .describe('Calendar id (default: configured GOOGLE_CALENDAR_ID)'),
     },
   },
   async ({ eventId, calendarId }) => {
     try {
       const res = await calendar.events.get({ calendarId, eventId })
       return ok(formatEvent(res.data))
-    } catch (e) { return fail(e?.message ?? e) }
-  }
+    } catch (e) {
+      return fail(e?.message ?? e)
+    }
+  },
 )
 
 server.registerTool(
   'gcal_freebusy',
   {
     title: 'Query free/busy',
-    description: 'Return busy time blocks for one or more calendars within a window — useful for finding free slots.',
+    description:
+      'Return busy time blocks for one or more calendars within a window — useful for finding free slots.',
     inputSchema: {
       timeMin: z.string().describe('ISO start of window'),
       timeMax: z.string().describe('ISO end of window'),
-      calendarIds: z.array(z.string()).default([DEFAULT_CAL]).describe('Calendar ids to check (default: configured GOOGLE_CALENDAR_ID)'),
+      calendarIds: z
+        .array(z.string())
+        .default([DEFAULT_CAL])
+        .describe('Calendar ids to check (default: configured GOOGLE_CALENDAR_ID)'),
     },
   },
   async ({ timeMin, timeMax, calendarIds }) => {
@@ -175,8 +201,10 @@ server.registerTool(
       })
       const cals = res.data.calendars ?? {}
       return ok(Object.fromEntries(Object.entries(cals).map(([id, v]) => [id, v.busy ?? []])))
-    } catch (e) { return fail(e?.message ?? e) }
-  }
+    } catch (e) {
+      return fail(e?.message ?? e)
+    }
+  },
 )
 
 async function main() {

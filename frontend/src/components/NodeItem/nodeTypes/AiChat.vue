@@ -66,20 +66,27 @@ const clearChat = async () => {
 
 <template>
   <div class="chat">
-    <div class="messages" ref="scroller">
-      <div v-for="(turn, index) in (node.messages ?? [])" :key="index" :class="['msg', turn.role, { error: turn.error }]">
+    <div ref="scroller" class="messages">
+      <div
+        v-for="(turn, index) in node.messages ?? []"
+        :key="index"
+        :class="['msg', turn.role, { error: turn.error }]"
+      >
         <div class="role">{{ turn.role }}</div>
         <div class="text">{{ turn.text }}</div>
         <div v-if="turn.tools && turn.tools.length" class="tools">
           🔧 {{ turn.tools.map((tool) => tool.name).join(', ') }}
         </div>
         <div v-if="turn.result" class="meta">
-          {{ turn.result.turns }} turns<span v-if="turn.result.cost != null"> · ${{ turn.result.cost.toFixed(4) }}</span>
+          {{ turn.result.turns }} turns<span v-if="turn.result.cost != null">
+            · ${{ turn.result.cost.toFixed(4) }}</span
+          >
         </div>
       </div>
       <div v-if="busy" class="msg assistant pending">…working (reading / editing / running)…</div>
       <div v-if="!(node.messages ?? []).length && !busy" class="empty">
-        Ask Claude anything about this repo. Full agent — it can read, edit files, and run bash here.
+        Ask Claude anything about this repo. Full agent — it can read, edit files, and run bash
+        here.
       </div>
     </div>
 
@@ -99,20 +106,93 @@ const clearChat = async () => {
 </template>
 
 <style scoped>
-.chat { display: flex; flex-direction: column; height: 100%; min-height: 0; gap: 8px; }
-.messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 4px; }
-.msg { max-width: 90%; padding: 8px 12px; border-radius: 10px; white-space: pre-wrap; word-break: break-word; line-height: 1.45; }
-.msg.user { align-self: flex-end; background: #2f6fed; color: #fff; }
-.msg.assistant { align-self: flex-start; background: rgba(127, 127, 127, 0.14); }
-.msg.assistant.error { background: rgba(220, 60, 60, 0.16); }
-.msg.pending { opacity: 0.6; font-style: italic; }
-.role { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.5; margin-bottom: 3px; }
-.tools { margin-top: 6px; font-size: 12px; opacity: 0.7; }
-.meta { margin-top: 6px; font-size: 11px; opacity: 0.45; }
-.empty { margin: auto; opacity: 0.5; text-align: center; max-width: 360px; }
-.composer { flex-shrink: 0; display: flex; gap: 8px; align-items: flex-end; }
-.composer textarea { flex: 1; resize: vertical; min-height: 48px; max-height: 200px; padding: 8px; font: inherit; border-radius: 8px; }
-.actions { display: flex; flex-direction: column; gap: 6px; }
-.actions button { padding: 6px 14px; }
-.clear { opacity: 0.7; font-size: 12px; }
+.chat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  gap: 8px;
+}
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px;
+}
+.msg {
+  max-width: 90%;
+  padding: 8px 12px;
+  border-radius: 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.45;
+}
+.msg.user {
+  align-self: flex-end;
+  background: #2f6fed;
+  color: #fff;
+}
+.msg.assistant {
+  align-self: flex-start;
+  background: rgba(127, 127, 127, 0.14);
+}
+.msg.assistant.error {
+  background: rgba(220, 60, 60, 0.16);
+}
+.msg.pending {
+  opacity: 0.6;
+  font-style: italic;
+}
+.role {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.5;
+  margin-bottom: 3px;
+}
+.tools {
+  margin-top: 6px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+.meta {
+  margin-top: 6px;
+  font-size: 11px;
+  opacity: 0.45;
+}
+.empty {
+  margin: auto;
+  opacity: 0.5;
+  text-align: center;
+  max-width: 360px;
+}
+.composer {
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+.composer textarea {
+  flex: 1;
+  resize: vertical;
+  min-height: 48px;
+  max-height: 200px;
+  padding: 8px;
+  font: inherit;
+  border-radius: 8px;
+}
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.actions button {
+  padding: 6px 14px;
+}
+.clear {
+  opacity: 0.7;
+  font-size: 12px;
+}
 </style>

@@ -6,7 +6,6 @@ import { getDirname } from './lib/path.js'
 const currentDir = getDirname(import.meta.url)
 
 export const execute = async (name, args = []) => {
-
   const entryPath = path.join(currentDir, 'entries', `${name}.js`)
 
   let mod
@@ -27,7 +26,7 @@ export const execute = async (name, args = []) => {
     env: process.env,
     state: {
       load: () => loadEntryState(name),
-      save: (state) => saveEntryState(name, state)
+      save: (state) => saveEntryState(name, state),
     },
     log: (msg) => {
       const entry = { time: getTime(), msg }
@@ -42,7 +41,9 @@ export const execute = async (name, args = []) => {
   const startedAt = new Date().toISOString()
   const startedMs = Date.now()
   const id = `${startedAt.replace(/[:.]/g, '-').slice(0, 19)}-${name}`
-  let result, status = 'success', error
+  let result,
+    status = 'success',
+    error
 
   await saveExecution({ id, entry: name, startedAt, status: 'running', logs })
 
@@ -56,8 +57,18 @@ export const execute = async (name, args = []) => {
 
   const finishedAt = new Date().toISOString()
   const durationMs = Date.now() - startedMs
-  const execution = { id, entry: name, startedAt, finishedAt, durationMs, status, result, logs, error }
-  
+  const execution = {
+    id,
+    entry: name,
+    startedAt,
+    finishedAt,
+    durationMs,
+    status,
+    result,
+    logs,
+    error,
+  }
+
   await saveExecution(execution)
 
   return execution

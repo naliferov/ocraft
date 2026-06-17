@@ -1,15 +1,15 @@
 import { spawn } from 'node:child_process'
 
 export const getProcessList = () => {
-  const { promise, resolve, reject } = Promise.withResolvers()
+  const { promise, resolve } = Promise.withResolvers()
 
   const parseLine = (line) => {
-    const parts = line.trim().split(/\s+/);
+    const parts = line.trim().split(/\s+/)
     return {
       user: parts[0],
       pid: Number(parts[1]),
       command: parts.slice(10).join(' '),
-    };
+    }
   }
 
   const procs = {}
@@ -19,7 +19,7 @@ export const getProcessList = () => {
   child.stdout.on('data', (data) => {
     output += data.toString()
   })
-  child.on('close', (code) => {
+  child.on('close', () => {
     const lines = output.trim().split('\n')
     lines.shift()
 

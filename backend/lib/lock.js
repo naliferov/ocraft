@@ -5,7 +5,7 @@ import { getDirname } from './path.js'
 const currentDir = getDirname(import.meta.url)
 const LOCKS_DIR = path.join(currentDir, '..')
 
-const lockPath = name => path.join(LOCKS_DIR, `${name}.lock`)
+const lockPath = (name) => path.join(LOCKS_DIR, `${name}.lock`)
 
 const POLL_MS = 500
 
@@ -14,7 +14,7 @@ export const waitForUnlock = async (name) => {
   while (true) {
     try {
       await fs.access(file)
-      await new Promise(r => setTimeout(r, POLL_MS))
+      await new Promise((r) => setTimeout(r, POLL_MS))
     } catch {
       break
     }
@@ -26,7 +26,7 @@ export const withLock = async (name, fn) => {
 
   await waitForUnlock(name)
   await fs.writeFile(file, String(process.pid))
-  
+
   try {
     return await fn()
   } finally {

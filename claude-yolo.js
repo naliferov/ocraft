@@ -56,7 +56,10 @@ const docker = (args, options = {}) => spawnSync('docker', args, options)
 const imageExists = docker(['image', 'inspect', IMAGE], { stdio: 'ignore' }).status === 0
 if (!imageExists) {
   console.log(`-> building image '${IMAGE}' (one-time, ~30s)...`)
-  const build = docker(['build', '-t', IMAGE, '-'], { input: dockerfile, stdio: ['pipe', 'inherit', 'inherit'] })
+  const build = docker(['build', '-t', IMAGE, '-'], {
+    input: dockerfile,
+    stdio: ['pipe', 'inherit', 'inherit'],
+  })
   if (build.status !== 0) {
     console.error('x docker build failed')
     process.exit(build.status ?? 1)
@@ -65,9 +68,13 @@ if (!imageExists) {
 
 // Persistent home keeps your login between runs; mount the repo as the workspace.
 const dockerArgs = [
-  'run', '-it', '--rm',
-  '-v', `${HOME_VOLUME}:/home/node`,
-  '-v', `${repoDir}:/workspace`,
+  'run',
+  '-it',
+  '--rm',
+  '-v',
+  `${HOME_VOLUME}:/home/node`,
+  '-v',
+  `${repoDir}:/workspace`,
 ]
 // Forward the token only if present (helps non-interactive use; harmless otherwise).
 if (process.env.CLAUDE_CODE_OAUTH_TOKEN) dockerArgs.push('-e', 'CLAUDE_CODE_OAUTH_TOKEN')

@@ -16,7 +16,11 @@
 // SSH:  uses the local default key (~/.ssh/id_ed25519 = the DO "macbook air" key).
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { createDroplet, getDroplet, latestUbuntuImage } from '../../mcp-servers/digitalocean-mcp/do-api.js'
+import {
+  createDroplet,
+  getDroplet,
+  latestUbuntuImage,
+} from '../../mcp-servers/digitalocean-mcp/do-api.js'
 
 const execFileAsync = promisify(execFile)
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
@@ -28,10 +32,14 @@ const REPO = 'https://github.com/naliferov/ocraft'
 // Disposable boxes get a fresh host key each rebuild, so skip host-key checking
 // rather than fight known_hosts collisions.
 const SSH_OPTS = [
-  '-o', 'StrictHostKeyChecking=no',
-  '-o', 'UserKnownHostsFile=/dev/null',
-  '-o', 'ConnectTimeout=20',
-  '-o', 'LogLevel=ERROR',
+  '-o',
+  'StrictHostKeyChecking=no',
+  '-o',
+  'UserKnownHostsFile=/dev/null',
+  '-o',
+  'ConnectTimeout=20',
+  '-o',
+  'LogLevel=ERROR',
 ]
 
 const ssh = async (ip, command, timeout = 300000) => {
@@ -54,8 +62,12 @@ async function waitForActive(id) {
 
 async function waitForSsh(ip) {
   for (let attempt = 0; attempt < 40; attempt++) {
-    try { await ssh(ip, 'true', 20000); return }
-    catch { await sleep(5000) }
+    try {
+      await ssh(ip, 'true', 20000)
+      return
+    } catch {
+      await sleep(5000)
+    }
   }
   throw new Error('ssh did not become reachable within ~3 min')
 }
@@ -90,9 +102,11 @@ export const run = async (ctx) => {
   await ssh(ip, 'cloud-init status --wait || true')
 
   ctx.log(`installing Node.js (current) + git…`)
-  await ssh(ip,
+  await ssh(
+    ip,
     'curl -fsSL https://deb.nodesource.com/setup_current.x | bash - && ' +
-    'DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs git')
+      'DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs git',
+  )
   const nodeVersion = await ssh(ip, 'node -v')
   ctx.log(`node installed: ${nodeVersion}`)
 

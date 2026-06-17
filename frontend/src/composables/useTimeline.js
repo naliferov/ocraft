@@ -40,7 +40,7 @@ export function useTimeline(getNode) {
     const filter = new Tone.Filter({
       type: 'lowpass',
       frequency: 3000,
-      Q: 30
+      Q: 30,
     }).toDestination()
 
     const synth = new Tone.Synth().connect(filter) // synth -> filter -> speakers
@@ -127,8 +127,17 @@ export function useTimeline(getNode) {
   })
 
   return {
-    isPlaying, playheadProgress,
-    bpm, bars, beatsPerBar, stepsPerBeat, totalSteps, tracks,
-    play, pause, stop, toggleStep,
+    isPlaying,
+    playheadProgress,
+    bpm,
+    bars,
+    beatsPerBar,
+    stepsPerBeat,
+    totalSteps,
+    tracks,
+    play,
+    pause,
+    stop,
+    toggleStep,
   }
 }

@@ -6,17 +6,24 @@ import { useTimeline } from '../../../composables/useTimeline.js'
 import Stage from './Stage.vue'
 
 const props = defineProps({
-  node: { type: Object, required: true }
+  node: { type: Object, required: true },
 })
 
 const {
-  isPlaying, playheadProgress,
-  bpm, bars, stepsPerBeat, totalSteps, tracks,
-  play, pause, stop, toggleStep,
+  isPlaying,
+  playheadProgress,
+  bpm,
+  bars,
+  stepsPerBeat,
+  totalSteps,
+  tracks,
+  play,
+  pause,
+  stop,
+  toggleStep,
 } = useTimeline(() => props.node)
 
-const isStepActive = (track, s) =>
-  Array.isArray(track.events) && track.events.includes(s)
+const isStepActive = (track, s) => Array.isArray(track.events) && track.events.includes(s)
 
 // Nodes can opt out of the visual stage (e.g. an audio-only track) with
 // `stage: false`; then we show only the transport + timeline and never mount p5.
@@ -35,7 +42,8 @@ onMounted(() => {
   // position is written onto props.node.elements in place; it persists when the
   // user hits Save (no autosave — same as every other field in the editor).
   let drag = null
-  const overCanvas = (s) => s.mouseX >= 0 && s.mouseY >= 0 && s.mouseX <= s.width && s.mouseY <= s.height
+  const overCanvas = (s) =>
+    s.mouseX >= 0 && s.mouseY >= 0 && s.mouseX <= s.width && s.mouseY <= s.height
   const round2 = (value) => Math.round(value * 100) / 100
 
   p5Instance = new p5((s) => {
@@ -53,7 +61,11 @@ onMounted(() => {
       if (!element.props) element.props = {}
       const point = screenToLogical(s.width, s.height, props.node, s.mouseX, s.mouseY)
 
-      drag = { element, grabX: point.x - (element.props.x ?? 0), grabY: point.y - (element.props.y ?? 0) }
+      drag = {
+        element,
+        grabX: point.x - (element.props.x ?? 0),
+        grabY: point.y - (element.props.y ?? 0),
+      }
     }
     s.mouseDragged = () => {
       if (!drag) return
@@ -61,7 +73,9 @@ onMounted(() => {
       drag.element.props.x = round2(point.x - drag.grabX)
       drag.element.props.y = round2(point.y - drag.grabY)
     }
-    s.mouseReleased = () => { drag = null }
+    s.mouseReleased = () => {
+      drag = null
+    }
     // Cursor affordance: show a move cursor when hovering a draggable element.
     s.mouseMoved = () => {
       if (!overCanvas(s)) return
@@ -105,7 +119,7 @@ onBeforeUnmount(() => {
           class="step"
           :class="{
             active: isStepActive(t, s - 1),
-            'bar-start': (s - 1) % stepsPerBeat === 0
+            'bar-start': (s - 1) % stepsPerBeat === 0,
           }"
           @click="toggleStep(t, s - 1)"
         ></div>
@@ -169,8 +183,17 @@ onBeforeUnmount(() => {
   border: 1px solid #2e2e2e;
 }
 
-.step.bar-start { margin-left: 4px; }
-.step:hover { background: #333; }
-.step.active { background: #3d7eff; border-color: #3d7eff; }
-.step.active:hover { background: #5090ff; }
+.step.bar-start {
+  margin-left: 4px;
+}
+.step:hover {
+  background: #333;
+}
+.step.active {
+  background: #3d7eff;
+  border-color: #3d7eff;
+}
+.step.active:hover {
+  background: #5090ff;
+}
 </style>

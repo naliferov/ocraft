@@ -11,9 +11,7 @@ dotenv.config({ path: path.join(import.meta.dirname, '.env') })
 const API = 'https://api.digitalocean.com'
 
 const token = () =>
-  process.env.DIGITALOCEAN_API_TOKEN ||
-  process.env.DIGITALOCEAN_TOKEN ||
-  process.env.DO_API_TOKEN
+  process.env.DIGITALOCEAN_API_TOKEN || process.env.DIGITALOCEAN_TOKEN || process.env.DO_API_TOKEN
 
 // Throw a helpful error if no token is configured. Call at startup to fail fast.
 export function requireToken() {
@@ -21,8 +19,8 @@ export function requireToken() {
   if (!apiToken) {
     throw new Error(
       'digitalocean: missing DIGITALOCEAN_API_TOKEN.\n' +
-      'Create a read+write token at https://cloud.digitalocean.com/account/api/tokens\n' +
-      'and set DIGITALOCEAN_API_TOKEN in mcp-servers/digitalocean-mcp/.env'
+        'Create a read+write token at https://cloud.digitalocean.com/account/api/tokens\n' +
+        'and set DIGITALOCEAN_API_TOKEN in mcp-servers/digitalocean-mcp/.env',
     )
   }
   return apiToken
@@ -36,7 +34,9 @@ export const clean = (obj) =>
 // a non-2xx into a thrown Error carrying DigitalOcean's own message.
 export async function doFetch(pathname, { method = 'GET', query, body } = {}) {
   const url = new URL(pathname, API)
-  if (query) for (const [key, value] of Object.entries(query)) if (value != null) url.searchParams.set(key, String(value))
+  if (query)
+    for (const [key, value] of Object.entries(query))
+      if (value != null) url.searchParams.set(key, String(value))
   const response = await fetch(url, {
     method,
     headers: { Authorization: `Bearer ${requireToken()}`, 'Content-Type': 'application/json' },
@@ -62,9 +62,12 @@ export const summarize = (droplet) => ({
   vcpus: droplet.vcpus,
   disk_gb: droplet.disk,
   image: droplet.image
-    ? (droplet.image.slug || `${droplet.image.distribution ?? ''} ${droplet.image.name ?? ''}`.trim())
+    ? droplet.image.slug || `${droplet.image.distribution ?? ''} ${droplet.image.name ?? ''}`.trim()
     : null,
-  ipv4: (droplet.networks?.v4 ?? []).map((network) => ({ ip: network.ip_address, type: network.type })),
+  ipv4: (droplet.networks?.v4 ?? []).map((network) => ({
+    ip: network.ip_address,
+    type: network.type,
+  })),
   tags: droplet.tags ?? [],
   created_at: droplet.created_at,
 })
@@ -102,7 +105,10 @@ export async function listImages(type = 'distribution') {
   const query = type === 'user' ? { private: true, per_page: 200 } : { type, per_page: 200 }
   const data = await doFetch('/v2/images', { query })
   return data.images.map((image) => ({
-    slug: image.slug, id: image.id, distribution: image.distribution, name: image.name,
+    slug: image.slug,
+    id: image.id,
+    distribution: image.distribution,
+    name: image.name,
   }))
 }
 

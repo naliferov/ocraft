@@ -7,7 +7,7 @@ export const router = createRouter({
   routes: [
     { path: '/', component: { template: '' } },
     { path: '/node/:id', component: NodeItem },
-  ]
+  ],
 })
 
 router.beforeEach(async () => {

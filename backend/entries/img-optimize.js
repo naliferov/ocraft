@@ -32,5 +32,7 @@ export const run = async (ctx) => {
   const saved = (((inputSize - outputSize) / inputSize) * 100).toFixed(1)
 
   ctx.log(`${inputPath} → ${outputPath}`)
-  ctx.log(`${(inputSize / 1024).toFixed(1)}kb → ${(outputSize / 1024).toFixed(1)}kb (saved ${saved}%)`)
+  ctx.log(
+    `${(inputSize / 1024).toFixed(1)}kb → ${(outputSize / 1024).toFixed(1)}kb (saved ${saved}%)`,
+  )
 }

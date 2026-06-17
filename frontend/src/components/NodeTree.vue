@@ -19,10 +19,11 @@ const emit = defineEmits(['select', 'toggle', 'create', 'rename', 'remove', 'rep
 // is emitted up to the store, which flips the flag and persists it, so the choice
 // survives reloads; the tree re-renders reactively once the flag changes.
 // While searching, ignore the stored collapse flag so matched branches show.
-const isCollapsed = (n) => props.expandAll ? false : !!n.collapsed
+const isCollapsed = (n) => (props.expandAll ? false : !!n.collapsed)
 const toggle = (n) => emit('toggle', n.id)
 const isCategory = (n) => n.type === 'category'
-const isMatch = (node) => !!props.query && (node.name || '').toLowerCase().includes(props.query.toLowerCase())
+const isMatch = (node) =>
+  !!props.query && (node.name || '').toLowerCase().includes(props.query.toLowerCase())
 
 // Drag a node onto a category to reparent it. Native HTML5 DnD carries the dragged
 // id in dataTransfer, so it crosses recursive NodeTree instances without shared
@@ -40,10 +41,17 @@ const onDragStart = (node, event) => {
   const ghost = document.createElement('div')
   ghost.textContent = node.name ?? ''
   ghost.style.cssText = [
-    'position:fixed', 'top:-1000px', 'left:-1000px', 'pointer-events:none',
+    'position:fixed',
+    'top:-1000px',
+    'left:-1000px',
+    'pointer-events:none',
     // Horizontal padding only — no vertical padding/space; the chip hugs the text.
-    'padding:0 12px', 'line-height:1.2', 'border-radius:6px', 'white-space:nowrap',
-    'background:#fff', 'border:1px solid rgba(0,0,0,0.12)',
+    'padding:0 12px',
+    'line-height:1.2',
+    'border-radius:6px',
+    'white-space:nowrap',
+    'background:#fff',
+    'border:1px solid rgba(0,0,0,0.12)',
     'box-shadow:0 4px 14px rgba(0,0,0,0.18)',
   ].join(';')
   // Inherit the label's actual text styling so the ghost matches the active theme.
@@ -139,8 +147,8 @@ const requestRemove = (node) => {
         <input
           v-if="renamingId === n.id"
           ref="renameInput"
-          class="rename-input"
           v-model="renameDraft"
+          class="rename-input"
           @keyup.enter="commitRename(n)"
           @keyup.esc="renamingId = null"
           @blur="commitRename(n)"
@@ -158,7 +166,14 @@ const requestRemove = (node) => {
         </span>
 
         <span v-if="renamingId !== n.id" class="actions">
-          <button v-if="isCategory(n)" class="act" title="New child node" @click.stop="emit('create', n.id)">+</button>
+          <button
+            v-if="isCategory(n)"
+            class="act"
+            title="New child node"
+            @click.stop="emit('create', n.id)"
+          >
+            +
+          </button>
           <button class="act" title="Rename" @click.stop="startRename(n)">✎</button>
           <button class="act act--danger" title="Delete" @click.stop="requestRemove(n)">🗑</button>
         </span>

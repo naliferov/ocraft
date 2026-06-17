@@ -10,7 +10,7 @@ import { useRouter } from 'vue-router'
 import { NButton } from 'naive-ui'
 
 const props = defineProps({
-  node: { type: Object, required: true }
+  node: { type: Object, required: true },
 })
 
 // The node's HTML body, lazy-loaded from its content.html sidecar. `savedContent`
@@ -45,8 +45,8 @@ const editing = ref(false)
 const READ_MODE_KEY = 'ocraft.html.readMode'
 const readMode = ref(localStorage.getItem(READ_MODE_KEY) !== 'false') // default on
 watch(readMode, (on) => localStorage.setItem(READ_MODE_KEY, String(on)))
-const source = ref(false)  // within edit: false = rich (contenteditable), true = raw HTML
-const bodyRef = ref(null)  // the contenteditable element (rich edit mode only)
+const source = ref(false) // within edit: false = rich (contenteditable), true = raw HTML
+const bodyRef = ref(null) // the contenteditable element (rich edit mode only)
 
 // Wikilinks render as plain <a href="/node/:id"> inside v-html, which the router
 // can't see — a native click would full-reload the SPA. Intercept clicks on
@@ -91,13 +91,13 @@ const exec = (cmd, value = null) => {
 }
 
 const PARTS = [
-  { label: 'B',       title: 'Bold',         run: () => exec('bold') },
-  { label: 'I',       title: 'Italic',       run: () => exec('italic') },
-  { label: 'H1',      title: 'Heading 1',    run: () => exec('formatBlock', 'h1') },
-  { label: 'H2',      title: 'Heading 2',    run: () => exec('formatBlock', 'h2') },
-  { label: '• List',  title: 'Bullet list',  run: () => exec('insertUnorderedList') },
-  { label: '❝ Quote', title: 'Quote',        run: () => exec('formatBlock', 'blockquote') },
-  { label: '⎯ Rule',  title: 'Divider',      run: () => exec('insertHTML', '<hr>') },
+  { label: 'B', title: 'Bold', run: () => exec('bold') },
+  { label: 'I', title: 'Italic', run: () => exec('italic') },
+  { label: 'H1', title: 'Heading 1', run: () => exec('formatBlock', 'h1') },
+  { label: 'H2', title: 'Heading 2', run: () => exec('formatBlock', 'h2') },
+  { label: '• List', title: 'Bullet list', run: () => exec('insertUnorderedList') },
+  { label: '❝ Quote', title: 'Quote', run: () => exec('formatBlock', 'blockquote') },
+  { label: '⎯ Rule', title: 'Divider', run: () => exec('insertHTML', '<hr>') },
 ]
 
 // --- Link insertion -------------------------------------------------------
@@ -123,10 +123,9 @@ const cancelLink = () => {
 }
 
 const escapeHtml = (s) =>
-  s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+  s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
 
-const normalizeUrl = (u) =>
-  /^(https?:|mailto:|tel:|#|\/)/i.test(u) ? u : `https://${u}`
+const normalizeUrl = (u) => (/^(https?:|mailto:|tel:|#|\/)/i.test(u) ? u : `https://${u}`)
 
 const applyLink = () => {
   const raw = linkUrl.value.trim()
@@ -141,7 +140,11 @@ const applyLink = () => {
   if (!savedRange || savedRange.collapsed) {
     // No text selected — drop the URL in as its own linked label.
     const safe = escapeHtml(url)
-    document.execCommand('insertHTML', false, `<a href="${safe}" target="_blank" rel="noopener">${safe}</a>`)
+    document.execCommand(
+      'insertHTML',
+      false,
+      `<a href="${safe}" target="_blank" rel="noopener">${safe}</a>`,
+    )
   } else {
     // Wrap the selected text.
     document.execCommand('createLink', false, url)
@@ -164,7 +167,9 @@ const applyLink = () => {
             class="tool"
             :title="p.title"
             @mousedown.prevent="p.run"
-          >{{ p.label }}</button>
+          >
+            {{ p.label }}
+          </button>
           <button class="tool" title="Link" @mousedown.prevent="openLink">🔗 Link</button>
         </template>
       </template>
@@ -174,9 +179,14 @@ const applyLink = () => {
         <n-button
           size="small"
           :type="readMode ? 'primary' : 'default'"
-          :title="readMode ? 'Reading width on — click for full width' : 'Reading width off — click to constrain'"
+          :title="
+            readMode
+              ? 'Reading width on — click for full width'
+              : 'Reading width off — click to constrain'
+          "
           @click="readMode = !readMode"
-        >Read mode: {{ readMode ? 'on' : 'off' }}</n-button>
+          >Read mode: {{ readMode ? 'on' : 'off' }}</n-button
+        >
       </template>
     </div>
 
@@ -203,8 +213,8 @@ const applyLink = () => {
     />
     <textarea
       v-else-if="editing && source"
-      class="body source"
       v-model="content"
+      class="body source"
       spellcheck="false"
       placeholder="<p>Raw HTML…</p>"
     />
@@ -233,7 +243,6 @@ const applyLink = () => {
   flex-shrink: 0;
   margin-bottom: 8px;
 }
-
 
 .link-bar {
   display: flex;
@@ -265,7 +274,10 @@ const applyLink = () => {
   border-radius: 4px;
   cursor: pointer;
 }
-.tool:hover { background: #2c2c2c; border-color: #444; }
+.tool:hover {
+  background: #2c2c2c;
+  border-color: #444;
+}
 
 .body {
   flex: 1;
@@ -284,7 +296,10 @@ const applyLink = () => {
   border: 1px solid #ddd;
   border-radius: 4px;
 }
-.body.edit { outline: none; border-color: #3a6; }
+.body.edit {
+  outline: none;
+  border-color: #3a6;
+}
 /* Read mode: cap the page at a comfortable measure and center it, so long
    paragraphs don't span the full window on wide screens. The body is also the
    scroll container, so narrowing it gives a centered "document page" look. */
@@ -304,16 +319,34 @@ const applyLink = () => {
 }
 
 /* Rendered HTML lives outside the scoped template, so style it via :deep. */
-.body :deep(h1) { font-size: 22px; margin: 12px 0 6px; }
-.body :deep(h2) { font-size: 18px; margin: 10px 0 6px; }
+.body :deep(h1) {
+  font-size: 22px;
+  margin: 12px 0 6px;
+}
+.body :deep(h2) {
+  font-size: 18px;
+  margin: 10px 0 6px;
+}
 .body :deep(blockquote) {
   margin: 8px 0;
   padding-left: 12px;
   border-left: 3px solid #3a6;
   color: #555;
 }
-.body :deep(hr) { border: none; border-top: 1px solid #ccc; margin: 12px 0; }
-.body :deep(ul) { padding-left: 22px; margin: 6px 0; }
-.body :deep(a) { color: #0066cc; }
-.body :deep(.empty) { color: #999; font-style: italic; }
+.body :deep(hr) {
+  border: none;
+  border-top: 1px solid #ccc;
+  margin: 12px 0;
+}
+.body :deep(ul) {
+  padding-left: 22px;
+  margin: 6px 0;
+}
+.body :deep(a) {
+  color: #0066cc;
+}
+.body :deep(.empty) {
+  color: #999;
+  font-style: italic;
+}
 </style>

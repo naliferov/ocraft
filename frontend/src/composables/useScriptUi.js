@@ -46,8 +46,12 @@ const makeInput = ({ value = '', placeholder = '', type = 'text', onEnter }) => 
   // current text and can set it (e.g. clearing a send box after sending).
   return {
     element: input,
-    get value() { return input.value },
-    set value(next) { input.value = next },
+    get value() {
+      return input.value
+    },
+    set value(next) {
+      input.value = next
+    },
   }
 }
 
@@ -74,7 +78,9 @@ const makeText = (initial = '') => {
   applyStyle(span, { fontSize: '12px', opacity: '0.8' })
   return {
     element: span,
-    set(next) { span.textContent = next },
+    set(next) {
+      span.textContent = next
+    },
   }
 }
 
@@ -99,7 +105,12 @@ const makeLog = ({ height = '300px' } = {}) => {
   // mode, not a boolean, so each call site reads clearly.
   const push = (text, direction = 'sys') => {
     const line = document.createElement('div')
-    applyStyle(line, { display: 'flex', gap: '8px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' })
+    applyStyle(line, {
+      display: 'flex',
+      gap: '8px',
+      whiteSpace: 'pre-wrap',
+      wordBreak: 'break-word',
+    })
     line.style.color = LINE_COLOR[direction] ?? LINE_COLOR.sys
     const time = document.createElement('span')
     time.textContent = stamp()
@@ -113,7 +124,9 @@ const makeLog = ({ height = '300px' } = {}) => {
     view.append(line)
     view.scrollTop = view.scrollHeight
   }
-  const clear = () => { view.replaceChildren() }
+  const clear = () => {
+    view.replaceChildren()
+  }
   return { element: view, push, clear }
 }
 
@@ -163,25 +176,60 @@ export function createScriptUi(mountElement) {
       ensureMounted()
       const row = makeRow()
       panel.append(row)
-      if (build) build({
-        input: (opts = {}) => { const field = makeInput(opts); row.append(field.element); return field },
-        button: (label, onClick) => { const btn = makeButton(label, onClick); row.append(btn); return btn },
-        text: (initial) => { const txt = makeText(initial); row.append(txt.element); return txt },
-      })
+      if (build)
+        build({
+          input: (opts = {}) => {
+            const field = makeInput(opts)
+            row.append(field.element)
+            return field
+          },
+          button: (label, onClick) => {
+            const btn = makeButton(label, onClick)
+            row.append(btn)
+            return btn
+          },
+          text: (initial) => {
+            const txt = makeText(initial)
+            row.append(txt.element)
+            return txt
+          },
+        })
       return row
     },
-    input(opts = {}) { const field = makeInput(opts); append(field, opts.parent); return field },
-    button(label, onClick, opts = {}) { const btn = makeButton(label, onClick); append(btn, opts.parent); return btn },
-    text(initial, opts = {}) { const txt = makeText(initial); append(txt, opts.parent); return txt },
-    log(opts = {}) { const logView = makeLog(opts); append(logView, opts.parent); return logView },
+    input(opts = {}) {
+      const field = makeInput(opts)
+      append(field, opts.parent)
+      return field
+    },
+    button(label, onClick, opts = {}) {
+      const btn = makeButton(label, onClick)
+      append(btn, opts.parent)
+      return btn
+    },
+    text(initial, opts = {}) {
+      const txt = makeText(initial)
+      append(txt, opts.parent)
+      return txt
+    },
+    log(opts = {}) {
+      const logView = makeLog(opts)
+      append(logView, opts.parent)
+      return logView
+    },
     // Register teardown to run on re-run / unmount (e.g. () => socket.close()).
-    onCleanup(fn) { if (typeof fn === 'function') teardowns.push(fn) },
+    onCleanup(fn) {
+      if (typeof fn === 'function') teardowns.push(fn)
+    },
   }
 
   const cleanup = () => {
     while (teardowns.length) {
       const teardown = teardowns.pop()
-      try { teardown() } catch (err) { console.error('[script ui] cleanup failed:', err) }
+      try {
+        teardown()
+      } catch (err) {
+        console.error('[script ui] cleanup failed:', err)
+      }
     }
     mountElement.replaceChildren()
     // Symmetric with construction: a re-added control re-inserts the panel.

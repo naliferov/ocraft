@@ -19,8 +19,8 @@ const apiHash = process.env.TG_API_HASH
 if (!apiId || !apiHash) {
   console.error(
     'Missing TG_API_ID / TG_API_HASH.\n' +
-    'Get them from https://my.telegram.org -> API development tools,\n' +
-    'then put them in telegram-mcp/.env (copy .env.example).'
+      'Get them from https://my.telegram.org -> API development tools,\n' +
+      'then put them in telegram-mcp/.env (copy .env.example).',
   )
   process.exit(1)
 }
@@ -43,20 +43,27 @@ try {
         const token = code.token.toString('base64url')
         const url = `tg://login?token=${token}`
         console.clear()
-        console.log('Scan with your phone: Telegram -> Settings -> Devices -> Link Desktop Device\n')
+        console.log(
+          'Scan with your phone: Telegram -> Settings -> Devices -> Link Desktop Device\n',
+        )
         qrcode.generate(url, { small: true })
         console.log(`\n(or paste this into a browser on a logged-in device: ${url})`)
         console.log('\nWaiting for you to scan...')
       },
       // Account has 2FA enabled -> Telegram asks for the cloud password after scan.
       password: async () => ask('\n2FA password: '),
-      onError: (err) => { console.error('QR login error:', err?.message ?? err); return true },
-    }
+      onError: (err) => {
+        console.error('QR login error:', err?.message ?? err)
+        return true
+      },
+    },
   )
 
   const session = String(client.session.save())
   const me = await client.getMe()
-  console.log(`\nLogged in as ${me.firstName ?? ''} ${me.lastName ?? ''} (@${me.username ?? 'n/a'}).`)
+  console.log(
+    `\nLogged in as ${me.firstName ?? ''} ${me.lastName ?? ''} (@${me.username ?? 'n/a'}).`,
+  )
 
   // Upsert TG_SESSION into .env (next to this file).
   const envPath = path.join(import.meta.dirname, '.env')
@@ -64,7 +71,7 @@ try {
   const line = `TG_SESSION=${session}`
   env = /^TG_SESSION=.*$/m.test(env)
     ? env.replace(/^TG_SESSION=.*$/m, line)
-    : (env.trimEnd() + '\n' + line + '\n')
+    : env.trimEnd() + '\n' + line + '\n'
   fs.writeFileSync(envPath, env)
   console.log(`Session saved to ${envPath}. Restart the MCP server (or /mcp) now.`)
 } catch (err) {

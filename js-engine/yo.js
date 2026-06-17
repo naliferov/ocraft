@@ -29,19 +29,31 @@ function tokenize(src) {
     const c = src[i]
 
     // newline -> statement separator (kept as a token)
-    if (c === '\n') { tokens.push({ type: 'NEWLINE' }); i++; continue }
+    if (c === '\n') {
+      tokens.push({ type: 'NEWLINE' })
+      i++
+      continue
+    }
     // other whitespace -> skip
-    if (c === ' ' || c === '\t' || c === '\r') { i++; continue }
+    if (c === ' ' || c === '\t' || c === '\r') {
+      i++
+      continue
+    }
 
     // "->" arrow (check before the single '-' operator)
-    if (c === '-' && src[i + 1] === '>') { tokens.push({ type: 'ARROW' }); i += 2; continue }
+    if (c === '-' && src[i + 1] === '>') {
+      tokens.push({ type: 'ARROW' })
+      i += 2
+      continue
+    }
 
     // "@word" -> a keyword/builtin token (e.g. @a, @w, @r, @l)
     if (c === '@') {
       let j = i + 1
       while (j < src.length && isAlnum(src[j])) j++
       const name = src.slice(i + 1, j)
-      if (name.length === 0) throw new SyntaxError(`'@' must be followed by a name at position ${i}`)
+      if (name.length === 0)
+        throw new SyntaxError(`'@' must be followed by a name at position ${i}`)
       tokens.push({ type: 'AT', name })
       i = j
       continue
@@ -67,10 +79,22 @@ function tokenize(src) {
 
     // single-character tokens
     const single = {
-      '=': 'EQUALS', '+': 'PLUS', '-': 'MINUS', '*': 'STAR', '/': 'SLASH',
-      '(': 'LPAREN', ')': 'RPAREN', ',': 'COMMA', '{': 'LBRACE', '}': 'RBRACE',
+      '=': 'EQUALS',
+      '+': 'PLUS',
+      '-': 'MINUS',
+      '*': 'STAR',
+      '/': 'SLASH',
+      '(': 'LPAREN',
+      ')': 'RPAREN',
+      ',': 'COMMA',
+      '{': 'LBRACE',
+      '}': 'RBRACE',
     }
-    if (single[c]) { tokens.push({ type: single[c] }); i++; continue }
+    if (single[c]) {
+      tokens.push({ type: single[c] })
+      i++
+      continue
+    }
 
     throw new SyntaxError(`Unexpected character '${c}' at position ${i}`)
   }
@@ -106,7 +130,9 @@ function parse(tokens) {
     if (t.type !== type) throw new SyntaxError(`Expected ${type} but got ${t.type}`)
     return t
   }
-  const skipNewlines = () => { while (peek().type === 'NEWLINE') next() }
+  const skipNewlines = () => {
+    while (peek().type === 'NEWLINE') next()
+  }
 
   // Parse statements until `endType` (EOF for the program, RBRACE for a block).
   function parseStatementList(endType) {
@@ -116,7 +142,8 @@ function parse(tokens) {
       if (peek().type === 'EOF') throw new SyntaxError(`Unexpected EOF: expected ${endType}`)
       body.push(parseStatement())
       if (peek().type === 'NEWLINE') skipNewlines()
-      else if (peek().type !== endType) throw new SyntaxError(`Expected end of statement but got ${peek().type}`)
+      else if (peek().type !== endType)
+        throw new SyntaxError(`Expected end of statement but got ${peek().type}`)
     }
     return body
   }
@@ -196,7 +223,10 @@ function parse(tokens) {
       const args = []
       if (peek().type !== 'RPAREN') {
         args.push(parseExpression())
-        while (peek().type === 'COMMA') { next(); args.push(parseExpression()) }
+        while (peek().type === 'COMMA') {
+          next()
+          args.push(parseExpression())
+        }
       }
       expect('RPAREN')
       node = { type: 'Call', callee: node, args }
@@ -206,8 +236,14 @@ function parse(tokens) {
 
   function parsePrimary() {
     const t = peek()
-    if (t.type === 'NUMBER') { next(); return { type: 'Number', value: t.value } }
-    if (t.type === 'IDENT') { next(); return { type: 'Var', name: t.name } }
+    if (t.type === 'NUMBER') {
+      next()
+      return { type: 'Number', value: t.value }
+    }
+    if (t.type === 'IDENT') {
+      next()
+      return { type: 'Var', name: t.name }
+    }
     if (t.type === 'AT') {
       if (t.name === 'a' || t.name === 'f') return parseFn()
       next()
@@ -253,11 +289,15 @@ class Scope {
 }
 
 class Async {
-  constructor(promise) { this.promise = promise }
+  constructor(promise) {
+    this.promise = promise
+  }
 }
 
 class ReturnSignal {
-  constructor(value) { this.value = value }
+  constructor(value) {
+    this.value = value
+  }
 }
 
 async function evaluate(node, env) {
@@ -299,10 +339,14 @@ async function evaluate(node, env) {
       const left = await evaluate(node.left, env)
       const right = await evaluate(node.right, env)
       switch (node.op) {
-        case '+': return left + right
-        case '-': return left - right
-        case '*': return left * right
-        case '/': return left / right
+        case '+':
+          return left + right
+        case '-':
+          return left - right
+        case '*':
+          return left * right
+        case '/':
+          return left / right
       }
       throw new Error(`Unknown operator: ${node.op}`)
     }
@@ -346,7 +390,10 @@ async function evaluate(node, env) {
 
 function makeGlobalScope() {
   const scope = new Scope()
-  scope.set('@l', (...args) => { console.log(...args); return args[0] })
+  scope.set('@l', (...args) => {
+    console.log(...args)
+    return args[0]
+  })
   return scope
 }
 
@@ -363,7 +410,11 @@ async function main() {
   console.log('── source ──')
   console.log(source.trim())
   console.log('\n── tokens ──')
-  console.log(tokens.map((t) => ((t.name ?? t.value) !== undefined ? `${t.type}(${t.name ?? t.value})` : t.type)).join(' '))
+  console.log(
+    tokens
+      .map((t) => ((t.name ?? t.value) !== undefined ? `${t.type}(${t.name ?? t.value})` : t.type))
+      .join(' '),
+  )
   console.log('\n── ast ──')
   console.log(JSON.stringify(ast, null, 2))
   console.log('\n── output ──')

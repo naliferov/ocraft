@@ -29,8 +29,8 @@ if (!USER || !PASS) {
   // stderr only — stdout is the MCP stdio channel and must stay clean.
   console.error(
     'gmail-mcp: missing GMAIL_USER and/or GMAIL_APP_PASSWORD.\n' +
-    'Enable 2-Step Verification, create an app password at\n' +
-    'https://myaccount.google.com/apppasswords, and set both in gmail-mcp/.env.'
+      'Enable 2-Step Verification, create an app password at\n' +
+      'https://myaccount.google.com/apppasswords, and set both in gmail-mcp/.env.',
   )
   process.exit(1)
 }
@@ -56,7 +56,11 @@ async function withClient(fn) {
   try {
     return await fn(client)
   } finally {
-    try { await client.logout() } catch { /* ignore */ }
+    try {
+      await client.logout()
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -137,32 +141,47 @@ server.registerTool(
   'gmail_list_mailboxes',
   {
     title: 'List Gmail mailboxes',
-    description: 'List mailboxes/labels (path, name, special-use flag like \\Inbox, \\Sent, \\All, \\Trash). Use a path with the message tools.',
+    description:
+      'List mailboxes/labels (path, name, special-use flag like \\Inbox, \\Sent, \\All, \\Trash). Use a path with the message tools.',
     inputSchema: {},
   },
   async () => {
     try {
       return await withClient(async (client) => {
         const boxes = await client.list()
-        return ok(boxes.map((b) => ({
-          path: b.path,
-          name: b.name,
-          specialUse: b.specialUse ?? null,
-          subscribed: b.subscribed ?? null,
-        })))
+        return ok(
+          boxes.map((b) => ({
+            path: b.path,
+            name: b.name,
+            specialUse: b.specialUse ?? null,
+            subscribed: b.subscribed ?? null,
+          })),
+        )
       })
-    } catch (e) { return fail(e?.message ?? e) }
-  }
+    } catch (e) {
+      return fail(e?.message ?? e)
+    }
+  },
 )
 
 server.registerTool(
   'gmail_list_messages',
   {
     title: 'List recent messages',
-    description: 'List the most recent messages in a mailbox (default INBOX), newest first. Returns compact summaries (uid, subject, from/to, date, read state, size, hasAttachments). Use the uid with gmail_get_message.',
+    description:
+      'List the most recent messages in a mailbox (default INBOX), newest first. Returns compact summaries (uid, subject, from/to, date, read state, size, hasAttachments). Use the uid with gmail_get_message.',
     inputSchema: {
-      mailbox: z.string().default('INBOX').describe('Mailbox path (default: INBOX). See gmail_list_mailboxes.'),
-      limit: z.number().int().min(1).max(200).default(25).describe('How many recent messages to return'),
+      mailbox: z
+        .string()
+        .default('INBOX')
+        .describe('Mailbox path (default: INBOX). See gmail_list_mailboxes.'),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(200)
+        .default(25)
+        .describe('How many recent messages to return'),
     },
   },
   async ({ mailbox, limit }) => {
@@ -173,22 +192,30 @@ server.registerTool(
           if (total === 0) return ok([])
           const start = Math.max(1, total - limit + 1)
           const out = []
-          for await (const msg of client.fetch(`${start}:*`, { envelope: true, flags: true, size: true, bodyStructure: true })) {
+          for await (const msg of client.fetch(`${start}:*`, {
+            envelope: true,
+            flags: true,
+            size: true,
+            bodyStructure: true,
+          })) {
             out.push(fmtSummary(msg))
           }
           out.sort((a, b) => (b.uid ?? 0) - (a.uid ?? 0)) // newest first
           return ok(out)
-        })
+        }),
       )
-    } catch (e) { return fail(e?.message ?? e) }
-  }
+    } catch (e) {
+      return fail(e?.message ?? e)
+    }
+  },
 )
 
 server.registerTool(
   'gmail_search',
   {
     title: 'Search messages',
-    description: 'Search messages using native Gmail search syntax (e.g. "from:foo@bar.com has:attachment newer_than:7d", "subject:invoice"). Searches All Mail by default. Returns compact summaries, newest first; the returned "mailbox" must be passed to gmail_get_message/gmail_download_attachment (uids are per-mailbox).',
+    description:
+      'Search messages using native Gmail search syntax (e.g. "from:foo@bar.com has:attachment newer_than:7d", "subject:invoice"). Searches All Mail by default. Returns compact summaries, newest first; the returned "mailbox" must be passed to gmail_get_message/gmail_download_attachment (uids are per-mailbox).',
     inputSchema: {
       query: z.string().min(1).describe('Gmail search query (X-GM-RAW syntax)'),
       mailbox: z.string().optional().describe('Mailbox to search (default: the All Mail folder)'),
@@ -204,25 +231,37 @@ server.registerTool(
           if (!uids || uids.length === 0) return ok({ mailbox: box, count: 0, messages: [] })
           const pick = uids.slice(-limit) // highest (newest) uids
           const out = []
-          for await (const msg of client.fetch(pick, { envelope: true, flags: true, size: true, bodyStructure: true }, { uid: true })) {
+          for await (const msg of client.fetch(
+            pick,
+            { envelope: true, flags: true, size: true, bodyStructure: true },
+            { uid: true },
+          )) {
             out.push(fmtSummary(msg))
           }
           out.sort((a, b) => (b.uid ?? 0) - (a.uid ?? 0))
           return ok({ mailbox: box, count: out.length, messages: out })
         })
       })
-    } catch (e) { return fail(e?.message ?? e) }
-  }
+    } catch (e) {
+      return fail(e?.message ?? e)
+    }
+  },
 )
 
 server.registerTool(
   'gmail_get_message',
   {
     title: 'Read one message',
-    description: 'Fetch a full message by uid from a mailbox: headers, plain-text body, and a list of attachments (each with a "part" id to pass to gmail_download_attachment).',
+    description:
+      'Fetch a full message by uid from a mailbox: headers, plain-text body, and a list of attachments (each with a "part" id to pass to gmail_download_attachment).',
     inputSchema: {
       uid: z.number().int().describe('Message uid (from gmail_list_messages / gmail_search)'),
-      mailbox: z.string().default('INBOX').describe('Mailbox the uid belongs to (default: INBOX; for search results use the "mailbox" it returned)'),
+      mailbox: z
+        .string()
+        .default('INBOX')
+        .describe(
+          'Mailbox the uid belongs to (default: INBOX; for search results use the "mailbox" it returned)',
+        ),
     },
   },
   async ({ uid, mailbox }) => {
@@ -232,7 +271,11 @@ server.registerTool(
           let source = null
           let bodyStructure = null
           let flags = null
-          for await (const msg of client.fetch(`${uid}`, { source: true, bodyStructure: true, flags: true }, { uid: true })) {
+          for await (const msg of client.fetch(
+            `${uid}`,
+            { source: true, bodyStructure: true, flags: true },
+            { uid: true },
+          )) {
             source = msg.source
             bodyStructure = msg.bodyStructure
             flags = msg.flags
@@ -251,20 +294,26 @@ server.registerTool(
             text: parsed.text ?? null,
             attachments: collectAttachments(bodyStructure),
           })
-        })
+        }),
       )
-    } catch (e) { return fail(e?.message ?? e) }
-  }
+    } catch (e) {
+      return fail(e?.message ?? e)
+    }
+  },
 )
 
 server.registerTool(
   'gmail_download_attachment',
   {
     title: 'Download an attachment',
-    description: 'Download one attachment (by message uid + part id from gmail_get_message) to a local file, and return the saved path.',
+    description:
+      'Download one attachment (by message uid + part id from gmail_get_message) to a local file, and return the saved path.',
     inputSchema: {
       uid: z.number().int().describe('Message uid'),
-      part: z.string().min(1).describe('Attachment part id (from gmail_get_message attachments[].part)'),
+      part: z
+        .string()
+        .min(1)
+        .describe('Attachment part id (from gmail_get_message attachments[].part)'),
       mailbox: z.string().default('INBOX').describe('Mailbox the uid belongs to (default: INBOX)'),
       outDir: z.string().optional().describe('Output directory (defaults to gmail-mcp/downloads)'),
     },
@@ -281,18 +330,27 @@ server.registerTool(
           const file = path.join(dir, safe)
           await pipeline(content, fs.createWriteStream(file))
           const { size } = fs.statSync(file)
-          return ok({ saved: true, path: file, filename: safe, contentType: meta?.contentType ?? null, bytes: size })
-        })
+          return ok({
+            saved: true,
+            path: file,
+            filename: safe,
+            contentType: meta?.contentType ?? null,
+            bytes: size,
+          })
+        }),
       )
-    } catch (e) { return fail(e?.message ?? e) }
-  }
+    } catch (e) {
+      return fail(e?.message ?? e)
+    }
+  },
 )
 
 server.registerTool(
   'gmail_delete_message',
   {
     title: 'Delete a message (move to Trash)',
-    description: 'Delete a message by uid by moving it to Trash. In Gmail this is reversible — the message stays in Trash for ~30 days before being purged automatically. Pass the mailbox the uid belongs to (default INBOX; for search results use the "mailbox" that search returned).',
+    description:
+      'Delete a message by uid by moving it to Trash. In Gmail this is reversible — the message stays in Trash for ~30 days before being purged automatically. Pass the mailbox the uid belongs to (default INBOX; for search results use the "mailbox" that search returned).',
     inputSchema: {
       uid: z.number().int().describe('Message uid (from gmail_list_messages / gmail_search)'),
       mailbox: z.string().default('INBOX').describe('Mailbox the uid belongs to (default: INBOX)'),
@@ -303,13 +361,17 @@ server.registerTool(
       return await withClient(async (client) => {
         const trash = await resolveTrash(client)
         if (mailbox === trash) {
-          return fail(`uid ${uid} is already in Trash (${trash}); permanent purge is not supported by this tool`)
+          return fail(
+            `uid ${uid} is already in Trash (${trash}); permanent purge is not supported by this tool`,
+          )
         }
         return withMailboxRW(client, mailbox, async () => {
           // Confirm the message exists first so we return a clear error rather
           // than silently succeeding on a no-op move.
           let found = false
-          for await (const _ of client.fetch(`${uid}`, { uid: true }, { uid: true })) { found = true }
+          for await (const _ of client.fetch(`${uid}`, { uid: true }, { uid: true })) {
+            found = true
+          }
           if (!found) return fail(`message uid ${uid} not found in ${mailbox}`)
           // In Gmail, moving to Trash drops all other labels — this is exactly
           // what the web UI's "Delete" button does.
@@ -317,8 +379,10 @@ server.registerTool(
           return ok({ deleted: true, uid, from: mailbox, movedTo: trash })
         })
       })
-    } catch (e) { return fail(e?.message ?? e) }
-  }
+    } catch (e) {
+      return fail(e?.message ?? e)
+    }
+  },
 )
 
 async function main() {

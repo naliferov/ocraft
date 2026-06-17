@@ -18,7 +18,7 @@
 
 const DEFAULT_URL = 'wss://stream.x8.deno.net/ws'
 const CONNECT_TIMEOUT_MS = 8000 // fail if the socket never opens
-const REPLY_WAIT_MS = 3000      // after open, how long to listen for a reply
+const REPLY_WAIT_MS = 3000 // after open, how long to listen for a reply
 
 export const run = async (ctx) => {
   const url = ctx.args[0] || DEFAULT_URL
@@ -31,19 +31,27 @@ export const run = async (ctx) => {
     let settled = false
     let opened = false
     let socket
-    let connectTimer
     let replyTimer
     const finish = (result) => {
       if (settled) return
       settled = true
       clearTimeout(connectTimer)
       clearTimeout(replyTimer)
-      try { socket?.close() } catch { /* already closing */ }
+      try {
+        socket?.close()
+      } catch {
+        /* already closing */
+      }
       resolve(result)
     }
-    connectTimer = setTimeout(
-      () => finish({ ok: false, opened: false, reason: `never opened (timeout ${CONNECT_TIMEOUT_MS}ms)` }),
-      CONNECT_TIMEOUT_MS
+    const connectTimer = setTimeout(
+      () =>
+        finish({
+          ok: false,
+          opened: false,
+          reason: `never opened (timeout ${CONNECT_TIMEOUT_MS}ms)`,
+        }),
+      CONNECT_TIMEOUT_MS,
     )
 
     try {
@@ -65,14 +73,22 @@ export const run = async (ctx) => {
       // Connected = success regardless of reply; wait briefly for one as a bonus.
       clearTimeout(connectTimer)
       replyTimer = setTimeout(
-        () => finish({ ok: true, opened: true, replied: false, openMs, note: 'connected; no reply (relay is not an echo server)' }),
-        REPLY_WAIT_MS
+        () =>
+          finish({
+            ok: true,
+            opened: true,
+            replied: false,
+            openMs,
+            note: 'connected; no reply (relay is not an echo server)',
+          }),
+        REPLY_WAIT_MS,
       )
     })
     socket.addEventListener('message', (event) => {
-      const data = typeof event.data === 'string'
-        ? event.data
-        : `[binary ${event.data?.byteLength ?? '?'} bytes]`
+      const data =
+        typeof event.data === 'string'
+          ? event.data
+          : `[binary ${event.data?.byteLength ?? '?'} bytes]`
       ctx.log(`reply ⬇ ${data}`)
       finish({ ok: true, opened: true, replied: true, rttMs: Date.now() - startedAt, reply: data })
     })
@@ -80,13 +96,19 @@ export const run = async (ctx) => {
     socket.addEventListener('error', () => ctx.log('error ❌ (see close code)'))
     socket.addEventListener('close', (event) => {
       const where = opened ? 'after open' : 'before open'
-      finish({ ok: opened, opened, reason: `closed ${where} (code=${event.code}${event.reason ? ' ' + event.reason : ''})` })
+      finish({
+        ok: opened,
+        opened,
+        reason: `closed ${where} (code=${event.code}${event.reason ? ' ' + event.reason : ''})`,
+      })
     })
   })
 
-  ctx.log(outcome.ok
-    ? `reachable ✅ (replied=${outcome.replied ?? false})`
-    : `unreachable ❌ — ${outcome.reason}`)
+  ctx.log(
+    outcome.ok
+      ? `reachable ✅ (replied=${outcome.replied ?? false})`
+      : `unreachable ❌ — ${outcome.reason}`,
+  )
 
   const state = await ctx.state.load()
   state.lastCheck = { at: ctx.time.now(), url, ...outcome }

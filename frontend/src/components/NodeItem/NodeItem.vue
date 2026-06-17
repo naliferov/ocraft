@@ -9,7 +9,7 @@ import Category from './nodeTypes/Category.vue'
 import AiChat from './nodeTypes/AiChat.vue'
 
 const props = defineProps({
-  node: { type: Object, required: true }
+  node: { type: Object, required: true },
 })
 
 const store = useNodesStore()
@@ -41,7 +41,9 @@ const typeOptions = Object.entries(NODE_TYPES)
 
 const nodeType = computed({
   get: () => props.node.type ?? 'scene',
-  set: (val) => { props.node.type = val === 'scene' ? undefined : val }
+  set: (val) => {
+    props.node.type = val === 'scene' ? undefined : val
+  },
 })
 
 // No silent fallback: an unknown type resolves to null so the template can show an
@@ -89,30 +91,35 @@ const commitName = () => {
       <input
         v-if="editingName"
         ref="nameInput"
+        v-model="node.name"
         class="name name-input"
         :style="inputStyle"
         :size="Math.max((node.name || '').length + 1, 2)"
-        v-model="node.name"
         @keyup.enter="commitName"
         @blur="commitName"
       />
-      <span v-else ref="nameLabel" class="name" title="Click to rename" @click="startRename">{{ node.name }}</span>
+      <span v-else ref="nameLabel" class="name" title="Click to rename" @click="startRename">{{
+        node.name
+      }}</span>
       <n-select
         v-model:value="nodeType"
         :options="typeOptions"
         size="small"
-        style="width: 110px; flex-shrink: 0;"
+        style="width: 110px; flex-shrink: 0"
       />
       <n-button size="small" @click="save">Save</n-button>
       <span class="desc">{{ node.description }}</span>
     </div>
 
-    <component v-if="activeComponent" :is="activeComponent" :node="node" ref="componentRef" />
+    <component :is="activeComponent" v-if="activeComponent" ref="componentRef" :node="node" />
     <div v-else class="no-handler">
-      <p>No handler for type <code>{{ node.type }}</code>.</p>
       <p>
-        This node exists and is addressable, but no view is registered for its type.
-        Pick a known type from the selector above, or register a handler for
+        No handler for type <code>{{ node.type }}</code
+        >.
+      </p>
+      <p>
+        This node exists and is addressable, but no view is registered for its type. Pick a known
+        type from the selector above, or register a handler for
         <code>{{ node.type }}</code> in <code>NODE_TYPES</code> (NodeItem.vue).
       </p>
     </div>

@@ -30,7 +30,7 @@ export const listExecutions = async () => {
   return files
     .sort()
     .reverse()
-    .map(f => {
+    .map((f) => {
       const base = f.replace('.json', '')
       const dateStr = base.slice(0, 19).replace(/T(\d{2})-(\d{2})-(\d{2})/, 'T$1:$2:$3')
       const name = base.slice(20)

@@ -6,7 +6,7 @@
 // audio-only node that wants the transport but no visual stage).
 defineProps({
   background: { type: String, default: '#1a1a1a' },
-  canvas: { type: Boolean, default: true }
+  canvas: { type: Boolean, default: true },
 })
 </script>
 
@@ -38,9 +38,16 @@ defineProps({
   font-size: 13px;
   line-height: 1.6;
 }
-.transport :slotted(.btn:hover) { background: #3a3a3a; }
-.transport :slotted(.btn.save) { margin-left: auto; }
-.transport :slotted(.meta) { font-size: 12px; opacity: 0.5; }
+.transport :slotted(.btn:hover) {
+  background: #3a3a3a;
+}
+.transport :slotted(.btn.save) {
+  margin-left: auto;
+}
+.transport :slotted(.meta) {
+  font-size: 12px;
+  opacity: 0.5;
+}
 
 .stage {
   flex: 1;

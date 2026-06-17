@@ -47,13 +47,11 @@ export const run = async (ctx) => {
 
     const inputSize = (await fs.stat(inputPath)).size
     const outputSize = (await fs.stat(outputPath)).size
-    const saved = inputSize > 0
-      ? (((inputSize - outputSize) / inputSize) * 100).toFixed(1)
-      : '0.0'
+    const saved = inputSize > 0 ? (((inputSize - outputSize) / inputSize) * 100).toFixed(1) : '0.0'
 
     ctx.log(`${file} → ${file}`)
     ctx.log(
-      `${(inputSize / 1024).toFixed(1)}kb → ${(outputSize / 1024).toFixed(1)}kb (saved ${saved}%)`
+      `${(inputSize / 1024).toFixed(1)}kb → ${(outputSize / 1024).toFixed(1)}kb (saved ${saved}%)`,
     )
 
     processed += 1

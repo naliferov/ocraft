@@ -93,11 +93,13 @@ const sendText = (req, res, body, contentType) => {
   const buffer = Buffer.from(body)
   const acceptsGzip = (req.headers['accept-encoding'] || '').includes('gzip')
   if (acceptsGzip && buffer.length > 512) {
-    res.writeHead(200, {
-      'Content-Type': contentType,
-      'Content-Encoding': 'gzip',
-      'Vary': 'Accept-Encoding',
-    }).end(zlib.gzipSync(buffer))
+    res
+      .writeHead(200, {
+        'Content-Type': contentType,
+        'Content-Encoding': 'gzip',
+        Vary: 'Accept-Encoding',
+      })
+      .end(zlib.gzipSync(buffer))
   } else {
     res.writeHead(200, { 'Content-Type': contentType }).end(buffer)
   }
@@ -142,7 +144,7 @@ const routes = {
         const raw = await fs.readFile(nodePath(id), 'utf-8')
         const { id: _id, ...data } = JSON.parse(raw)
         return { id, ...data }
-      })
+      }),
     )
     sendText(req, res, JSON.stringify(nodes), 'application/json')
   },
@@ -237,7 +239,8 @@ const routes = {
     }
     const children = await childrenOf(id)
     if (children.length) {
-      res.writeHead(409, { 'Content-Type': 'application/json' })
+      res
+        .writeHead(409, { 'Content-Type': 'application/json' })
         .end(JSON.stringify({ error: 'Node has children', children }))
       return
     }
@@ -245,7 +248,9 @@ const routes = {
       await fs.rm(dir, { recursive: true, force: true })
       res.writeHead(200).end('Deleted')
     } catch (error) {
-      res.writeHead(500, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: error.message }))
+      res
+        .writeHead(500, { 'Content-Type': 'application/json' })
+        .end(JSON.stringify({ error: error.message }))
     }
   },
 
@@ -258,7 +263,9 @@ const routes = {
   'POST /api/ai-chat': async (req, res) => {
     const { message, history = [] } = await readBody(req)
     if (!message || typeof message !== 'string') {
-      res.writeHead(400, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: 'message (string) required' }))
+      res
+        .writeHead(400, { 'Content-Type': 'application/json' })
+        .end(JSON.stringify({ error: 'message (string) required' }))
       return
     }
 
@@ -276,18 +283,28 @@ const routes = {
         if (event.type === 'assistant') {
           for (const block of event.message.content) {
             if (block.type === 'text') text += block.text
-            else if (block.type === 'tool_use') toolUses.push({ name: block.name, input: block.input })
+            else if (block.type === 'tool_use')
+              toolUses.push({ name: block.name, input: block.input })
           }
         } else if (event.type === 'result') {
-          result = { subtype: event.subtype, cost: event.total_cost_usd, turns: event.num_turns, sessionId: event.session_id }
+          result = {
+            subtype: event.subtype,
+            cost: event.total_cost_usd,
+            turns: event.num_turns,
+            sessionId: event.session_id,
+          }
         }
       }
     } catch (error) {
-      res.writeHead(500, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: error.message }))
+      res
+        .writeHead(500, { 'Content-Type': 'application/json' })
+        .end(JSON.stringify({ error: error.message }))
       return
     }
 
-    res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ text: text.trim(), toolUses, result }))
+    res
+      .writeHead(200, { 'Content-Type': 'application/json' })
+      .end(JSON.stringify({ text: text.trim(), toolUses, result }))
   },
 }
 
@@ -295,15 +312,17 @@ const matchUrl = (method, url) => {
   for (const key of Object.keys(routes)) {
     const [routeMethod, routePath] = key.split(' ')
     if (routeMethod !== method) continue
-    
+
     const pattern = routePath.replace(/:\w+/g, '([^/]+)')
     const m = url.match(new RegExp(`^${pattern}$`))
 
     if (m) {
-      const paramNames = [...routePath.matchAll(/:(\w+)/g)].map(x => x[1])
-      const params = Object.fromEntries(paramNames.map((name, i) => {
-        return [name, m[i + 1]]
-      }))
+      const paramNames = [...routePath.matchAll(/:(\w+)/g)].map((x) => x[1])
+      const params = Object.fromEntries(
+        paramNames.map((name, i) => {
+          return [name, m[i + 1]]
+        }),
+      )
       return { handler: routes[key], params }
     }
   }

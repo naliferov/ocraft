@@ -27,11 +27,24 @@ const DEFAULT_VAULT = path.join(BACKEND_DIR, '../../ThinkTank')
 // public repo). Stored lowercased, matched against the note basename (no .md).
 const EXCLUDED = new Set([
   // credentials / contact data
-  'job accounts', 'contacts', 'job contacts', 'job todo',
+  'job accounts',
+  'contacts',
+  'job contacts',
+  'job todo',
   // personal life (user keeps these for a future private space)
-  'самоанализ', 'тревога', 'знакомства', 'женщины', 'моя комната',
-  'body', 'medicine', 'home', 'finance',
-  'job', 'job ownership', 'job productivity', 'job interview',
+  'самоанализ',
+  'тревога',
+  'знакомства',
+  'женщины',
+  'моя комната',
+  'body',
+  'medicine',
+  'home',
+  'finance',
+  'job',
+  'job ownership',
+  'job productivity',
+  'job interview',
 ])
 
 // Vault tooling/config, not knowledge notes — don't import.
@@ -60,14 +73,17 @@ const isImageTarget = (name) => IMAGE_EXTENSIONS.has(path.extname(name).toLowerC
 
 const readVault = async (vaultDir, ctx) => {
   const dirEntries = await fs.readdir(vaultDir, { withFileTypes: true })
-  const notes = []      // { file, base, raw }
-  const skipped = []    // { file, reason }
+  const notes = [] // { file, base, raw }
+  const skipped = [] // { file, reason }
   const imageFiles = new Set()
 
   for (const dirEntry of dirEntries) {
     if (!dirEntry.isFile()) continue
     const ext = path.extname(dirEntry.name).toLowerCase()
-    if (IMAGE_EXTENSIONS.has(ext)) { imageFiles.add(dirEntry.name); continue }
+    if (IMAGE_EXTENSIONS.has(ext)) {
+      imageFiles.add(dirEntry.name)
+      continue
+    }
     if (ext !== '.md') continue
 
     const base = stripExt(dirEntry.name)
@@ -144,22 +160,32 @@ const buildMarkdown = (nameToId, assetUrlOf, referencedAssets) => {
       {
         name: 'embed',
         level: 'inline',
-        start(src) { const index = src.indexOf('![['); return index < 0 ? undefined : index },
+        start(src) {
+          const index = src.indexOf('![[')
+          return index < 0 ? undefined : index
+        },
         tokenizer(src) {
           const match = /^!\[\[([^\]]+)\]\]/.exec(src)
           if (match) return { type: 'embed', raw: match[0], target: match[1].trim() }
         },
-        renderer(token) { return renderEmbed(token.target) },
+        renderer(token) {
+          return renderEmbed(token.target)
+        },
       },
       {
         name: 'wikilink',
         level: 'inline',
-        start(src) { const index = src.indexOf('[['); return index < 0 ? undefined : index },
+        start(src) {
+          const index = src.indexOf('[[')
+          return index < 0 ? undefined : index
+        },
         tokenizer(src) {
           const match = /^\[\[([^\]]+)\]\]/.exec(src)
           if (match) return { type: 'wikilink', raw: match[0], target: match[1].trim() }
         },
-        renderer(token) { return renderWikilink(token.target) },
+        renderer(token) {
+          return renderWikilink(token.target)
+        },
       },
     ],
   })
@@ -212,7 +238,10 @@ const processImages = async (referencedAssets, imageFiles, vaultDir, ctx) => {
   await fs.mkdir(ASSETS_OPT_DIR, { recursive: true })
   const done = []
   for (const fileName of referencedAssets) {
-    if (!imageFiles.has(fileName)) { ctx.log(`⚠ image not found in vault: ${fileName}`); continue }
+    if (!imageFiles.has(fileName)) {
+      ctx.log(`⚠ image not found in vault: ${fileName}`)
+      continue
+    }
     const source = path.join(vaultDir, fileName)
     const ext = path.extname(fileName).toLowerCase()
     const target = path.join(ASSETS_OPT_DIR, fileName)
@@ -243,8 +272,8 @@ export const run = async (ctx) => {
 
   // Root category + id assignment for every note (so wikilinks can resolve).
   const rootId = allocId()
-  const nameToId = new Map()           // basename(lower) -> node id
-  const noteById = new Map()           // id -> note record
+  const nameToId = new Map() // basename(lower) -> node id
+  const noteById = new Map() // id -> note record
   for (const note of notes) {
     const id = allocId()
     note.id = id
@@ -254,7 +283,7 @@ export const run = async (ctx) => {
   }
 
   // --- hierarchy: parse navigation.md into category tree + note parents ------
-  const categories = []                // { id, name }
+  const categories = [] // { id, name }
   const sectionByLabel = new Map()
   const getSection = (label) => {
     const existing = sectionByLabel.get(label)
@@ -279,7 +308,7 @@ export const run = async (ctx) => {
   }
 
   const navNote = notes.find((note) => note.base.toLowerCase() === 'navigation')
-  const placedOrder = []               // ids placed by navigation, for BFS seeds
+  const placedOrder = [] // ids placed by navigation, for BFS seeds
   if (navNote) {
     let currentSection = rootId
     for (const line of navNote.raw.split('\n')) {
@@ -290,7 +319,10 @@ export const run = async (ctx) => {
         if (asLink) {
           // Heading is itself a note link → that note sits under root; following
           // bullets attach to root (its own children come from its map, later).
-          for (const id of resolveLinks(label)) { setParent(id, rootId); placedOrder.push(id) }
+          for (const id of resolveLinks(label)) {
+            setParent(id, rootId)
+            placedOrder.push(id)
+          }
           currentSection = rootId
         } else {
           currentSection = getSection(label)
@@ -319,7 +351,10 @@ export const run = async (ctx) => {
       const childId = nameToId.get(target.toLowerCase())
       if (!childId || childId === parentId) continue
       const child = noteById.get(childId)
-      if (child && child.parentId == null) { child.parentId = parentId; queue.push(childId) }
+      if (child && child.parentId == null) {
+        child.parentId = parentId
+        queue.push(childId)
+      }
     }
   }
 
@@ -344,7 +379,12 @@ export const run = async (ctx) => {
   // root + categories
   await writeNode(rootId, { name: 'notes', type: 'category', collapsed: false })
   for (const category of liveCategories) {
-    await writeNode(category.id, { name: category.name, type: 'category', collapsed: true, parentId: rootId })
+    await writeNode(category.id, {
+      name: category.name,
+      type: 'category',
+      collapsed: true,
+      parentId: rootId,
+    })
   }
   // notes
   const manifestNodes = [{ id: rootId, name: 'notes', type: 'category', parentId: null }]
@@ -358,7 +398,13 @@ export const run = async (ctx) => {
     // node-list endpoint stays tiny), mirroring how script nodes store script.js.
     await writeNode(note.id, { name, type: 'html', parentId: note.parentId })
     await fs.writeFile(path.join(NODES_DIR, String(note.id), 'content.html'), html)
-    manifestNodes.push({ id: note.id, source: note.file, name, type: 'html', parentId: note.parentId })
+    manifestNodes.push({
+      id: note.id,
+      source: note.file,
+      name,
+      type: 'html',
+      parentId: note.parentId,
+    })
   }
 
   const images = await processImages(referencedAssets, imageFiles, vaultDir, ctx)
@@ -367,13 +413,20 @@ export const run = async (ctx) => {
     importedAt: ctx.time.now(),
     vault: vaultDir,
     rootId,
-    counts: { notes: notes.length, categories: liveCategories.length, images: images.length, skipped: skipped.length },
+    counts: {
+      notes: notes.length,
+      categories: liveCategories.length,
+      images: images.length,
+      skipped: skipped.length,
+    },
     nodes: manifestNodes,
     images,
     skipped,
   }
   await fs.writeFile(MANIFEST_PATH, JSON.stringify(manifest, null, 2))
 
-  ctx.log(`done → ${notes.length} notes, ${liveCategories.length} categories, ${images.length} images under node ${rootId} (notes)`)
+  ctx.log(
+    `done → ${notes.length} notes, ${liveCategories.length} categories, ${images.length} images under node ${rootId} (notes)`,
+  )
   return manifest.counts
 }

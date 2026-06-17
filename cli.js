@@ -2,14 +2,22 @@ import 'dotenv/config'
 import { execute } from './backend/executor.js'
 import { listExecutions } from './backend/storage.js'
 import { runScheduler } from './backend/scheduler.js'
-import { listProcs, getProc, startProc, stopProc, restartProc, readLog, clearLog } from './backend/procManager.js'
+import {
+  listProcs,
+  getProc,
+  startProc,
+  stopProc,
+  restartProc,
+  readLog,
+  clearLog,
+} from './backend/procManager.js'
 
 const [command, ...args] = process.argv.slice(2)
 
 //check deploy
 
 const commands = {
-  'run': async () => {
+  run: async () => {
     const [name, ...fnArgs] = args
     if (!name) {
       console.error('Usage: node cli.js run <function-name> [args...]')
@@ -35,7 +43,7 @@ const commands = {
       console.log(`${date}  ${execution.name}  (${execution.id})`)
     }
   },
-  'proc': async () => {
+  proc: async () => {
     const [sub, id, ...rest] = args
     const fmt = (s) => {
       const dot = s.running ? '●' : '○'

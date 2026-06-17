@@ -6,12 +6,12 @@ import { runNodeCode, runWasmNode, clearCache } from '../../../composables/useNo
 import { createScriptUi } from '../../../composables/useScriptUi.js'
 
 const props = defineProps({
-  node: { type: Object, required: true }
+  node: { type: Object, required: true },
 })
 
 const store = useNodesStore()
 const scriptCode = ref('')
-const savedCode = ref('')       // last persisted script.js — lets save() skip no-op writes
+const savedCode = ref('') // last persisted script.js — lets save() skip no-op writes
 const txtAreaRef = ref(null)
 const insertTarget = ref(null) // bound model for the picker; reset after each pick
 
@@ -19,7 +19,10 @@ const insertTarget = ref(null) // bound model for the picker; reset after each p
 // a run fills it, and we tear down the previous run's UI/sockets first.
 const uiHostRef = ref(null)
 let uiHost = null
-const teardownUi = () => { uiHost?.cleanup(); uiHost = null }
+const teardownUi = () => {
+  uiHost?.cleanup()
+  uiHost = null
+}
 
 // Live name hints. On load we inject `/*→name*/` right after each x.x("id") so
 // the editor shows what the id points at; they're stripped before save so the
@@ -37,16 +40,19 @@ const annotate = (s) =>
 // the human name (+ id) so picking is readable without the id living in source.
 const callableOptions = computed(() =>
   store.nodes
-    .filter(n => n.type === 'script' && n.id !== props.node.id)
-    .map(n => ({ label: `${n.name || '(unnamed)'}${n.isWasm ? ' ⚙' : ''}  ·  ${n.id}`, value: n.id }))
+    .filter((n) => n.type === 'script' && n.id !== props.node.id)
+    .map((n) => ({
+      label: `${n.name || '(unnamed)'}${n.isWasm ? ' ⚙' : ''}  ·  ${n.id}`,
+      value: n.id,
+    })),
 )
 
 onMounted(async () => {
   const res = await fetch(`/api/nodes/${props.node.id}/body`)
   if (res.ok) {
     const raw = await res.text()
-    savedCode.value = stripMarks(raw)   // clean baseline for the dirty check
-    scriptCode.value = annotate(raw)    // shown with name hints
+    savedCode.value = stripMarks(raw) // clean baseline for the dirty check
+    scriptCode.value = annotate(raw) // shown with name hints
   }
   // Run-on-open: nodes that are really mini-apps (auth token field, the WS
   // tester) auto-run when opened, so their x.ui panel is there without a click.
@@ -81,7 +87,7 @@ const save = async () => {
   await fetch(`/api/nodes/${props.node.id}/body`, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain' },
-    body: cleanStr
+    body: cleanStr,
   })
   savedCode.value = cleanStr
   clearCache() // so a subsequent x.x picks up the saved version
@@ -120,7 +126,9 @@ const onKeydown = (e) => {
 <template>
   <div class="actions">
     <n-button size="small" @click="runScript">Run</n-button>
-    <n-checkbox v-model:checked="node.runOnOpen" title="Run automatically when this node is opened">Run on open</n-checkbox>
+    <n-checkbox v-model:checked="node.runOnOpen" title="Run automatically when this node is opened"
+      >Run on open</n-checkbox
+    >
     <n-popselect
       v-if="!node.isWasm"
       v-model:value="insertTarget"
@@ -143,8 +151,8 @@ const onKeydown = (e) => {
     <div ref="uiHostRef" class="ui-host" />
     <textarea
       ref="txtAreaRef"
-      class="editor"
       v-model="scriptCode"
+      class="editor"
       spellcheck="false"
       @keydown="onKeydown"
     />

@@ -12,7 +12,9 @@ export const run = async (ctx) => {
   for (const u of updates) {
     const msg = u.message
     if (!msg) continue
-    ctx.log(`[${u.update_id}] chat ${msg.chat.id} ${msg.from?.username ?? ''}: ${msg.text ?? '<non-text>'}`)
+    ctx.log(
+      `[${u.update_id}] chat ${msg.chat.id} ${msg.from?.username ?? ''}: ${msg.text ?? '<non-text>'}`,
+    )
   }
 
   ctx.log(`${updates.length} update(s)`)

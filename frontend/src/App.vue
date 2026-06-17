@@ -10,9 +10,13 @@ const store = useNodesStore()
 const router = useRouter()
 const route = useRoute()
 
-watch(() => route.params.id, (id) => {
-  if (id) store.activeNodeId = id
-}, { immediate: true })
+watch(
+  () => route.params.id,
+  (id) => {
+    if (id) store.activeNodeId = id
+  },
+  { immediate: true },
+)
 
 const navigate = (id) => router.push(`/node/${id}`)
 
@@ -96,7 +100,9 @@ const reparentNode = async ({ id, parentId }) => {
             class="tree-search-clear"
             title="Clear search"
             @click="searchQuery = ''"
-          >×</button>
+          >
+            ×
+          </button>
         </div>
         <div v-if="deleteError" class="tree-error" @click="deleteError = ''">{{ deleteError }}</div>
         <div v-if="store.deletedNodes.length" class="trash-pool">
@@ -124,7 +130,11 @@ const reparentNode = async ({ id, parentId }) => {
       </n-layout-sider>
 
       <n-layout-content content-style="height: 100%; overflow: hidden;">
-        <NodeItem v-if="route.params.id && store.activeNode" :key="store.activeNode.id" :node="store.activeNode" />
+        <NodeItem
+          v-if="route.params.id && store.activeNode"
+          :key="store.activeNode.id"
+          :node="store.activeNode"
+        />
       </n-layout-content>
     </n-layout>
   </n-config-provider>
@@ -268,4 +278,3 @@ const reparentNode = async ({ id, parentId }) => {
   background: rgba(255, 255, 255, 0.1);
 }
 </style>
-

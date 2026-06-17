@@ -20,20 +20,38 @@ if (!chatRef || !idArgs.length) {
 }
 const ids = idArgs.map(Number)
 
-const client = new TelegramClient(new StringSession(sessionStr), apiId, apiHash, { connectionRetries: 5 })
+const client = new TelegramClient(new StringSession(sessionStr), apiId, apiHash, {
+  connectionRetries: 5,
+})
 
 async function resolveEntity(ref) {
   const s = String(ref).trim()
   if (/^@?[a-zA-Z]/.test(s)) {
-    try { return await client.getEntity(s.startsWith('@') ? s : '@' + s) } catch { /* fall through */ }
-    try { return await client.getEntity(s) } catch { /* fall through */ }
+    try {
+      return await client.getEntity(s.startsWith('@') ? s : '@' + s)
+    } catch {
+      /* fall through */
+    }
+    try {
+      return await client.getEntity(s)
+    } catch {
+      /* fall through */
+    }
   }
-  if (/^-?\d+$/.test(s)) { try { return await client.getEntity(Number(s)) } catch { /* fall through */ } }
+  if (/^-?\d+$/.test(s)) {
+    try {
+      return await client.getEntity(Number(s))
+    } catch {
+      /* fall through */
+    }
+  }
   const dialogs = await client.getDialogs({ limit: 200 })
-  const match = dialogs.find((d) =>
-    String(d.id) === s ||
-    d.entity?.username?.toLowerCase() === s.replace(/^@/, '').toLowerCase() ||
-    d.title === s)
+  const match = dialogs.find(
+    (d) =>
+      String(d.id) === s ||
+      d.entity?.username?.toLowerCase() === s.replace(/^@/, '').toLowerCase() ||
+      d.title === s,
+  )
   if (match) return match.entity
   throw new Error(`Could not resolve chat "${ref}"`)
 }
@@ -45,10 +63,16 @@ async function main() {
   const dir = path.join(import.meta.dirname, 'downloads')
   fs.mkdirSync(dir, { recursive: true })
   for (const m of msgs) {
-    if (!m || !m.media) { console.log(`#${m?.id}: no media`); continue }
+    if (!m || !m.media) {
+      console.log(`#${m?.id}: no media`)
+      continue
+    }
     const buf = await client.downloadMedia(m, {})
-    if (!buf?.length) { console.log(`#${m.id}: empty download`); continue }
-    const ext = m.photo ? 'jpg' : (m.document?.mimeType?.split('/')[1] || 'bin')
+    if (!buf?.length) {
+      console.log(`#${m.id}: empty download`)
+      continue
+    }
+    const ext = m.photo ? 'jpg' : m.document?.mimeType?.split('/')[1] || 'bin'
     const file = path.join(dir, `media-${m.id}.${ext}`)
     fs.writeFileSync(file, buf)
     console.log(`#${m.id}: saved ${file} (${buf.length} bytes)`)
@@ -57,4 +81,7 @@ async function main() {
   process.exit(0)
 }
 
-main().catch((e) => { console.error('error:', e?.message ?? e); process.exit(1) })
+main().catch((e) => {
+  console.error('error:', e?.message ?? e)
+  process.exit(1)
+})

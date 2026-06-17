@@ -1,7 +1,7 @@
 const clamp = (value) => Math.min(255, Math.max(0, value))
 
 const applyPixelDelta = (pixels, index, delta) => {
-  pixels[index]     = clamp(pixels[index]     + delta[0])
+  pixels[index] = clamp(pixels[index] + delta[0])
   pixels[index + 1] = clamp(pixels[index + 1] + delta[1])
   pixels[index + 2] = clamp(pixels[index + 2] + delta[2])
 }
@@ -16,23 +16,14 @@ const getBaseGrainColor = (rangeColor) => {
 }
 
 const getGrainDelta = ({ baseColor, color, intensity }) => {
-
   if (baseColor) {
     const strength = Math.random() * intensity
-    return [
-      baseColor[0] * strength,
-      baseColor[1] * strength,
-      baseColor[2] * strength,
-    ]
+    return [baseColor[0] * strength, baseColor[1] * strength, baseColor[2] * strength]
   }
 
   if (color) {
     const strength = Math.random() * intensity
-    return [
-      color[0] * strength,
-      color[1] * strength,
-      color[2] * strength,
-    ]
+    return [color[0] * strength, color[1] * strength, color[2] * strength]
   }
 
   const noise = (Math.random() - 0.5) * 2 * intensity * 255
@@ -78,7 +69,7 @@ const applyGrain = (s, props) => {
     // so the *average* count is exact (no hard 0→1 cliff at tiny amounts) and it
     // varies frame-to-frame — sparse crackle fades in smoothly and flickers.
     const exact = cols * rows * clampedAmount
-    const count = Math.floor(exact) + (Math.random() < (exact % 1) ? 1 : 0)
+    const count = Math.floor(exact) + (Math.random() < exact % 1 ? 1 : 0)
     for (let k = 0; k < count; k++) {
       fillBlock((Math.random() * cols) | 0, (Math.random() * rows) | 0)
     }
@@ -141,7 +132,9 @@ const getClipart = (src) => {
     entry.aspect = aspect
     entry.status = 'ready'
   }
-  img.onerror = () => { entry.status = 'error' }
+  img.onerror = () => {
+    entry.status = 'error'
+  }
   img.src = assetUrl(src)
   return entry
 }
@@ -194,7 +187,7 @@ export const renderSceneP5 = (s, { width, height }, node) => {
         y = 0,
         width = 10,
         height = 10,
-        fill = 'white'
+        fill = 'white',
       } = element.props ?? {}
 
       if (kind === 'rect') {
@@ -225,7 +218,11 @@ export const renderSceneP5 = (s, { width, height }, node) => {
 const viewportTransform = (canvasWidth, canvasHeight, node) => {
   const { width: vw, height: vh } = node.viewport ?? { width: 160, height: 90 }
   const scale = Math.min(canvasWidth / vw, canvasHeight / vh)
-  return { scale, offsetX: (canvasWidth - vw * scale) / 2, offsetY: (canvasHeight - vh * scale) / 2 }
+  return {
+    scale,
+    offsetX: (canvasWidth - vw * scale) / 2,
+    offsetY: (canvasHeight - vh * scale) / 2,
+  }
 }
 
 // Canvas pixel coords -> logical viewport units (the space element x/y live in).
@@ -250,7 +247,12 @@ const elementBounds = (element) => {
     const baseHeight = height ?? baseWidth / aspect
     const halfWidth = (baseWidth / 2) * scale
     const halfHeight = (baseHeight / 2) * scale // x,y is the clipart's center
-    return { left: x - halfWidth, top: y - halfHeight, right: x + halfWidth, bottom: y + halfHeight }
+    return {
+      left: x - halfWidth,
+      top: y - halfHeight,
+      right: x + halfWidth,
+      bottom: y + halfHeight,
+    }
   }
   return null
 }
@@ -265,7 +267,8 @@ export const pickElement = (canvasWidth, canvasHeight, node, screenX, screenY) =
     if (element.enabled === false) continue
     const bounds = elementBounds(element)
     if (!bounds) continue
-    if (x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom) return element
+    if (x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom)
+      return element
   }
   return null
 }
