@@ -1,10 +1,22 @@
 {
   "type": "module",
   "scripts": {
-    "yolo": "node claude-yolo.js"
+    "yolo": "node claude-yolo.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "dotenv": "^17.4.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "eslint": "^9.39.4",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-vue": "^10.9.2",
+    "globals": "^17.6.0",
+    "prettier": "^3.8.4"
   }
 }

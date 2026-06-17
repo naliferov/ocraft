@@ -1,0 +1,29 @@
+# Dependencies & build output
+node_modules
+**/node_modules
+dist
+**/dist
+
+# Backend data plane — node bodies (script.js / content.html), state.json, and
+# assets. This is sandboxed user content + runtime state, NOT project source.
+backend/data
+backend/executions
+backend/state
+
+# Deno service — different runtime (JSR imports, Deno globals); format it with
+# deno's own tooling, not this Node toolchain.
+backend/transport
+
+# Generated / vendored
+package-lock.json
+**/package-lock.json
+
+# Docs & notes are hand-authored — don't let Prettier reflow them.
+*.md
+plans
+
+# Personal / local Claude settings (also gitignored)
+**/.claude
+
+# Non-JS experiment file
+js-engine/program.yo
