@@ -11,19 +11,6 @@
 // `x.ui` exists ONLY for the top-level run in the browser; nested `x.x(...)`
 // calls and any future backend runner get a ctx without `x.ui`.
 
-const PANEL_STYLE = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '10px',
-  padding: '12px',
-  marginBottom: '4px',
-  background: '#141414',
-  border: '1px solid #333',
-  borderRadius: '4px',
-  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-  color: '#d4d4d4',
-}
-
 const applyStyle = (element, style) => {
   for (const [key, value] of Object.entries(style)) element.style[key] = value
 }
@@ -141,7 +128,18 @@ const makeLog = ({ height = '300px' } = {}) => {
 // box appears above the editor — the panel shows up only when it has content.
 export function createScriptUi(mountElement) {
   const panel = document.createElement('div')
-  applyStyle(panel, PANEL_STYLE)
+  applyStyle(panel, {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    padding: '12px',
+    marginBottom: '4px',
+    background: '#141414',
+    border: '1px solid #333',
+    borderRadius: '4px',
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    color: '#d4d4d4',
+  })
 
   // Insert the panel lazily: the first added control reveals it, an unused
   // `x.ui` never does.
