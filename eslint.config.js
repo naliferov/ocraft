@@ -1,6 +1,6 @@
 // Flat ESLint config (ESLint v9). One root config covers every package — the
 // repo is ESM throughout. Prettier owns formatting; ESLint owns code quality +
-// the repo's naming conventions (see CLAUDE.md).
+// the repo's naming conventions (see README — Conventions & coding rules).
 import js from '@eslint/js'
 import globals from 'globals'
 import pluginVue from 'eslint-plugin-vue'
@@ -14,11 +14,11 @@ export default [
     ignores: [
       '**/node_modules/**',
       '**/dist/**',
-      'backend/data/**',
-      'backend/executions/**',
-      'backend/state/**',
-      'backend/transport/**',
-      'js-engine/program.yo',
+      'kernel/data/**',
+      'runtime/executions/**',
+      'runtime/state/**',
+      'ws-exchange/**',
+      'experiments/js-engine/program.yo',
     ],
   },
 
@@ -30,13 +30,12 @@ export default [
     files: ['**/*.js', '**/*.vue'],
     languageOptions: { ecmaVersion: 'latest', sourceType: 'module' },
     rules: {
-      // CLAUDE.md rule 1: no single-letter variable names. Enforced as a WARNING
-      // for now: the codebase has ~150 pre-existing single-letter names (graphics
-      // math, the `yo` interpreter, callback args), so erroring would turn
-      // `npm run lint` red and force a risky mass-rename bundled into this change.
-      // As a warning it guides new code and surfaces the debt (`npm run lint`);
-      // clean up incrementally, then bump to 'error'.
-      'id-length': ['warn', { min: 2, properties: 'never', exceptions: ['_'] }],
+      // README convention: no single-letter variable names, EXCEPT i/j/k as numeric
+      // loop counters (exempted below). The ~150 pre-existing single-letter names
+      // (callback args, catch errors, graphics math, the `yo` interpreter) were
+      // renamed to descriptive names; only i/j/k loop indices remain, by design.
+      // Kept as 'warn'; bump to 'error' to hard-enforce once it's proven stable.
+      'id-length': ['warn', { min: 2, properties: 'never', exceptions: ['_', 'i', 'j', 'k'] }],
       'no-unused-vars': [
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none' },

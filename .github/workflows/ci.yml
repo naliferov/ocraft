@@ -33,4 +33,4 @@ jobs:
              echo 'TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN' > .env && \
              git pull && \
              npm install && \
-             node cli.js run deploy"
+             node bin/cli.js run deploy"

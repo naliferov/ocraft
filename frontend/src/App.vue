@@ -83,7 +83,15 @@ const reparentNode = async ({ id, parentId }) => {
       <n-layout-sider :width="240" bordered content-style="padding: 10px 8px 0 8px;">
         <div class="tree-toolbar">
           <div class="tree-brand">
-            <span class="tree-logo">ocraft</span>
+            <span
+              class="tree-logo"
+              title="Home"
+              role="link"
+              tabindex="0"
+              @click="router.push('/')"
+              @keydown.enter="router.push('/')"
+              >ocraft</span
+            >
             <span class="tree-title">Nodes</span>
           </div>
           <button class="new-node" title="New root node" @click="createNode()">+ node</button>
@@ -157,6 +165,10 @@ const reparentNode = async ({ id, parentId }) => {
   font-weight: 700;
   font-size: 0.95em;
   letter-spacing: -0.02em;
+  cursor: pointer;
+}
+.tree-logo:hover {
+  opacity: 0.7;
 }
 .tree-title {
   font-size: 0.8em;

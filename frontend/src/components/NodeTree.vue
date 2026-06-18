@@ -19,9 +19,9 @@ const emit = defineEmits(['select', 'toggle', 'create', 'rename', 'remove', 'rep
 // is emitted up to the store, which flips the flag and persists it, so the choice
 // survives reloads; the tree re-renders reactively once the flag changes.
 // While searching, ignore the stored collapse flag so matched branches show.
-const isCollapsed = (n) => (props.expandAll ? false : !!n.collapsed)
-const toggle = (n) => emit('toggle', n.id)
-const isCategory = (n) => n.type === 'category'
+const isCollapsed = (node) => (props.expandAll ? false : !!node.collapsed)
+const toggle = (node) => emit('toggle', node.id)
+const isCategory = (node) => node.type === 'category'
 const isMatch = (node) =>
   !!props.query && (node.name || '').toLowerCase().includes(props.query.toLowerCase())
 

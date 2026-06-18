@@ -25,32 +25,32 @@ const client = new TelegramClient(new StringSession(sessionStr), apiId, apiHash,
 })
 
 async function resolveEntity(ref) {
-  const s = String(ref).trim()
-  if (/^@?[a-zA-Z]/.test(s)) {
+  const refText = String(ref).trim()
+  if (/^@?[a-zA-Z]/.test(refText)) {
     try {
-      return await client.getEntity(s.startsWith('@') ? s : '@' + s)
+      return await client.getEntity(refText.startsWith('@') ? refText : '@' + refText)
     } catch {
       /* fall through */
     }
     try {
-      return await client.getEntity(s)
+      return await client.getEntity(refText)
     } catch {
       /* fall through */
     }
   }
-  if (/^-?\d+$/.test(s)) {
+  if (/^-?\d+$/.test(refText)) {
     try {
-      return await client.getEntity(Number(s))
+      return await client.getEntity(Number(refText))
     } catch {
       /* fall through */
     }
   }
   const dialogs = await client.getDialogs({ limit: 200 })
   const match = dialogs.find(
-    (d) =>
-      String(d.id) === s ||
-      d.entity?.username?.toLowerCase() === s.replace(/^@/, '').toLowerCase() ||
-      d.title === s,
+    (dialog) =>
+      String(dialog.id) === refText ||
+      dialog.entity?.username?.toLowerCase() === refText.replace(/^@/, '').toLowerCase() ||
+      dialog.title === refText,
   )
   if (match) return match.entity
   throw new Error(`Could not resolve chat "${ref}"`)
@@ -62,26 +62,26 @@ async function main() {
   const msgs = await client.getMessages(entity, { ids })
   const dir = path.join(import.meta.dirname, 'downloads')
   fs.mkdirSync(dir, { recursive: true })
-  for (const m of msgs) {
-    if (!m || !m.media) {
-      console.log(`#${m?.id}: no media`)
+  for (const message of msgs) {
+    if (!message || !message.media) {
+      console.log(`#${message?.id}: no media`)
       continue
     }
-    const buf = await client.downloadMedia(m, {})
+    const buf = await client.downloadMedia(message, {})
     if (!buf?.length) {
-      console.log(`#${m.id}: empty download`)
+      console.log(`#${message.id}: empty download`)
       continue
     }
-    const ext = m.photo ? 'jpg' : m.document?.mimeType?.split('/')[1] || 'bin'
-    const file = path.join(dir, `media-${m.id}.${ext}`)
+    const ext = message.photo ? 'jpg' : message.document?.mimeType?.split('/')[1] || 'bin'
+    const file = path.join(dir, `media-${message.id}.${ext}`)
     fs.writeFileSync(file, buf)
-    console.log(`#${m.id}: saved ${file} (${buf.length} bytes)`)
+    console.log(`#${message.id}: saved ${file} (${buf.length} bytes)`)
   }
   await client.disconnect()
   process.exit(0)
 }
 
-main().catch((e) => {
-  console.error('error:', e?.message ?? e)
+main().catch((error) => {
+  console.error('error:', error?.message ?? error)
   process.exit(1)
 })

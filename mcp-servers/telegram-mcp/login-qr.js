@@ -26,7 +26,7 @@ if (!apiId || !apiHash) {
 }
 
 const rl = readline.createInterface({ input, output })
-const ask = (q) => rl.question(q)
+const ask = (prompt) => rl.question(prompt)
 
 const client = new TelegramClient(new StringSession(''), apiId, apiHash, {
   connectionRetries: 5,

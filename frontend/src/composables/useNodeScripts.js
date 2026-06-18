@@ -22,11 +22,9 @@ import { useNodesStore } from '../stores/nodes.js'
 // id -> Promise<module>. Cached so repeated calls don't re-fetch/re-import.
 // Cleared whenever a script is saved (see clearCache), so edits take effect.
 const moduleCache = new Map()
-const wasmCache = new Map()
 
 export function clearCache() {
   moduleCache.clear()
-  wasmCache.clear()
 }
 
 // Host functions an AssemblyScript module can import to talk to the page — this
@@ -73,24 +71,16 @@ function createWasmDebugImports(id) {
   }
 }
 
-// Compile (server-side) + instantiate a wasm node, returning its exports. Cached
-// by id like JS modules; cleared on save so edits take effect. Instantiated with
-// the debug imports above so the module can console.log / trace / assert.
+// Compile (server-side) + instantiate a wasm node, returning its exports. Fetched
+// and instantiated fresh on every call, with the debug imports above so the module
+// can console.log / trace / assert.
 async function loadWasmExports(id) {
-  if (!wasmCache.has(id)) {
-    wasmCache.set(
-      id,
-      (async () => {
-        const res = await fetch(`/api/nodes/${id}/wasm`)
-        if (!res.ok) throw new Error(`wasm compile failed:\n${await res.text()}`)
-        const { imports, useMemory } = createWasmDebugImports(id)
-        const { instance } = await WebAssembly.instantiate(await res.arrayBuffer(), imports)
-        useMemory(instance.exports.memory)
-        return instance.exports
-      })(),
-    )
-  }
-  return wasmCache.get(id)
+  const res = await fetch(`/api/nodes/${id}/wasm`)
+  if (!res.ok) throw new Error(`wasm compile failed:\n${await res.text()}`)
+  const { imports, useMemory } = createWasmDebugImports(id)
+  const { instance } = await WebAssembly.instantiate(await res.arrayBuffer(), imports)
+  useMemory(instance.exports.memory)
+  return instance.exports
 }
 
 async function loadModule(id) {
@@ -115,7 +105,7 @@ async function loadModule(id) {
 
 // Resolve a node id to a "name (id)" label for log prefixes, via the store.
 const nodeLabel = (id) => {
-  const node = useNodesStore().nodes.find((n) => n.id === id)
+  const node = useNodesStore().nodes.find((candidate) => candidate.id === id)
   return node?.name ? `${node.name} (${id})` : `node ${id}`
 }
 
@@ -157,7 +147,7 @@ const authStore = {
 function makeCtx(selfId, args, stack, ui) {
   return {
     args,
-    log: (...a) => console.log(`[${nodeLabel(selfId)}]`, ...a),
+    log: (...messages) => console.log(`[${nodeLabel(selfId)}]`, ...messages),
     auth: authStore,
     ...(ui ? { ui } : {}),
     // x.x(id, ...args) — run another node's script by its bare id.
@@ -172,7 +162,7 @@ function makeCtx(selfId, args, stack, ui) {
       // and returns its result, just like a JS node's default export. With no
       // main, hand back the exports so the caller picks a named function:
       // `const w = await x.x("10"); w.add(2, 3)`.
-      const target = useNodesStore().nodes.find((n) => n.id === id)
+      const target = useNodesStore().nodes.find((candidate) => candidate.id === id)
       if (target?.isWasm) {
         const ex = await loadWasmExports(id)
         return typeof ex.main === 'function' ? ex.main(...args) : ex
@@ -217,7 +207,7 @@ export async function runWasmNode(id) {
     console.log(`[${nodeLabel(id)}] wasm main() =`, result)
     return result
   }
-  const fns = Object.keys(ex).filter((k) => typeof ex[k] === 'function')
+  const fns = Object.keys(ex).filter((key) => typeof ex[key] === 'function')
   console.log(
     `[${nodeLabel(id)}] wasm ready — exports: ${fns.join(', ') || '(none)'}. Add a main() for Run to call one.`,
   )

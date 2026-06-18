@@ -51,8 +51,8 @@ server.registerTool(
         total: data.meta?.total ?? data.droplets.length,
         droplets: data.droplets.map(summarize),
       })
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -68,8 +68,8 @@ server.registerTool(
     try {
       const data = await doFetch(`/v2/droplets/${id}`)
       return ok(summarize(data.droplet))
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -109,8 +109,8 @@ server.registerTool(
     try {
       const data = await doFetch('/v2/droplets', { method: 'POST', body: args })
       return ok({ created: true, droplet: summarize(data.droplet) })
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -163,8 +163,8 @@ server.registerTool(
       }
       const data = await doFetch(`/v2/droplets/${id}/actions`, { method: 'POST', body })
       return ok({ action: data.action })
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -183,8 +183,8 @@ server.registerTool(
     try {
       await doFetch(`/v2/droplets/${id}`, { method: 'DELETE' })
       return ok({ deleted: true, id })
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -203,17 +203,17 @@ server.registerTool(
     try {
       const data = await doFetch('/v2/sizes', { query: { per_page: 200 } })
       return ok(
-        data.sizes.map((s) => ({
-          slug: s.slug,
-          vcpus: s.vcpus,
-          memory_mb: s.memory,
-          disk_gb: s.disk,
-          price_monthly: s.price_monthly,
-          available: s.available,
+        data.sizes.map((size) => ({
+          slug: size.slug,
+          vcpus: size.vcpus,
+          memory_mb: size.memory,
+          disk_gb: size.disk,
+          price_monthly: size.price_monthly,
+          available: size.available,
         })),
       )
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -229,9 +229,15 @@ server.registerTool(
   async () => {
     try {
       const data = await doFetch('/v2/regions', { query: { per_page: 200 } })
-      return ok(data.regions.map((r) => ({ slug: r.slug, name: r.name, available: r.available })))
-    } catch (e) {
-      return fail(e?.message ?? e)
+      return ok(
+        data.regions.map((region) => ({
+          slug: region.slug,
+          name: region.name,
+          available: region.available,
+        })),
+      )
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -254,15 +260,15 @@ server.registerTool(
       const query = type === 'user' ? { private: true, per_page: 200 } : { type, per_page: 200 }
       const data = await doFetch('/v2/images', { query })
       return ok(
-        data.images.map((i) => ({
-          slug: i.slug,
-          id: i.id,
-          distribution: i.distribution,
-          name: i.name,
+        data.images.map((image) => ({
+          slug: image.slug,
+          id: image.id,
+          distribution: image.distribution,
+          name: image.name,
         })),
       )
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -281,8 +287,8 @@ server.registerTool(
     try {
       const data = await doFetch('/v2/reserved_ips', { query: { per_page: 200 } })
       return ok(data.reserved_ips.map(summarizeReservedIp))
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -314,8 +320,8 @@ server.registerTool(
         body: { droplet_id, region },
       })
       return ok({ created: true, reserved_ip: summarizeReservedIp(data.reserved_ip) })
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -338,8 +344,8 @@ server.registerTool(
         body: { type: 'assign', droplet_id },
       })
       return ok({ action: data.action })
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -359,8 +365,8 @@ server.registerTool(
         body: { type: 'unassign' },
       })
       return ok({ action: data.action })
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -377,8 +383,8 @@ server.registerTool(
     try {
       await doFetch(`/v2/reserved_ips/${ip}`, { method: 'DELETE' })
       return ok({ released: true, ip })
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -390,7 +396,7 @@ async function main() {
   console.error('digitalocean-mcp: connected and ready.')
 }
 
-main().catch((e) => {
-  console.error('digitalocean-mcp fatal:', e?.message ?? e)
+main().catch((error) => {
+  console.error('digitalocean-mcp fatal:', error?.message ?? error)
   process.exit(1)
 })

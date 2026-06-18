@@ -30,33 +30,40 @@ const client = new TelegramClient(new StringSession(sessionStr), apiId, apiHash,
 })
 
 // JSON.stringify replacer: GramJS returns BigInt / Integer-like ids.
-const safe = (obj) => JSON.stringify(obj, (_k, v) => (typeof v === 'bigint' ? v.toString() : v), 2)
+const safe = (obj) =>
+  JSON.stringify(obj, (_k, value) => (typeof value === 'bigint' ? value.toString() : value), 2)
 
 const ok = (data) => ({ content: [{ type: 'text', text: safe(data) }] })
 const fail = (msg) => ({ isError: true, content: [{ type: 'text', text: String(msg) }] })
 
-const dialogKind = (d) =>
-  d.isChannel ? (d.entity?.broadcast ? 'channel' : 'supergroup') : d.isGroup ? 'group' : 'user'
+const dialogKind = (dialog) =>
+  dialog.isChannel
+    ? dialog.entity?.broadcast
+      ? 'channel'
+      : 'supergroup'
+    : dialog.isGroup
+      ? 'group'
+      : 'user'
 
 // Resolve a chat reference (@username, numeric id, or exact dialog title) to an entity.
 async function resolveEntity(ref) {
-  const s = String(ref).trim()
+  const reference = String(ref).trim()
   // Try username / direct id first.
-  if (/^@?[a-zA-Z]/.test(s)) {
+  if (/^@?[a-zA-Z]/.test(reference)) {
     try {
-      return await client.getEntity(s.startsWith('@') ? s : '@' + s)
+      return await client.getEntity(reference.startsWith('@') ? reference : '@' + reference)
     } catch {
       /* fall through */
     }
     try {
-      return await client.getEntity(s)
+      return await client.getEntity(reference)
     } catch {
       /* fall through */
     }
   }
-  if (/^-?\d+$/.test(s)) {
+  if (/^-?\d+$/.test(reference)) {
     try {
-      return await client.getEntity(Number(s))
+      return await client.getEntity(Number(reference))
     } catch {
       /* fall through */
     }
@@ -64,10 +71,10 @@ async function resolveEntity(ref) {
   // Fall back to matching a cached dialog by id, username, or exact title.
   const dialogs = await client.getDialogs({ limit: 200 })
   const match = dialogs.find(
-    (d) =>
-      String(d.id) === s ||
-      d.entity?.username?.toLowerCase() === s.replace(/^@/, '').toLowerCase() ||
-      d.title === s,
+    (dialog) =>
+      String(dialog.id) === reference ||
+      dialog.entity?.username?.toLowerCase() === reference.replace(/^@/, '').toLowerCase() ||
+      dialog.title === reference,
   )
   if (match) return match.entity
   throw new Error(
@@ -75,18 +82,18 @@ async function resolveEntity(ref) {
   )
 }
 
-const formatMessage = (m) => ({
-  id: m.id,
-  date: m.date ? new Date(m.date * 1000).toISOString() : null,
-  fromId: m.senderId ? String(m.senderId) : null,
-  sender: m.sender
-    ? m.sender.username
-      ? '@' + m.sender.username
-      : (m.sender.title ?? m.sender.firstName ?? null)
+const formatMessage = (message) => ({
+  id: message.id,
+  date: message.date ? new Date(message.date * 1000).toISOString() : null,
+  fromId: message.senderId ? String(message.senderId) : null,
+  sender: message.sender
+    ? message.sender.username
+      ? '@' + message.sender.username
+      : (message.sender.title ?? message.sender.firstName ?? null)
     : null,
-  text: m.message ?? m.text ?? '',
-  media: m.media ? m.media.className : null,
-  replyToMsgId: m.replyTo?.replyToMsgId ?? null,
+  text: message.message ?? message.text ?? '',
+  media: message.media ? message.media.className : null,
+  replyToMsgId: message.replyTo?.replyToMsgId ?? null,
 })
 
 const server = new McpServer({ name: 'telegram', version: '1.0.0' })
@@ -105,16 +112,16 @@ server.registerTool(
     try {
       const dialogs = await client.getDialogs({ limit })
       return ok(
-        dialogs.map((d) => ({
-          id: String(d.id),
-          title: d.title,
-          username: d.entity?.username ? '@' + d.entity.username : null,
-          type: dialogKind(d),
-          unread: d.unreadCount ?? 0,
+        dialogs.map((dialog) => ({
+          id: String(dialog.id),
+          title: dialog.title,
+          username: dialog.entity?.username ? '@' + dialog.entity.username : null,
+          type: dialogKind(dialog),
+          unread: dialog.unreadCount ?? 0,
         })),
       )
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -135,8 +142,8 @@ server.registerTool(
       const entity = await resolveEntity(chat)
       const msgs = await client.getMessages(entity, { limit })
       return ok(msgs.map(formatMessage))
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -165,8 +172,8 @@ server.registerTool(
         messages: msgs.map(formatMessage),
         oldestId: msgs.length ? msgs[msgs.length - 1].id : null,
       })
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -207,8 +214,8 @@ server.registerTool(
         }),
       )
       return ok((res.messages ?? []).map(formatMessage))
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -235,30 +242,34 @@ server.registerTool(
       const dir = outDir || path.join(import.meta.dirname, 'downloads')
       fs.mkdirSync(dir, { recursive: true })
       const results = []
-      for (const m of msgs) {
-        if (!m || !m.media) {
-          results.push({ id: m?.id ?? null, saved: false, reason: 'no media on this message' })
+      for (const message of msgs) {
+        if (!message || !message.media) {
+          results.push({
+            id: message?.id ?? null,
+            saved: false,
+            reason: 'no media on this message',
+          })
           continue
         }
-        const buf = await client.downloadMedia(m, {})
+        const buf = await client.downloadMedia(message, {})
         if (!buf || !buf.length) {
-          results.push({ id: m.id, saved: false, reason: 'empty download' })
+          results.push({ id: message.id, saved: false, reason: 'empty download' })
           continue
         }
-        const ext = m.photo ? 'jpg' : m.document?.mimeType?.split('/')[1] || 'bin'
-        const file = path.join(dir, `media-${m.id}.${ext}`)
+        const ext = message.photo ? 'jpg' : message.document?.mimeType?.split('/')[1] || 'bin'
+        const file = path.join(dir, `media-${message.id}.${ext}`)
         fs.writeFileSync(file, buf)
         results.push({
-          id: m.id,
+          id: message.id,
           saved: true,
           path: file,
           bytes: buf.length,
-          type: m.media.className,
+          type: message.media.className,
         })
       }
       return ok(results)
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -280,8 +291,8 @@ server.registerTool(
       const entity = await resolveEntity(chat)
       const sent = await client.sendMessage(entity, { message: text, replyTo: replyToMsgId })
       return ok(formatMessage(sent))
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -305,8 +316,8 @@ server.registerTool(
       const entity = await resolveEntity(chat)
       const sent = await client.sendFile(entity, { file: filePath, caption, replyTo: replyToMsgId })
       return ok(formatMessage(sent))
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -318,7 +329,7 @@ async function main() {
   console.error('telegram-mcp: connected and ready.')
 }
 
-main().catch((e) => {
-  console.error('telegram-mcp fatal:', e?.message ?? e)
+main().catch((error) => {
+  console.error('telegram-mcp fatal:', error?.message ?? error)
   process.exit(1)
 })

@@ -44,16 +44,20 @@ export function useTimeline(getNode) {
     }).toDestination()
 
     const synth = new Tone.Synth().connect(filter) // synth -> filter -> speakers
-    return { nodes: [synth, filter], trigger: (t) => synth.triggerAttackRelease(note, '16n', t) }
+    return {
+      nodes: [synth, filter],
+      trigger: (time) => synth.triggerAttackRelease(note, '16n', time),
+    }
   }
 
   const buildVoices = () => {
     disposeVoices()
-    for (const t of tracks.value) voices[t.name] = makeVoice(t)
+    for (const track of tracks.value) voices[track.name] = makeVoice(track)
   }
 
   const disposeVoices = () => {
-    for (const v of Object.values(voices)) v.nodes.forEach((n) => n.dispose())
+    for (const voice of Object.values(voices))
+      voice.nodes.forEach((audioNode) => audioNode.dispose())
     voices = {}
   }
 
@@ -68,9 +72,10 @@ export function useTimeline(getNode) {
     transport.loopEnd = `${bars.value}m`
     buildVoices()
     loop = new Tone.Loop((time) => {
-      const s = step % totalSteps.value
-      for (const t of tracks.value) {
-        if (Array.isArray(t.events) && t.events.includes(s)) voices[t.name]?.trigger(time)
+      const currentStep = step % totalSteps.value
+      for (const track of tracks.value) {
+        if (Array.isArray(track.events) && track.events.includes(currentStep))
+          voices[track.name]?.trigger(time)
       }
       step++
     }, '16n').start(0)
@@ -112,10 +117,10 @@ export function useTimeline(getNode) {
     step = 0
   }
 
-  const toggleStep = (track, s) => {
+  const toggleStep = (track, stepIndex) => {
     if (!Array.isArray(track.events)) track.events = []
-    const idx = track.events.indexOf(s)
-    if (idx === -1) track.events.push(s)
+    const idx = track.events.indexOf(stepIndex)
+    if (idx === -1) track.events.push(stepIndex)
     else track.events.splice(idx, 1)
   }
 

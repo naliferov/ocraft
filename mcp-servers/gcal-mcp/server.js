@@ -39,20 +39,23 @@ const ok = (data) => ({ content: [{ type: 'text', text: JSON.stringify(data, nul
 const fail = (msg) => ({ isError: true, content: [{ type: 'text', text: String(msg) }] })
 
 // Normalize a Calendar API event into a compact shape.
-const formatEvent = (e) => ({
-  id: e.id,
-  status: e.status,
-  summary: e.summary ?? null,
-  description: e.description ?? null,
-  location: e.location ?? null,
-  start: e.start?.dateTime ?? e.start?.date ?? null, // dateTime for timed events, date for all-day
-  end: e.end?.dateTime ?? e.end?.date ?? null,
-  allDay: !!e.start?.date,
-  organizer: e.organizer?.email ?? null,
-  attendees: (e.attendees ?? []).map((a) => ({ email: a.email, response: a.responseStatus })),
-  hangoutLink: e.hangoutLink ?? null,
-  htmlLink: e.htmlLink ?? null,
-  recurringEventId: e.recurringEventId ?? null,
+const formatEvent = (event) => ({
+  id: event.id,
+  status: event.status,
+  summary: event.summary ?? null,
+  description: event.description ?? null,
+  location: event.location ?? null,
+  start: event.start?.dateTime ?? event.start?.date ?? null, // dateTime for timed events, date for all-day
+  end: event.end?.dateTime ?? event.end?.date ?? null,
+  allDay: !!event.start?.date,
+  organizer: event.organizer?.email ?? null,
+  attendees: (event.attendees ?? []).map((attendee) => ({
+    email: attendee.email,
+    response: attendee.responseStatus,
+  })),
+  hangoutLink: event.hangoutLink ?? null,
+  htmlLink: event.htmlLink ?? null,
+  recurringEventId: event.recurringEventId ?? null,
 })
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
@@ -71,16 +74,16 @@ server.registerTool(
     try {
       const res = await calendar.calendarList.list()
       return ok(
-        (res.data.items ?? []).map((c) => ({
-          id: c.id,
-          summary: c.summary,
-          primary: !!c.primary,
-          accessRole: c.accessRole,
-          timeZone: c.timeZone,
+        (res.data.items ?? []).map((calendarEntry) => ({
+          id: calendarEntry.id,
+          summary: calendarEntry.summary,
+          primary: !!calendarEntry.primary,
+          accessRole: calendarEntry.accessRole,
+          timeZone: calendarEntry.timeZone,
         })),
       )
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -115,8 +118,8 @@ server.registerTool(
         maxResults,
       })
       return ok((res.data.items ?? []).map(formatEvent))
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -150,8 +153,8 @@ server.registerTool(
         maxResults,
       })
       return ok((res.data.items ?? []).map(formatEvent))
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -173,8 +176,8 @@ server.registerTool(
     try {
       const res = await calendar.events.get({ calendarId, eventId })
       return ok(formatEvent(res.data))
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -200,9 +203,11 @@ server.registerTool(
         requestBody: { timeMin, timeMax, items: calendarIds.map((id) => ({ id })) },
       })
       const cals = res.data.calendars ?? {}
-      return ok(Object.fromEntries(Object.entries(cals).map(([id, v]) => [id, v.busy ?? []])))
-    } catch (e) {
-      return fail(e?.message ?? e)
+      return ok(
+        Object.fromEntries(Object.entries(cals).map(([id, busyInfo]) => [id, busyInfo.busy ?? []])),
+      )
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -213,7 +218,7 @@ async function main() {
   console.error('gcal-mcp: connected and ready.')
 }
 
-main().catch((e) => {
-  console.error('gcal-mcp fatal:', e?.message ?? e)
+main().catch((error) => {
+  console.error('gcal-mcp fatal:', error?.message ?? error)
   process.exit(1)
 })

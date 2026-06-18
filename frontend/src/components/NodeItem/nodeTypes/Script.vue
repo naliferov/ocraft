@@ -29,21 +29,21 @@ const teardownUi = () => {
 // stored source stays clean ids. The `→` marker makes them safe to strip without
 // disturbing the user's own comments.
 const MARK = / ?\/\*→.*?\*\//g
-const stripMarks = (s) => s.replace(MARK, '')
-const annotate = (s) =>
-  stripMarks(s).replace(/(x\.x\(\s*["'])(\w+)(["'])/g, (_, pre, id, post) => {
-    const n = store.nodes.find((nd) => nd.id === id)
-    return `${pre}${id}${post} /*→${n?.name ?? '⚠ unknown'}*/`
+const stripMarks = (source) => source.replace(MARK, '')
+const annotate = (source) =>
+  stripMarks(source).replace(/(x\.x\(\s*["'])(\w+)(["'])/g, (_, pre, id, post) => {
+    const target = store.nodes.find((nd) => nd.id === id)
+    return `${pre}${id}${post} /*→${target?.name ?? '⚠ unknown'}*/`
   })
 
 // Other script nodes this one can call. Identity is the flat id; the label shows
 // the human name (+ id) so picking is readable without the id living in source.
 const callableOptions = computed(() =>
   store.nodes
-    .filter((n) => n.type === 'script' && n.id !== props.node.id)
-    .map((n) => ({
-      label: `${n.name || '(unnamed)'}${n.isWasm ? ' ⚙' : ''}  ·  ${n.id}`,
-      value: n.id,
+    .filter((candidate) => candidate.type === 'script' && candidate.id !== props.node.id)
+    .map((candidate) => ({
+      label: `${candidate.name || '(unnamed)'}${candidate.isWasm ? ' ⚙' : ''}  ·  ${candidate.id}`,
+      value: candidate.id,
     })),
 )
 
@@ -100,8 +100,8 @@ const insertCall = (id) => {
   const el = txtAreaRef.value
   const start = el?.selectionStart ?? scriptCode.value.length
   const end = el?.selectionEnd ?? start
-  const n = store.nodes.find((nd) => nd.id === id)
-  const snippet = `x.x("${id}" /*→${n?.name ?? '⚠ unknown'}*/)`
+  const target = store.nodes.find((nd) => nd.id === id)
+  const snippet = `x.x("${id}" /*→${target?.name ?? '⚠ unknown'}*/)`
   scriptCode.value = scriptCode.value.slice(0, start) + snippet + scriptCode.value.slice(end)
   insertTarget.value = null
   nextTick(() => {
@@ -111,10 +111,10 @@ const insertCall = (id) => {
   })
 }
 
-const onKeydown = (e) => {
-  if (e.key === 'Tab') {
-    e.preventDefault()
-    const el = e.target
+const onKeydown = (event) => {
+  if (event.key === 'Tab') {
+    event.preventDefault()
+    const el = event.target
     const start = el.selectionStart
     const end = el.selectionEnd
     scriptCode.value = scriptCode.value.slice(0, start) + '  ' + scriptCode.value.slice(end)

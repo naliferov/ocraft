@@ -1,18 +1,50 @@
-/* @font-face {
-  font-family: 'JetBrains Mono';
-  src: url('../font/JetBrainsMono-Regular.woff2') format('woff2');
+/* Body reading font — Inter (designed for screen legibility). Used by html nodes. */
+@font-face {
+  font-family: 'Inter';
+  src: url('../assets/font/Inter-400.woff2') format('woff2');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
-
 @font-face {
-  font-family: 'JetBrains Mono';
-  src: url('../font/JetBrainsMono-Bold.woff2') format('woff2');
+  font-family: 'Inter';
+  src: url('../assets/font/Inter-600.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('../assets/font/Inter-700.woff2') format('woff2');
   font-weight: 700;
   font-style: normal;
   font-display: swap;
-} */
+}
+
+/* Code font — JetBrains Mono. Used by the script editors + raw-HTML source.
+   (Was commented out + pointed at a stale ../font/ path, so the editors had been
+   falling back to the OS monospace — now actually loaded.) */
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('../assets/font/JetBrainsMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('../assets/font/JetBrainsMono-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('../assets/font/JetBrainsMono-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
 
 body {
   color: #2e2e2c;

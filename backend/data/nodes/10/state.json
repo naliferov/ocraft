@@ -1,6 +1,0 @@
-{
-  "name": "wasm-add-fn",
-  "type": "script",
-  "isWasm": true,
-  "parentId": "3"
-}

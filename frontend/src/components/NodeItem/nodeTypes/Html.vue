@@ -122,10 +122,13 @@ const cancelLink = () => {
   savedRange = null
 }
 
-const escapeHtml = (s) =>
-  s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
+const escapeHtml = (text) =>
+  text.replace(
+    /[&<>"]/g,
+    (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char],
+  )
 
-const normalizeUrl = (u) => (/^(https?:|mailto:|tel:|#|\/)/i.test(u) ? u : `https://${u}`)
+const normalizeUrl = (url) => (/^(https?:|mailto:|tel:|#|\/)/i.test(url) ? url : `https://${url}`)
 
 const applyLink = () => {
   const raw = linkUrl.value.trim()
@@ -285,9 +288,14 @@ const applyLink = () => {
   overflow: auto;
   box-sizing: border-box;
   padding: 14px 16px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 14px;
-  line-height: 1.7;
+  font-family:
+    'Inter',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  font-size: 18px;
+  line-height: 1.6;
   /* HTML content is a document — render it (view + rich edit) on a white page so
      user markup that brings no background of its own, with default black text,
      looks the way it would in a browser instead of light-on-black. */
@@ -305,7 +313,9 @@ const applyLink = () => {
    scroll container, so narrowing it gives a centered "document page" look. */
 .body.view.readable {
   width: 100%;
-  max-width: 760px;
+  /* ~66 characters per line (the comfortable reading measure). `ch` ties the
+     line length to the font size, so it stays ~66 CPL whatever the size. */
+  max-width: 66ch;
   margin-inline: 0;
 }
 /* Raw HTML source: a light editor too (inherits .body's white page), just monospace. */
@@ -320,12 +330,12 @@ const applyLink = () => {
 
 /* Rendered HTML lives outside the scoped template, so style it via :deep. */
 .body :deep(h1) {
-  font-size: 22px;
-  margin: 12px 0 6px;
+  font-size: 28px;
+  margin: 14px 0 6px;
 }
 .body :deep(h2) {
-  font-size: 18px;
-  margin: 10px 0 6px;
+  font-size: 22px;
+  margin: 12px 0 6px;
 }
 .body :deep(blockquote) {
   margin: 8px 0;

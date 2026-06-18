@@ -89,26 +89,29 @@ async function withMailboxRW(client, mailbox, fn) {
 // flag rather than hard-coding the English "[Gmail]/All Mail".
 async function resolveAllMail(client) {
   const boxes = await client.list()
-  const all = boxes.find((b) => b.specialUse === '\\All')
+  const all = boxes.find((box) => box.specialUse === '\\All')
   return all?.path || '[Gmail]/All Mail'
 }
 
 // Trash is localized too; resolve it via the \Trash special-use flag.
 async function resolveTrash(client) {
   const boxes = await client.list()
-  const trash = boxes.find((b) => b.specialUse === '\\Trash')
+  const trash = boxes.find((box) => box.specialUse === '\\Trash')
   return trash?.path || '[Gmail]/Trash'
 }
 
 // Format an envelope address list ([{ name, address }]) as "Name <email>" strings.
 const fmtAddrs = (list) =>
-  (list ?? []).map((a) => (a.name ? `${a.name} <${a.address}>` : a.address)).filter(Boolean)
+  (list ?? [])
+    .map((addr) => (addr.name ? `${addr.name} <${addr.address}>` : addr.address))
+    .filter(Boolean)
 
 // Walk a bodyStructure tree and collect attachment-like parts (those with a
 // filename or an "attachment" disposition), keyed by their IMAP part id.
 function collectAttachments(node, out = []) {
   if (!node) return out
-  if (Array.isArray(node.childNodes)) node.childNodes.forEach((c) => collectAttachments(c, out))
+  if (Array.isArray(node.childNodes))
+    node.childNodes.forEach((child) => collectAttachments(child, out))
   const filename = node.dispositionParameters?.filename || node.parameters?.name || null
   const isAttachment = node.disposition === 'attachment' || (!!filename && node.part)
   if (isAttachment && node.part) {
@@ -150,16 +153,16 @@ server.registerTool(
       return await withClient(async (client) => {
         const boxes = await client.list()
         return ok(
-          boxes.map((b) => ({
-            path: b.path,
-            name: b.name,
-            specialUse: b.specialUse ?? null,
-            subscribed: b.subscribed ?? null,
+          boxes.map((box) => ({
+            path: box.path,
+            name: box.name,
+            specialUse: box.specialUse ?? null,
+            subscribed: box.subscribed ?? null,
           })),
         )
       })
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -200,12 +203,12 @@ server.registerTool(
           })) {
             out.push(fmtSummary(msg))
           }
-          out.sort((a, b) => (b.uid ?? 0) - (a.uid ?? 0)) // newest first
+          out.sort((left, right) => (right.uid ?? 0) - (left.uid ?? 0)) // newest first
           return ok(out)
         }),
       )
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -238,12 +241,12 @@ server.registerTool(
           )) {
             out.push(fmtSummary(msg))
           }
-          out.sort((a, b) => (b.uid ?? 0) - (a.uid ?? 0))
+          out.sort((left, right) => (right.uid ?? 0) - (left.uid ?? 0))
           return ok({ mailbox: box, count: out.length, messages: out })
         })
       })
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -296,8 +299,8 @@ server.registerTool(
           })
         }),
       )
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -339,8 +342,8 @@ server.registerTool(
           })
         }),
       )
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -379,8 +382,8 @@ server.registerTool(
           return ok({ deleted: true, uid, from: mailbox, movedTo: trash })
         })
       })
-    } catch (e) {
-      return fail(e?.message ?? e)
+    } catch (error) {
+      return fail(error?.message ?? error)
     }
   },
 )
@@ -391,7 +394,7 @@ async function main() {
   console.error('gmail-mcp: connected and ready.')
 }
 
-main().catch((e) => {
-  console.error('gmail-mcp fatal:', e?.message ?? e)
+main().catch((error) => {
+  console.error('gmail-mcp fatal:', error?.message ?? error)
   process.exit(1)
 })

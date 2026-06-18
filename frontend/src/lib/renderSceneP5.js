@@ -7,11 +7,11 @@ const applyPixelDelta = (pixels, index, delta) => {
 }
 
 const getBaseGrainColor = (rangeColor) => {
-  const t = Math.random()
+  const mix = Math.random()
   return [
-    rangeColor.min[0] + t * (rangeColor.max[0] - rangeColor.min[0]),
-    rangeColor.min[1] + t * (rangeColor.max[1] - rangeColor.min[1]),
-    rangeColor.min[2] + t * (rangeColor.max[2] - rangeColor.min[2]),
+    rangeColor.min[0] + mix * (rangeColor.max[0] - rangeColor.min[0]),
+    rangeColor.min[1] + mix * (rangeColor.max[1] - rangeColor.min[1]),
+    rangeColor.min[2] + mix * (rangeColor.max[2] - rangeColor.min[2]),
   ]
 }
 
@@ -30,19 +30,19 @@ const getGrainDelta = ({ baseColor, color, intensity }) => {
   return [noise, noise, noise]
 }
 
-const applyGrain = (s, props) => {
+const applyGrain = (sketch, props) => {
   const { rangeColor, intensity, color, amount = 1, grainSize = 10 } = props ?? {}
   const clampedAmount = Math.min(1, Math.max(0, amount))
   if (clampedAmount <= 0) return
 
   const baseColor = rangeColor ? getBaseGrainColor(rangeColor) : null
 
-  s.loadPixels()
+  sketch.loadPixels()
 
-  const d = s.pixelDensity()
-  const width = s.width * d
-  const height = s.height * d
-  const buf = s.pixels
+  const density = sketch.pixelDensity()
+  const width = sketch.width * density
+  const height = sketch.height * density
+  const buf = sketch.pixels
 
   // The image is tiled into grid-aligned grainSize×grainSize cells; a tinted cell
   // gets one delta applied to its whole block.
@@ -83,7 +83,7 @@ const applyGrain = (s, props) => {
     }
   }
 
-  s.updatePixels()
+  sketch.updatePixels()
 }
 
 // --- Clipart (SVG) elements -------------------------------------------------
@@ -139,25 +139,39 @@ const getClipart = (src) => {
   return entry
 }
 
-const drawClipart = (s, node) => {
-  const { src, x = 0, y = 0, width, height, scale = 1, rotation = 0 } = node.props ?? {}
+const drawClipart = (sketch, node) => {
+  const {
+    src,
+    x: centerX = 0,
+    y: centerY = 0,
+    width,
+    height,
+    scale = 1,
+    rotation = 0,
+  } = node.props ?? {}
   if (!src) return
   const entry = getClipart(src)
   if (entry.status !== 'ready') return // not loaded yet; a later frame will draw it
 
-  const w = width ?? (height != null ? height * entry.aspect : 40)
-  const h = height ?? w / entry.aspect
+  const drawWidth = width ?? (height != null ? height * entry.aspect : 40)
+  const drawHeight = height ?? drawWidth / entry.aspect
 
-  s.push()
-  s.translate(x, y) // x,y = center, so rotation/scale pivot on the clipart's middle
-  if (rotation) s.rotate((rotation * Math.PI) / 180)
-  if (scale !== 1) s.scale(scale)
-  s.drawingContext.drawImage(entry.canvas, -w / 2, -h / 2, w, h)
-  s.pop()
+  sketch.push()
+  sketch.translate(centerX, centerY) // center, so rotation/scale pivot on the clipart's middle
+  if (rotation) sketch.rotate((rotation * Math.PI) / 180)
+  if (scale !== 1) sketch.scale(scale)
+  sketch.drawingContext.drawImage(
+    entry.canvas,
+    -drawWidth / 2,
+    -drawHeight / 2,
+    drawWidth,
+    drawHeight,
+  )
+  sketch.pop()
 }
 
-export const renderSceneP5 = (s, { width, height }, node) => {
-  s.clear()
+export const renderSceneP5 = (sketch, { width, height }, node) => {
+  sketch.clear()
 
   const { width: vw, height: vh } = node.viewport ?? { width: 160, height: 90 }
   const scale = Math.min(width / vw, height / vh)
@@ -165,49 +179,51 @@ export const renderSceneP5 = (s, { width, height }, node) => {
   const offsetX = (width - vw * scale) / 2
   const offsetY = (height - vh * scale) / 2
 
-  s.push()
-  s.translate(offsetX, offsetY)
-  s.scale(scale)
+  sketch.push()
+  sketch.translate(offsetX, offsetY)
+  sketch.scale(scale)
 
   // Draw back-to-front by z (stable: equal-z keeps authoring/array order).
-  const elements = [...(node.elements ?? [])].sort((a, b) => (a.z ?? 0) - (b.z ?? 0))
+  const elements = [...(node.elements ?? [])].sort(
+    (first, second) => (first.z ?? 0) - (second.z ?? 0),
+  )
 
   for (const element of elements) {
     if (element.enabled === false) continue
     if (element.type === 'background' && element.props.fill) {
-      s.noStroke()
-      s.fill(element.props.fill)
-      s.rect(0, 0, vw, vh)
+      sketch.noStroke()
+      sketch.fill(element.props.fill)
+      sketch.rect(0, 0, vw, vh)
     }
 
     if (element.type === 'shape') {
       const {
         kind = 'rect',
-        x = 0,
-        y = 0,
+        x: shapeX = 0,
+        y: shapeY = 0,
         width = 10,
         height = 10,
         fill = 'white',
       } = element.props ?? {}
 
       if (kind === 'rect') {
-        s.noStroke()
-        s.fill(fill)
-        s.rect(x, y, width, height)
+        sketch.noStroke()
+        sketch.fill(fill)
+        sketch.rect(shapeX, shapeY, width, height)
       }
     }
 
     if (element.type === 'clipart') {
-      drawClipart(s, element)
+      drawClipart(sketch, element)
     }
   }
 
-  s.pop()
+  sketch.pop()
 
   for (const effect of node.effects ?? []) {
     if (effect.enabled === false) continue
     if (effect.type === 'grain') {
-      applyGrain(s, effect.props)
+      applyGrain(sketch, effect.props)
     }
   }
 }
@@ -237,21 +253,21 @@ export const screenToLogical = (canvasWidth, canvasHeight, node, screenX, screen
 // the unrotated extent, which is good enough for grabbing.
 const elementBounds = (element) => {
   if (element.type === 'shape') {
-    const { x = 0, y = 0, width = 10, height = 10 } = element.props ?? {}
-    return { left: x, top: y, right: x + width, bottom: y + height }
+    const { x: shapeX = 0, y: shapeY = 0, width = 10, height = 10 } = element.props ?? {}
+    return { left: shapeX, top: shapeY, right: shapeX + width, bottom: shapeY + height }
   }
   if (element.type === 'clipart') {
-    const { src, x = 0, y = 0, width, height, scale = 1 } = element.props ?? {}
+    const { src, x: centerX = 0, y: centerY = 0, width, height, scale = 1 } = element.props ?? {}
     const aspect = (src ? clipartCache.get(src)?.aspect : null) ?? 1
     const baseWidth = width ?? (height != null ? height * aspect : 40)
     const baseHeight = height ?? baseWidth / aspect
     const halfWidth = (baseWidth / 2) * scale
-    const halfHeight = (baseHeight / 2) * scale // x,y is the clipart's center
+    const halfHeight = (baseHeight / 2) * scale // center is the clipart's center
     return {
-      left: x - halfWidth,
-      top: y - halfHeight,
-      right: x + halfWidth,
-      bottom: y + halfHeight,
+      left: centerX - halfWidth,
+      top: centerY - halfHeight,
+      right: centerX + halfWidth,
+      bottom: centerY + halfHeight,
     }
   }
   return null
@@ -260,14 +276,27 @@ const elementBounds = (element) => {
 // Topmost draggable element at a canvas point, or null. Front-to-back is the
 // render order (by z, stable) reversed, so the visually top element wins.
 export const pickElement = (canvasWidth, canvasHeight, node, screenX, screenY) => {
-  const { x, y } = screenToLogical(canvasWidth, canvasHeight, node, screenX, screenY)
-  const ordered = [...(node.elements ?? [])].sort((a, b) => (a.z ?? 0) - (b.z ?? 0))
+  const { x: logicalX, y: logicalY } = screenToLogical(
+    canvasWidth,
+    canvasHeight,
+    node,
+    screenX,
+    screenY,
+  )
+  const ordered = [...(node.elements ?? [])].sort(
+    (first, second) => (first.z ?? 0) - (second.z ?? 0),
+  )
   for (let index = ordered.length - 1; index >= 0; index--) {
     const element = ordered[index]
     if (element.enabled === false) continue
     const bounds = elementBounds(element)
     if (!bounds) continue
-    if (x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom)
+    if (
+      logicalX >= bounds.left &&
+      logicalX <= bounds.right &&
+      logicalY >= bounds.top &&
+      logicalY <= bounds.bottom
+    )
       return element
   }
   return null

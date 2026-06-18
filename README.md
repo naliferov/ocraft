@@ -8,7 +8,7 @@ Built framework-free on plain Node.js (ESM), with a Vue 3 + p5.js editor on top.
 
 ## The idea — a filesystem of typed nodes
 
-Everything in ocraft is a **node**. On disk a node is a small folder, `backend/data/nodes/<id>/`, holding:
+Everything in ocraft is a **node**. On disk a node is a small folder, `kernel/data/nodes/<id>/`, holding:
 
 - **metadata** in `state.json` (`name`, `type`, `parentId`, …), and
 - an optional **body** sidecar — the "file contents" — resolved by type: `script.js` for a `script` node, `content.html` for an `html` node. Bodies are kept out of the node-list payload and fetched on open.
@@ -21,7 +21,8 @@ Four properties make this a small OS-like substrate rather than just a document 
   | type | what it's for | body |
   |------|---------------|------|
   | `html` | documents / notes — the knowledge base | `content.html` |
-  | `scene` | an animated audio-visual: shapes + post-effects on a p5.js canvas, timed to a Tone.js step sequencer | — |
+  | `scene2d` | an animated audio-visual: shapes + post-effects on a p5.js canvas, timed to a Tone.js step sequencer | — |
+  | `scene3d` | a Three.js 3D scene — meshes, lights, and a camera built from JSON, with a render loop | — |
   | `script` | a **program** — JavaScript or AssemblyScript→WASM, run on demand | `script.js` |
   | `category` | a folder that just holds children | — |
   | `ai-chat` | an embedded agent (Claude Agent SDK) | — |
@@ -38,7 +39,8 @@ test/
   websocket-tester     (script — a program with its own UI)
   adder                (script — compiled to WASM)
 scenes/
-  intro                (scene — p5.js + Tone.js)
+  intro                (scene2d — p5.js + Tone.js)
+  hello 3d             (scene3d — Three.js)
 ```
 
 *(Shape is real; names are illustrative.)*
@@ -52,31 +54,34 @@ A `script` node is a module: `export default async (x) => { … }`. When you Run
 - **`x.ui`** — mount real DOM controls (inputs, buttons, a live log) above the editor, so a script node can be a little **app** (the WebSocket tester is one).
 - **`x.args`, `x.log`** — invocation arguments and labelled logging.
 
-A script can also be **AssemblyScript**: the backend compiles its source to WebAssembly on demand (`GET /api/nodes/:id/wasm`), the browser instantiates it, and a `main()` export is the Run entrypoint (the WASM analog of `export default`). WASM nodes are callable from other nodes through `x.x` just like JS ones.
+A script can also be **AssemblyScript**: the kernel compiles its source to WebAssembly on demand (`GET /api/nodes/:id/wasm`), the browser instantiates it, and a `main()` export is the Run entrypoint (the WASM analog of `export default`). WASM nodes are callable from other nodes through `x.x` just like JS ones.
 
 > **Scope, honestly:** node scripts run in the **browser** today, with no sandbox and no resource limits — composition and a UI surface exist; isolation does not. A headless runner (so the scheduler can execute nodes) and sandboxed, resource-capped execution are on the [Roadmap](#roadmap), not built. The `x` context is kept deliberately small so it can be re-implemented backend-side later.
 
 ## The system around the nodes
 
-Four surfaces, one node store. They're independent apps and reach the store only over `/api/*` (HTTP, port 3001):
+Four surfaces, one node store. They're independent; the editor reaches the store over `/api/*` (HTTP, port 3001), while runtime tasks can also touch the node files directly:
 
-- **Node store + API** (`backend/server.js`) — the source of truth: a tiny, framework-free HTTP server doing CRUD on the node folders. Everything else is a client of it.
-- **Visual editor** (`frontend/`) — *one* client: a Vue 3 tree browser plus a per-type editor/preview (p5.js for scenes, a code editor for scripts, rich text for html). The app is literally a node router — just `/` and `/node/:id`.
-- **Scheduler + executor + proc manager** (`cli.js` + `backend/`) — the automation layer: cron-like **jobs** (finite *entries* the executor runs to completion) plus a **proc manager** that supervises long-running processes (start/stop/restart/status/logs).
+- **Node store + API** (`kernel/api.js` + `kernel/data/`) — the source of truth: a tiny, framework-free HTTP server doing CRUD on the node folders. Everything else is a client of it.
+- **Visual editor** (`frontend/`) — *one* client: a Vue 3 tree browser plus a per-type editor/preview (p5.js / Three.js for scenes, a code editor for scripts, rich text for html). The app is literally a node router — just `/` and `/node/:id`.
+- **Tasks, scheduler & services** (`bin/cli.js` + `runtime/`) — the automation layer, split by lifecycle: **tasks** are finite (run to completion via the executor; the scheduler fires them on a cadence), **services** are long-running processes the service manager supervises (start/stop/restart/status/logs). A task *must terminate*; a service *stays up*.
 - **MCP servers** (`mcp-servers/`) — external I/O for an AI assistant: Telegram, Gmail, Google Calendar, DigitalOcean. Registered in `.mcp.json`, unrelated to the scheduler.
 
 ### Layout
 
 ```
 ocraft/
-  cli.js            # CLI entry point (scheduler, executor, proc manager)
-  backend/          # Node store + API server, scheduler/executor, proc manager, data store
+  bin/              # entry scripts — cli.js (tasks/scheduler/services) · yolo.js (Docker launcher)
+  kernel/           # the node store (data/) + its HTTP API (api.js) — the source of truth
+  runtime/          # automation engine — task executor/scheduler, service supervisor, tasks/, services/
   frontend/         # Vue 3 + p5.js visual editor — one client of the node store
+  ws-exchange/      # remote Deno WS relay (deployed to Deno Deploy)
   mcp-servers/      # Standalone MCP servers
     telegram-mcp/   #   read/search a Telegram account (GramJS / MTProto)
     gmail-mcp/      #   read/search Gmail
     gcal-mcp/       #   read Google Calendar (service account, read-only)
     digitalocean-mcp/ # manage DigitalOcean droplets / infra
+  experiments/      # js-engine — the `yo` toy interpreter (+ future experiments)
   .claude/skills/   # Reusable agent skills (daily-report, youtube-transcribe, …)
   plans/            # Longer-form design notes
   CLAUDE.md         # Guidance for AI coding agents (roadmap lives at the bottom of this README)
@@ -92,52 +97,48 @@ ocraft/
 ### Setup
 
 ```bash
-npm install                 # root deps (dotenv, MCP SDK)
-cd backend && npm install   # only needed for image-optimize entries (sharp)
+npm install                 # root deps — API server, tasks (sharp), MCP SDK, lint
 cd frontend && npm install  # editor deps
 ```
 
 ### Run the editor
 
 ```bash
-cd frontend
-npm run dev      # Vite dev server; auto-spawns the backend API server on port 3001
+node bin/cli.js service start api   # node API server (kernel/api.js) on :3001
+cd frontend && npm run dev          # Vite dev server; proxies /api to :3001
 npm run build
 ```
 
-The backend API server (`backend/server.js`) reads/writes node JSON under `backend/data/nodes/` and can also run standalone with `node backend/server.js`. See [`frontend/CLAUDE.md`](frontend/CLAUDE.md) for editor internals.
+The node API server (`kernel/api.js`) reads/writes node JSON under `kernel/data/nodes/` and can also run standalone with `node kernel/api.js`. It runs as a managed service (`api`); Vite only proxies `/api` to it.
 
 ## Reference
 
-### Scheduler & CLI
+### Tasks vs services
 
-The executor loads an entry module from `backend/entries/<name>.js`, runs its exported `run(ctx)`, and writes a record to `backend/executions/`. The scheduler (`backend/scheduler.js`) defines `jobs[]` and runs the ones that are due, tracking `lastRunAt` per job.
+The automation layer splits cleanly by **lifecycle**:
 
-```bash
-node cli.js run <entry-name> [args...]   # run a single entry once
-node cli.js start-scheduler              # run all due jobs once (call periodically via cron)
-node cli.js list-executions              # print recent execution log
-```
-
-Each entry receives a `ctx`: `args`, `env`, `log(msg)`, persistent `state.load()/save()`, and `time.now()`. Existing entries include `telegram-reminder`, `telegram-poll`, `img-optimize[-dir]`, `import-thinktank` (Obsidian vault → nodes), `do-droplet-up` / `do-droplet-down`, `deploy`, `every-hour`, and `test`.
-
-### Proc manager
-
-For long-running processes (e.g. the frontend dev server, a ticker), one config file per process lives in `backend/procs/`, discovered like entries. Runtime state and logs are kept in `backend/state/procs/`.
+- A **task** is **finite** — it runs to completion and exits. It lives in `runtime/tasks/<name>.js` (exports `run(ctx)`), is run by the executor (which writes a record to `runtime/executions/` and enforces a timeout — *a task must terminate*), and the **scheduler** (`runtime/scheduler.js`) fires it on an interval / cron-like schedule via `jobs[]`.
+- A **service** is **long-running** — it stays up until stopped. It lives in `runtime/services/<id>.js` (a `{ cmd, args, cwd, env }` config) and is supervised by the service manager; runtime state + logs live in `runtime/state/services/`.
 
 ```bash
-node cli.js proc list                  # show configured procs and status
-node cli.js proc status <id>
-node cli.js proc start <id>
-node cli.js proc stop <id>
-node cli.js proc restart <id>
-node cli.js proc logs <id> [lines]     # tail the proc log
-node cli.js proc clear-logs <id>
+# tasks (finite)
+node bin/cli.js run <task-name> [args...]    # run one task to completion
+node bin/cli.js start-scheduler              # run all due tasks once (call from cron)
+node bin/cli.js scheduler-loop               # run the scheduler as a daemon (the `scheduler` service)
+node bin/cli.js list-executions              # print recent task executions
+
+# services (long-running)
+node bin/cli.js service list                 # configured services + status
+node bin/cli.js service <start|stop|restart|status> <id>
+node bin/cli.js service logs <id> [lines]    # tail the service log
+node bin/cli.js service clear-logs <id>
 ```
+
+Each task receives a `ctx`: `args`, `env`, `log(msg)`, persistent `state.load()/save()`, and `time.now()` (and may export `timeoutMs` to widen its budget). Existing tasks: `telegram-reminder`, `telegram-poll`, `img-optimize[-dir]`, `import-thinktank` (Obsidian vault → nodes), `do-droplet-up` / `do-droplet-down`, `deploy`, `every-hour`, `test`. Configured services: `api` (the node API server), `frontend` (Vite), `scheduler` (the daemon), `ticker`.
 
 ### Importing notes (the knowledge base)
 
-`node cli.js run import-thinktank [vaultPath]` migrates an Obsidian Markdown vault into `html` nodes under a `notes` category: wikilinks become internal `/node/:id` links, the folder hierarchy is rebuilt from a map-of-content note via `parentId`, and embedded images are optimized into `data/assets/img/optimized/`. It is idempotent (wipe-on-rerun) and writes a manifest. Once imported, **the nodes are the source of truth** — edit them in the editor, not the original Markdown. Re-running is **destructive** — it wipes the prior import, regenerates from the source, and reassigns node ids, discarding any in-place edits — so to change a migrated note, edit the node; never re-run to tweak content. Private / credential notes are deliberately excluded (the importer's `EXCLUDED` set) and must never be migrated into this public repo.
+`node bin/cli.js run import-thinktank [vaultPath]` migrates an Obsidian Markdown vault into `html` nodes under a `notes` category: wikilinks become internal `/node/:id` links, the folder hierarchy is rebuilt from a map-of-content note via `parentId`, and embedded images are optimized into `kernel/data/assets/img/optimized/`. It is idempotent (wipe-on-rerun) and writes a manifest. Once imported, **the nodes are the source of truth** — edit them in the editor, not the original Markdown. Re-running is **destructive** — it wipes the prior import, regenerates from the source, and reassigns node ids, discarding any in-place edits — so to change a migrated note, edit the node; never re-run to tweak content. Private / credential notes are deliberately excluded (the importer's `EXCLUDED` set) and must never be migrated into this public repo.
 
 ### MCP servers
 
@@ -150,23 +151,41 @@ Standalone Model Context Protocol servers in `mcp-servers/`, registered in [`.mc
 
 > **Secrets:** `.env` files, Telegram session strings, and the Google service-account JSON key are git-ignored and must never be committed. The `.env.example` files are placeholders only. The `POST /api/ai-chat` endpoint runs the Claude Agent SDK with bypassed permissions and is **localhost / single-user only** — never expose this server to a network.
 
+## Conventions & coding rules
+
+Follow these when writing or editing code here (it's `.js` everywhere — every package is ESM):
+
+- **Never use the `.mjs` extension.** Every package here is ESM already (`"type": "module"` in package.json), so plain `.js` is ESM. Use `.js` for all JavaScript files — scripts, helpers, one-offs, everything.
+- **Develop on `main` — don't create feature branches.** Build features directly on `main`; do not `git checkout -b` a feature/topic branch for development. (This overrides the generic "branch before committing on the default branch" default for this repo.)
+- **No single-letter variable names — except `i`/`j`/`k` as numeric loop counters.** Use a descriptive name for every binding — including callback parameters, `.map`/`.filter`/`.find` args, and regex matches. Write `const droplet = await getDroplet(id)`, not `const d = …`; `images.filter((image) => …)`, not `(i) => …`. The name should say what the value *is*. The one allowed exception: a classic numeric loop index may be `i` (nested loops: `j`, `k`), e.g. `for (let i = 0; i < count; i++)` — ESLint's `id-length` exempts `i`/`j`/`k`. Still prefer a descriptive name when iterating a *named* collection: `for (const droplet of droplets)`, not `for (const d of droplets)`.
+- **No boolean flag parameters.** A `fn(…, true)` call site is opaque — the reader can't tell what `true` selects. When a flag would switch between two behaviours, prefer the most minimal split that removes the boolean: usually **two intention-named functions**, otherwise a named mode/strategy (e.g. a string `'rich'`/`'source'`, a passed-in handler, or a small factory). Write `editRich()` / `editSource()`, not `enterEdit(true)` / `enterEdit(false)`. This applies to new code and to flags you touch while editing.
+
+## Monetization & marketing lens (apply to every feature)
+
+Whenever you propose, plan, or build a feature, also analyze — and surface it in the plan/PR/idea, not as an afterthought — two angles:
+
+- **Monetization** — how could this feature make money? (paid tier, usage/metered pricing, one-off sale, marketplace cut, hosted/SaaS version, sponsorship, paid template/asset packs). Name *who* would pay, *why*, and the cheapest viable way to charge. If there's no realistic angle, say so plainly rather than inventing one.
+- **Marketing** — how would it reach people? The "show, don't tell" artifact (demo clip, screenshot, before/after), the channel (YouTube, X, Reddit, HN, Telegram), the hook/headline, and the target user. Many ocraft features are visual/demoable — favor a recordable demo. See the YouTube content plan in `plans/youtube-content-plan.txt`.
+
+Park concrete monetization/marketing ideas in the *Roadmap* below next to the feature they belong to. This lens is a default habit, not a gate — keep it short and honest.
+
 ## Direction
 
-The node store is the substrate; the long-term goal is a **personal life-management system** built on it: the node tree is the durable memory (notes, plans, logs), the scheduler decides *when/what*, the MCP servers are the I/O channels, and an assistant supplies the language/judgment step. This is a direction, not a spec — see the [Roadmap](#roadmap) below (a parking lot) and `plans/` for longer-form design notes.
+The node store is the substrate; the long-term goal is a **personal life-management system** built on it: the node tree is the durable memory (notes, plans, logs), the scheduler decides *when/what*, the MCP servers are the I/O channels, and an assistant supplies the language/judgment step. This is a direction, not a spec — see the [Roadmap](#roadmap) below (a parking lot) and `plans/` for longer-form design notes (deno-deploy MCP, TypeScript/lint adoption, YouTube content).
 
 ## License
 
-Personal project — no license specified.
+[MIT](LICENSE) © 2026 Nick Aliferov.
 
 ## Roadmap
 
 Scratchpad for things to explore, learn, or build later. Not a spec — just a parking lot so nothing gets lost. Move items into `CLAUDE.md` only once they become concrete, code-relevant work.
 
-- **Self-extending node types — make a handler itself a node (the keystone).** ocraft's identity claim is *"you can create any node type you want."* Graded honestly against the code today, that splits three ways: (1) creating any node **data** — TRUE (the store is type-agnostic; `POST /api/nodes` accepts any `type` string, the tree is computed from `parentId`, `x.x(id)` composes regardless of type, and a running script can even raw-`fetch` the API to manufacture nodes at runtime); (2) a note that **is a program** — TRUE and the real differentiator (`x.x` compose, `x.ui` mount UI, `x.auth`, AssemblyScript→WASM). (3) **"You can create any node *type* — THAT is what ocraft is" — FALSE today, and this is the load-bearing claim.** A type only becomes real once it has a **handler**, and handlers are five hardcoded compile-time Vue imports (`NodeItem.vue:30-36`) with a **silent fallback to Scene** for any unknown type (line 47), plus a two-entry `NODE_BODY` dict (`server.js:121-124`). You cannot register a handler from inside the running app — Vue resolves components at build time, and the server has no hot-reload. So ocraft is **open in its data plane but closed/build-time in its behavior plane**: `html`/`script` aren't "mere features," they're two of exactly five privileged, hand-built handlers, and that set is closed without a source edit + rebuild.
+- **Self-extending node types — make a handler itself a node (the keystone).** ocraft's identity claim is *"you can create any node type you want."* Graded honestly against the code today, that splits three ways: (1) creating any node **data** — TRUE (the store is type-agnostic; `POST /api/nodes` accepts any `type` string, the tree is computed from `parentId`, `x.x(id)` composes regardless of type, and a running script can even raw-`fetch` the API to manufacture nodes at runtime); (2) a note that **is a program** — TRUE and the real differentiator (`x.x` compose, `x.ui` mount UI, `x.auth`, AssemblyScript→WASM). (3) **"You can create any node *type* — THAT is what ocraft is" — FALSE today, and this is the load-bearing claim.** A type only becomes real once it has a **handler**, and handlers are five hardcoded compile-time Vue imports (`NodeItem.vue:30-36`) with a **silent fallback to Scene** for any unknown type (line 47), plus a two-entry `NODE_BODY` dict (`kernel/api.js:121-124`). You cannot register a handler from inside the running app — Vue resolves components at build time, and the server has no hot-reload. So ocraft is **open in its data plane but closed/build-time in its behavior plane**: `html`/`script` aren't "mere features," they're two of exactly five privileged, hand-built handlers, and that set is closed without a source edit + rebuild.
 
   The elegant part: the runtime **already** dynamic-imports from the store — for script *bodies* (`useNodeScripts.js` blob-imports `script.js` from `/api/nodes/:id/body`) — just never for *views*. Closing the gap, in leverage order: (1) **kill the silent Scene fallback** → render an explicit *"no handler for type X — create one?"* card (cheapest, highest-signal; turns the gap into an authoring affordance); (2) **make the handler a node** — move the `type→renderer` map out of the hardcoded `NODE_TYPES` into the store and load handlers at runtime by reusing the existing blob-import mechanism (a render-function/component module fetched from a node body, mounted via `defineAsyncComponent`; avoid in-browser SFC compilation); (3) give the running `x` a first-class, cycle-guarded **graph-mutation** affordance (`x.create`/`x.save`/`x.tree`) instead of incidental raw fetch; (4) make `NODE_BODY` **data-driven** so a new bodied type needs no server restart; (5) pair this with a **sandbox** (Worker/iframe, capability-scoped) — loading a handler from a node body means executing arbitrary code from data, and scripts already run unsandboxed. Steps 1–2 are the whole ballgame: ship them and *"create any node type"* stops being the name's aspiration and becomes an accurate description of what ocraft is.
 
-- **Flutter for cloud-driven mobile control** — build a Flutter mobile app that can be controlled / driven from "cloud code" (e.g. trigger actions, push state, or receive commands from a backend service). Explore how this could connect to the existing ocraft backend/scheduler.
+- **Flutter for cloud-driven mobile control** — build a Flutter mobile app that can be controlled / driven from "cloud code" (e.g. trigger actions, push state, or receive commands from a backend service). Explore how this could connect to the existing ocraft runtime + scheduler.
 
 - **Autonomous dev loop** — close the loop on AI-driven development of ocraft: the `ocraft-dev-plan` skill writes a sequenced weekly plan (`dev-plans/<date>-week.md`), then a dedicated **`dev-task` entry** executes *one* task per run on a branch (Agent SDK), gates on the task's acceptance check, and opens a PR for human review — never `main`, never auto-merge. Execution must be the `dev-task` entry, **not** `POST /api/ai-chat` (that endpoint is bypassPermissions + no-auth + localhost-only, must never do git/PR). Visual changes can be self-verified via the claude-in-chrome MCP (screenshots + DOM of the running editor) — the "eyes" already exist. Prereqs: `gh` installed + authenticated (`origin` is already set). Honest caveat: ocraft has no real test/behavior gate yet (only `node --check` + `npm run build` + screenshots), so PRs genuinely need human review until one exists.
 
@@ -174,23 +193,29 @@ Scratchpad for things to explore, learn, or build later. Not a spec — just a p
 
 - **Node / script versioning (version-on-save)** — saving a node script overwrites it today. Instead, each save could write a new version (keep history, allow diff/rollback) rather than clobbering the previous one. (From the old Varcraft notes — "need fx versioning, i.e. a new save.")
 
+- **Script code editor (CodeMirror 6)** — the script editor is a plain `<textarea>` today (`Script.vue:152`); the README's "a code editor for scripts" is aspirational. Swap in **CodeMirror 6** for line numbers, JS syntax highlighting, bracket matching, and auto-indent — tens of KB, no web-worker setup. (vs. **Monaco** — VS Code's editor, full IntelliSense but multi-MB with fiddly Vite worker config; overkill for a single-user local tool whose bundle is already ~1.5 MB. Ultra-minimal alt: `CodeJar + Prism`, but CM6 is the better long-term base.) The same component could later back the HTML source view and a custom **`yo`** language mode. Build order: highlighting + line numbers first, then the load-bearing follow-up — **autocomplete on the `x` API** (`x.x()`, `x.ui`, `x.auth`) via a CM6 completion source. *Monetization:* no standalone angle — table-stakes polish, not a paid feature; only matters as baseline if ocraft ever becomes a hosted "scriptable node OS." Don't charge for it. *Marketing:* highly demoable — a before/after clip (textarea → highlighted editor), but the killer artifact is `x`-API autocomplete, which shows off the "a note that *is* a program" differentiator far better than generic highlighting. Fits the YouTube content plan.
+
 - **`yo` as a node scripting medium** — `js-engine/` already holds `yo`, a tiny async-first toy interpreter (lexer → parser → evaluator, `@`-keyword syntax). It could grow into an embeddable, sandboxed scripting medium for nodes (a safer alternative to raw-JS `script` nodes), or a symbolic medium for the generative-art experiments below.
 
 - **Sandboxed execution with resource limits** — node/entry scripts currently run with full Node access. Run them in an isolated environment (container or VM) with disk / memory / CPU caps, so an artifact can't take down the host. Pairs with the `yo` sandbox idea above, and the DO droplet is a natural place to run isolated workers. (From the old Varcraft notes — the original vision already assumed containerised, resource-limited module execution.)
 
-- **Process control / supervisor — extend coverage** — `backend/procManager.js` now exists (the custom plain-ESM fork was chosen: per-proc config files like `scheduler.js`'s `jobs[]`, reusing `withLock` + the `state/` store, with rotating logs). But it currently supervises only two procs (`frontend`, `ticker`). Bring the rest under the one start/stop/restart/status/log unit: the scheduler, the backend API server, and the MCP servers. Caveat still stands — stdio MCP servers can only be supervised standalone if moved to HTTP/SSE transport.
+- **Process control / supervisor — extend coverage** — `runtime/serviceManager.js` supervises **services** (per-service config files in `runtime/services/`, reusing `withLock` + the `state/` store, with rotating logs). The `api` server, frontend, **scheduler** (now a `scheduler-loop` daemon), and ticker are all services under it. Remaining: bring the **MCP servers** under the same start/stop/restart/status/log unit — caveat: stdio MCP servers can only be supervised standalone unless moved to HTTP/SSE transport. Also still missing: real crash-restart / health — `autoRestart` is declared on a service config but not yet acted on.
 
-- **Process-management UI + live resource monitoring** — `procManager.js` is backend-only; there's no way to start/stop/restart procs or watch them from the editor. Add a frontend page that lists procs with their status, tails their logs, and shows live RAM / CPU usage per proc. (From the old Varcraft notes — "a page for managing app processes... and query RAM and CPU.")
+- **Process-management UI + live resource monitoring** — `serviceManager.js` is backend-only; there's no way to start/stop/restart services or watch them from the editor. Add a frontend page that lists services with their status, tails their logs, and shows live RAM / CPU usage per service. (From the old Varcraft notes — "a page for managing app processes... and query RAM and CPU.")
 
 - **Cloud WebSocket exchange** — a hosted relay/broker that exchanges WS messages between the backend, the editor, and future clients. This is the "cloud" the Flutter mobile-control idea needs — the hub that lets cloud code drive a mobile app. The exchange shipped on **Deno Deploy** (`wss://stream.x8.deno.net/ws`), so the open part is only the *design*: pub/sub topics vs. direct routing, auth, and whether the local backend is the origin or just another client. A deploy plan for the Deno service lives in `plans/deno-deploy-mcp-plan.txt`.
 
 - **Integrate `stream.x8.deno.net` (the live WS exchange) into ocraft** — the cloud WS relay now *exists* as a deployed endpoint: `wss://stream.x8.deno.net/ws` (on **Deno Deploy**). Next step is wiring it into the stack: the local backend connects as a **client** and publishes node / proc / execution events; the editor **subscribes** for live updates (replacing the poll-based proc UI and chat-node streaming); future clients (the Flutter/mobile idea) join the same hub. Open before that: the message protocol (pub/sub topics vs. direct addressing) and auth. Already have a **`websocket-tester` script node** (id 11, under `test`) for poking the endpoint — a connect/send/log panel built with the `x.ui` script-controls surface.
 
+- **Restore (or rethink) the deploy target — the DO droplet is gone.** Deploy is wired through GitHub Actions (`.github/workflows/ci.yml`, on push to `main`): it SSHes into `secrets.DEPLOY_HOST` (the DigitalOcean droplet), writes `.env`, `git pull`, `npm install`, then `node bin/cli.js run deploy` (the `deploy` task = git pull under the scheduler lock). **It's currently broken** — the droplet behind `DEPLOY_HOST` was destroyed, so every push fails at the SSH step (`runtime/state/droplet.json` holds only a `{region, size}` spec, nothing live). The `do-droplet-up` entry (or the DigitalOcean MCP `do_create_droplet`) re-provisions a box end-to-end (create → ssh → install Node + git → clone repo), but re-running it alone won't restore deploy — gaps to close: (1) a fresh droplet gets a **new IP**, so `DEPLOY_HOST` would change each rebuild — wire a **reserved IP** (the DO MCP has the tools) to keep it stable; (2) **node-path mismatch** — `ci.yml` hardcodes an nvm path (`/root/.nvm/.../v25.8.2`) while `do-droplet-up` installs Node via NodeSource/apt (`/usr/bin/node`), so align one side; (3) **no scheduler provisioning** — `do-droplet-up` clones the repo but never starts the `scheduler` service (`node bin/cli.js service start scheduler`) or writes a persistent `.env`, so scheduled tasks won't run. Bigger question first: **does an always-on DO droplet still earn its place** now that the WS exchange moved to **Deno Deploy** — DO droplet vs. Deno Deploy vs. dropping the persistent box entirely?
+
 - **More MCP servers to build** — beyond telegram + gcal + gmail, the life-management loop still lacks _hands on its own machinery_ (its _memory organ_ is now the migrated notes-as-nodes, so that gap is closed):
-  - **ocraft self-MCP** — expose the scheduler/nodes/procManager as tools (`list_jobs`, `run_entry`, `proc_status`, `tail_execution_log`, `search_nodes`, `create_node`) so Claude can _operate_ the system, not just edit its files. Now that the notes vault lives as nodes, this is also the "remember" organ — searching/appending a note _is_ a node op, the durable home every other MCP's summaries need. The real driver is the headless side (the scheduler + a chat-node "brain"), which can't borrow an interactive Claude Code session's Read/Grep/Edit and so needs these as tools.
+  - **ocraft self-MCP** — expose the scheduler/nodes/serviceManager as tools (`list_jobs`, `run_task`, `service_status`, `tail_execution_log`, `search_nodes`, `create_node`) so Claude can _operate_ the system, not just edit its files. Now that the notes vault lives as nodes, this is also the "remember" organ — searching/appending a note _is_ a node op, the durable home every other MCP's summaries need. The real driver is the headless side (the scheduler + a chat-node "brain"), which can't borrow an interactive Claude Code session's Read/Grep/Edit and so needs these as tools.
   - **Music** — _probably not worth a dedicated MCP._ For playback control the claude-in-chrome extension already drives the Spotify/Apple Music web player. An API MCP would only pay off for the data side (listening history, building playlists as data) — a weaker need. Park it; revisit if the history/logging use case becomes real.
 
-- **HTTP/3 (QUIC) for the backend API server** — Node.js landed a native QUIC + HTTP/3 implementation in **v26.2.0** via the `node:quic` module — HTTP/3 over `nghttp3`, activated when the negotiated ALPN is `h3`. Still **experimental** (Stability 1.0) behind the `--experimental-quic` runtime flag. Idea: serve `backend/server.js`'s `/api/*` over HTTP/3. Honest caveat: it's a **localhost dev server**, so HTTP/3's real wins (no head-of-line blocking + connection migration over lossy networks) don't apply here, and QUIC mandates TLS 1.3 — so it'd need certs + UDP where today it's plain HTTP. This is a **learning exercise**, not a perf need; the pragmatic production path is to terminate HTTP/3 at the edge (CDN / nginx 1.25+ with QUIC) and speak HTTP/2 to the Node origin, advertised via `Alt-Svc`.
+- **HTTP/3 (QUIC) for the backend API server** — Node.js landed a native QUIC + HTTP/3 implementation in **v26.2.0** via the `node:quic` module — HTTP/3 over `nghttp3`, activated when the negotiated ALPN is `h3`. Still **experimental** (Stability 1.0) behind the `--experimental-quic` runtime flag. Idea: serve `kernel/api.js`'s `/api/*` over HTTP/3. Honest caveat: it's a **localhost dev server**, so HTTP/3's real wins (no head-of-line blocking + connection migration over lossy networks) don't apply here, and QUIC mandates TLS 1.3 — so it'd need certs + UDP where today it's plain HTTP. This is a **learning exercise**, not a perf need; the pragmatic production path is to terminate HTTP/3 at the edge (CDN / nginx 1.25+ with QUIC) and speak HTTP/2 to the Node origin, advertised via `Alt-Svc`.
+
+- **Pixel-art SVG assets for scenes** — integrate a set of pixel-art sprites/clipart as **SVGs** that `scene2d` nodes can drop in as elements, extending the existing clipart-SVG pipeline (assets in `kernel/data/assets/img/`, served via `/api/assets/`, loaded by the p5 renderer — see `kernel/api.js`). Pixel art as SVG stays crisp at any zoom and is tiny + diff-able in the repo (vs. raster sprite sheets), and composes cleanly as scene elements — a natural medium for pixel-art scenes that pairs with the generative-art direction below. Open bits: a small picker/library in the scene editor, and whether to author the sprites by hand, generate them, or import a set.
 
 - **Generative art** — treat Claude as a *performer with an instrument*, not a coder: pick a symbolic medium → give it a render-and-return tool so it perceives output → iterate tight ("darker, slower, more space"). Two routes: **embed the medium as a node** (a script node hosts the language and plays/renders inline), or **drive an external pro tool** over OSC/MIDI. Could become creative `stream`/`chat` node types.
   - **Audio** — *embed in a node:* **Strudel** (TidalCycles-style pattern code, runs in-browser — output-only, you're the ear), **SuperCollider** (synthesis driven via `sclang`/OSC), **Sonic Pi** (OSC bridge). *drive a DAW:* **Ableton Live** toward minimal techno with glitch artifacts — Claude generates MIDI / clips / automation, you mix. Generative MIDI: scale constraints, Euclidean rhythms E(5,8), Markov chains over scale degrees, L-systems → pitch.

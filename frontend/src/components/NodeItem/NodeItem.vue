@@ -1,8 +1,8 @@
 <script setup>
-import { computed, ref, nextTick } from 'vue'
+import { computed, ref, nextTick, defineAsyncComponent } from 'vue'
 import { NSelect, NButton } from 'naive-ui'
 import { useNodesStore } from '../../stores/nodes.js'
-import Scene from './nodeTypes/Scene.vue'
+import Scene2d from './nodeTypes/Scene2d.vue'
 import Script from './nodeTypes/Script.vue'
 import Html from './nodeTypes/Html.vue'
 import Category from './nodeTypes/Category.vue'
@@ -28,7 +28,13 @@ const save = async () => {
 // `hidden: true` keeps the mapping (so existing nodes of that type still render)
 // but drops it from the type picker — used to park a not-yet-ready type.
 const NODE_TYPES = {
-  scene: { label: 'scene', component: Scene },
+  scene2d: { label: 'scene2d', component: Scene2d },
+  // Lazy-loaded: Three.js is heavy (~500 KB), so code-split it — the chunk loads
+  // only when a scene3d node is opened, keeping the main bundle lean.
+  scene3d: {
+    label: 'scene3d',
+    component: defineAsyncComponent(() => import('./nodeTypes/Scene3d.vue')),
+  },
   script: { label: 'script', component: Script },
   html: { label: 'html', component: Html },
   category: { label: 'category', component: Category },
@@ -40,15 +46,15 @@ const typeOptions = Object.entries(NODE_TYPES)
   .map(([value, { label }]) => ({ label, value }))
 
 const nodeType = computed({
-  get: () => props.node.type ?? 'scene',
+  get: () => props.node.type ?? 'scene2d',
   set: (val) => {
-    props.node.type = val === 'scene' ? undefined : val
+    props.node.type = val === 'scene2d' ? undefined : val
   },
 })
 
 // No silent fallback: an unknown type resolves to null so the template can show an
 // explicit "no handler for this type" card instead of masquerading as an empty Scene.
-// (Untyped nodes still resolve to 'scene' via nodeType's getter above — only a
+// (Untyped nodes still resolve to 'scene2d' via nodeType's getter above — only a
 // genuinely unregistered type lands here as null.)
 const activeComponent = computed(() => NODE_TYPES[nodeType.value]?.component ?? null)
 
@@ -66,12 +72,12 @@ const inputStyle = ref({})
 const startRename = async () => {
   const el = nameLabel.value
   if (el) {
-    const r = el.getBoundingClientRect()
+    const rect = el.getBoundingClientRect()
     // min-width (not width) floors the input at the label's size — no jump on
     // open — while letting it grow with content (see .name-input CSS).
     inputStyle.value = {
-      minWidth: `${Math.max(Math.ceil(r.width), 30)}px`,
-      height: `${Math.ceil(r.height)}px`,
+      minWidth: `${Math.max(Math.ceil(rect.width), 30)}px`,
+      height: `${Math.ceil(rect.height)}px`,
     }
   }
   editingName.value = true
