@@ -37,7 +37,9 @@ let ro
 
 onMounted(() => {
   const container = preview.value
-  if (!container) return
+  if (!container) {
+    return
+  }
   // Drag-to-move: grab the element under the cursor and track the offset between
   // the pointer and the element's stored x/y, so it doesn't jump on grab. The new
   // position is written onto props.node.elements in place; it persists when the
@@ -60,7 +62,9 @@ onMounted(() => {
       renderSceneP5(sketch, { width: sketch.width, height: sketch.height }, props.node)
 
     sketch.mousePressed = () => {
-      if (!overCanvas(sketch)) return
+      if (!overCanvas(sketch)) {
+        return
+      }
       const element = pickElement(
         sketch.width,
         sketch.height,
@@ -68,8 +72,12 @@ onMounted(() => {
         sketch.mouseX,
         sketch.mouseY,
       )
-      if (!element) return
-      if (!element.props) element.props = {}
+      if (!element) {
+        return
+      }
+      if (!element.props) {
+        element.props = {}
+      }
       const point = screenToLogical(
         sketch.width,
         sketch.height,
@@ -85,7 +93,9 @@ onMounted(() => {
       }
     }
     sketch.mouseDragged = () => {
-      if (!drag) return
+      if (!drag) {
+        return
+      }
       const point = screenToLogical(
         sketch.width,
         sketch.height,
@@ -101,7 +111,9 @@ onMounted(() => {
     }
     // Cursor affordance: show a move cursor when hovering a draggable element.
     sketch.mouseMoved = () => {
-      if (!overCanvas(sketch)) return
+      if (!overCanvas(sketch)) {
+        return
+      }
       const over = pickElement(
         sketch.width,
         sketch.height,

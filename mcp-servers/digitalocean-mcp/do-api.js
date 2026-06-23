@@ -34,9 +34,13 @@ export const clean = (obj) =>
 // a non-2xx into a thrown Error carrying DigitalOcean's own message.
 export async function doFetch(pathname, { method = 'GET', query, body } = {}) {
   const url = new URL(pathname, API)
-  if (query)
-    for (const [key, value] of Object.entries(query))
-      if (value != null) url.searchParams.set(key, String(value))
+  if (query) {
+    for (const [key, value] of Object.entries(query)) {
+      if (value != null) {
+        url.searchParams.set(key, String(value))
+      }
+    }
+  }
   const response = await fetch(url, {
     method,
     headers: { Authorization: `Bearer ${requireToken()}`, 'Content-Type': 'application/json' },

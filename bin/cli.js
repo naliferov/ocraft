@@ -75,7 +75,9 @@ const commands = {
             console.log('No services configured')
             return
           }
-          for (const service of all) console.log(fmt(service))
+          for (const service of all) {
+            console.log(fmt(service))
+          }
           return
         }
         case 'status':

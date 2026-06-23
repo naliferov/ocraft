@@ -52,7 +52,9 @@ async function resolveEntity(ref) {
       dialog.entity?.username?.toLowerCase() === refText.replace(/^@/, '').toLowerCase() ||
       dialog.title === refText,
   )
-  if (match) return match.entity
+  if (match) {
+    return match.entity
+  }
   throw new Error(`Could not resolve chat "${ref}"`)
 }
 

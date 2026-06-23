@@ -1,0 +1,110 @@
+===============================================================================
+ WebContainer-lite — a sandboxed in-browser node runtime for script nodes
+ (new features list #128; relates to: sandboxed-execution-plan.txt,
+  self-extending-handlers-plan.txt, ws-exchange-integration-plan.txt,
+  and the HTTP-imports / distributed-node-OS idea)
+===============================================================================
+
+## What & why
+
+StackBlitz WebContainers run Node.js entirely inside a browser tab — no server,
+no cloud VM. The surprising part of HOW they do it is the part that matters for
+ocraft: they do NOT compile Node (V8 + libuv) to WebAssembly. They reuse the
+browser's OWN JavaScript engine to execute JS, and reimplement the Node API
+surface (fs, path, process, net, http, streams, Buffer, …) in WASM + JS on top
+of browser primitives, with:
+
+  - a virtual in-memory filesystem,
+  - a virtual networking stack where a ServiceWorker intercepts requests to a
+    virtual origin and routes them into an in-page "server" — this is how a dev
+    server "listening on :3000" inside the tab becomes a previewable URL,
+  - a JS/WASM shell ("jsh") + an emulated process model on Web Workers,
+  - browser-tab sandboxing as the security boundary (untrusted code can't reach
+    the real machine — for them a selling point, not a limitation).
+
+ocraft already stands on the same foundation: a `script` node's body is
+blob-imported into the page and runs on the host V8 (useNodeScripts.js:86-104,
+runNodeCode :183-195). That IS WebContainers' approach-A starting point. We do
+not need a clone; we need the useful subset.
+
+## The two approaches (and which fits ocraft)
+
+  A. Reuse host V8 + reimplement the Node API surface.
+     → WebContainers, CodeSandbox's Nodebox. Fast, light, millisecond boot, but
+       JS-only: no arbitrary native binaries / node-gyp addons unless WASM.
+  B. Emulate a whole x86/Linux machine in WASM and run the REAL node binary.
+     → WebVM (CheerpX), container2wasm. Complete (runs any Linux binary) but
+       heavy and slower.
+
+ocraft wants A — it already runs JS on the host engine; B is a different
+project (and, if ever needed, is something to EMBED, not build).
+
+## The ocraft "WebContainer-lite" — three existing items, combined
+
+Not a new megaproject; the intersection of pieces already on the backlog:
+
+  1. SANDBOX  (#35 per-node error boundary, #111 capability-scoped x;
+     sandboxed-execution-plan.txt)
+     Run a script node inside a Web Worker (non-blocking + crash isolation) or a
+     sandboxed iframe (capability isolation). The isolation layer.
+  2. URL-IMPORTED npm  (#15 x.fetch / "HTTP imports"; distributed-node-OS idea)
+     Resolve bare specifiers to an ESM CDN (esm.sh / jspm) so a node can
+     `import` npm packages with no installer and no node_modules — the cheap
+     "npm in the browser."
+  3. VIRTUAL fs + VIRTUAL server  (the ServiceWorker trick)
+     - Virtual fs: an in-memory, POSIX-ish fs BACKED BY THE NODE STORE — a node's
+       children/bodies become files. (node-stdlib-browser supplies fs/path/
+       process/Buffer/stream shims if we want fuller Node-API fidelity.)
+     - Virtual server: a ServiceWorker intercepts a virtual path (e.g.
+       /run/:nodeId/*) and routes the request into the node's in-page HTTP
+       handler — so a `script` node can BE a tiny server you "visit" in the
+       editor, exactly like a WebContainer preview.
+
+Net result: a script node gets a virtual fs (its own subtree), URL-imported npm
+deps, Worker/iframe isolation, and the ability to run an in-browser "server"
+node — a real subset of WebContainers, scoped to ocraft, with zero backend. It
+also doubles as the headless/sandboxed runner the keystone (handlers-as-nodes)
+and the scheduler both need.
+
+## Build order (smallest shippable first)
+
+  1. Worker-sandboxed runner: run a script node's body in a Web Worker with a
+     postMessage `x` bridge (x.x, x.log, x.ui proxied back to the page). Ship
+     isolation first — independently valuable (#35, #111) and it is the sandbox
+     plan's browser half.
+  2. URL npm imports: rewrite bare `import`s → esm.sh in the blob/Worker loader.
+  3. Virtual fs shim: x.fs over the node store (read/write a node's subtree as
+     files); optionally node-stdlib-browser for a fuller Node-API surface.
+  4. ServiceWorker virtual server: register a SW, route /run/:id/* → a node's
+     `fetch(request)` export; add an "open preview" affordance in the editor.
+  5. (Optional, later) a tiny jsh-style command surface tying it together —
+     overlaps the "Command-first / terminal interface" roadmap item.
+
+## Hard caveats (don't discover these late)
+
+  - CROSS-ORIGIN ISOLATION: SharedArrayBuffer (needed for serious Worker
+    shared-memory / WASM threading) requires COOP: same-origin + COEP:
+    require-corp headers on the editor origin. Constrains the Vite dev server
+    and any hosting — plan for it up front.
+  - NO NATIVE BINARIES: approach A is JS/WASM only — packages with native .node
+    addons won't run. Fine for the ~95% that are pure JS.
+  - VIRTUAL NETWORKING: browsers have no raw TCP/UDP. Inbound = the
+    ServiceWorker trick; outbound HTTP(S) must go through x.fetch's CORS proxy
+    (#15). No direct DB sockets (Postgres etc.) without a tunnel.
+
+## What NOT to do
+
+  - Do NOT attempt a full WebContainers clone (fs + net + process + shell +
+    package manager + COOP/COEP at production grade). StackBlitz spent ~7 years;
+    the breadth is the moat. If full fidelity is ever needed, EMBED an existing
+    runtime (WebContainer API, Nodebox) or the approach-B WebVM/CheerpX.
+  - Do NOT treat a Worker alone as a security boundary for untrusted/multi-user
+    code — that needs the capability allow-list (#111) AND COOP/COEP. A Worker
+    is isolation, not a permission model.
+
+## Marketing / monetization lens
+
+A "script node that is a live in-browser server, no backend" is a strong,
+self-contained demo of ocraft-as-runtime (the "a note that runs" pitch taken to
+its limit) and is shareable as an embeddable widget (#101). No standalone paid
+angle; it is an ENABLER for the keystone + the creative/embeddable surfaces.

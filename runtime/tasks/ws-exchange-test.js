@@ -33,7 +33,9 @@ export const run = async (ctx) => {
     let socket
     let replyTimer
     const finish = (result) => {
-      if (settled) return
+      if (settled) {
+        return
+      }
       settled = true
       clearTimeout(connectTimer)
       clearTimeout(replyTimer)

@@ -152,14 +152,21 @@ server.registerTool(
   },
   async ({ id, action, name, size, disk }) => {
     try {
-      if ((action === 'rename' || action === 'snapshot') && !name)
+      if ((action === 'rename' || action === 'snapshot') && !name) {
         return fail(`action "${action}" requires "name"`)
-      if (action === 'resize' && !size) return fail('action "resize" requires "size"')
+      }
+      if (action === 'resize' && !size) {
+        return fail('action "resize" requires "size"')
+      }
       const body = { type: action }
-      if (action === 'rename' || action === 'snapshot') body.name = name
+      if (action === 'rename' || action === 'snapshot') {
+        body.name = name
+      }
       if (action === 'resize') {
         body.size = size
-        if (disk != null) body.disk = disk
+        if (disk != null) {
+          body.disk = disk
+        }
       }
       const data = await doFetch(`/v2/droplets/${id}/actions`, { method: 'POST', body })
       return ok({ action: data.action })
@@ -313,8 +320,12 @@ server.registerTool(
   },
   async ({ droplet_id, region }) => {
     try {
-      if (!droplet_id && !region) return fail('provide either droplet_id or region')
-      if (droplet_id && region) return fail('provide only one of droplet_id or region')
+      if (!droplet_id && !region) {
+        return fail('provide either droplet_id or region')
+      }
+      if (droplet_id && region) {
+        return fail('provide only one of droplet_id or region')
+      }
       const data = await doFetch('/v2/reserved_ips', {
         method: 'POST',
         body: { droplet_id, region },

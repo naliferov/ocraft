@@ -1,0 +1,196 @@
+ocraft — feature ideas backlog
+==============================
+(generated 2026-06-19)
+
+A wide brainstorm of NEW feature ideas, beyond the 17 README roadmap items and the
+8 in project-direction-and-ideas.txt. One line each; grounded in ocraft's real
+primitives (nodes, parentId, the `x` context, the kernel API, the scheduler, MCP,
+the migrated notes). This is a backlog to PRUNE, not a commitment. `[ext]` = sharpens
+an existing roadmap/analysis item. Promote the best into the README roadmap.
+
+
+1. NODE MODEL & PRIMITIVES
+--------------------------
+1.  Typed relations/edges beyond parentId — named links (references, depends-on, blocks); the tree becomes a graph.
+2.  Cross-cutting tags/labels — orthogonal to the tree, for filter/group (#project, #idea).
+3.  Node aliases / symlinks — one node appears in multiple tree locations without duplication.
+4.  Structured properties per type — typed key/value fields on nodes (Notion-like), queryable.
+5.  Multiple bodies/attachments per node — e.g. a script + its README + tests in one node.
+6.  Node transclusion/embed — render one node inside another (block include).
+7.  Computed/derived nodes — content is the live result of a script, auto-refreshing.
+8.  Type inheritance/mixins — "meeting" extends "html" with extra fields.
+9.  Persistent trash + restore — beyond the undo pool, a real trash category.
+10. Node color/icon/emoji — lightweight visual identity in the tree.
+
+2. THE `x` RUNTIME (node-as-program)
+------------------------------------
+11. `x.store` stdlib — create/save/delete/query/tree from inside a script [ext keystone].
+12. `x.state` — persistent per-node key/value across runs (scripts remember).
+13. `x.emit`/`x.on` — local node-to-node event bus (later bridged to ws-exchange).
+14. `x.schedule` — a node registers itself/another as a scheduled task from inside.
+15. `x.fetch` — authenticated, CORS-proxied outbound HTTP using the x.auth token store.
+16. Named exports per node — `x.x("5",{fn:"foo"})` calls a named export, not just default.
+17. Typed node contracts — declare input/output schema; x.x calls validated + autocompleted.
+18. `x.render` — formalize returning a renderable the handler displays. ✅ DONE as "view" script
+    nodes (node.view = vue-esm | vue-sfc): default export `(x)=>Component` mounts in the editor;
+    vue-sfc compiles a real .vue (template + script setup + auto-scoped <style>) at runtime via a
+    lazy, code-split compiler; one shared Vue instance. NEXT (roadmap): on-the-fly `<style lang=scss>`
+    (add sass) + `<script setup lang=ts>` compilation for vue-sfc; later React/Svelte/Solid renderers
+    (same (hostEl, component) → cleanup mount seam in useScriptView.js).
+19. Multi-language WASM bodies — Rust/Zig/C → WASM nodes; or run an uploaded .wasm node.
+20. `pipeline` node type — declaratively chain node calls (A→B→C) as visual dataflow.
+21. Node imports — a script declares dependencies on other node ids, resolved before run.
+22. Script↔service bridge — promote a long-running script node into a supervised service.
+
+3. EDITOR UX & NAVIGATION
+-------------------------
+23. Command palette (Cmd-K) — jump/search/create/run [ext].
+24. Node tabs — open multiple nodes in tabs within the app.
+25. Split-pane view — edit a note beside its script/preview.
+26. Browser-like back/forward + nav history through /node/:id.
+27. Type-to-filter the tree (name/type/tag).
+28. Hover preview popovers on /node/:id links.
+29. Keyboard-first / vim-style tree navigation; hotkeys for everything (OS feel).
+30. Resizable/dockable panels (tree · editor · preview · logs).
+31. Recent / pinned / favorites bar.
+32. Multi-select + bulk move/delete/tag on the tree.
+33. Drag-and-drop file/image → asset node.
+34. Focus/zen mode for single-node editing.
+35. Per-node error boundary — a broken node shows a card, never crashes the app.
+
+4. KNOWLEDGE BASE / MEMORY (the migrated notes)
+-----------------------------------------------
+36. Full-text search across node bodies (index + API) [ext].
+37. Backlinks panel — who links here [ext].
+38. Graph view — force-directed map of node links [ext].
+39. `[[`-autocomplete in the HTML editor to link nodes by name.
+40. Unlinked mentions — notes that name a node but don't link it.
+41. Daily notes — date-addressed journal nodes, auto-created [ext].
+42. Outline / table-of-contents for long html nodes.
+43. Tag index pages — browse nodes by tag.
+44. Semantic "related notes" via local embeddings.
+45. Spaced-repetition flashcard node type — the KB becomes a learning tool.
+46. Web clipper bookmarklet/extension → html node (capture).
+47. Note highlights + a "highlights digest" node.
+
+5. LIFE-MANAGEMENT LAYER (the direction)
+----------------------------------------
+48. `todo` node type — checkable, due dates, status, surfaced in agendas.
+49. Calendar view — date-nodes + gcal MCP on a calendar grid.
+50. Daily brain briefing — scheduled agent composes calendar+telegram+todos → "today" node [ext].
+51. Capture inbox — telegram/voice/web → inbox nodes for triage [ext].
+52. Habit tracker node type — streaks, recurring check-ins.
+53. Node-driven reminders via Telegram (scheduler + telegram MCP).
+54. GTD/projects — projects + next-actions + contexts on nodes+tags.
+55. Weekly review — scheduled prompt surfacing stale projects / wins.
+56. Time tracking — start/stop timers on nodes, logged as data.
+57. Goals/OKRs — hierarchical goals with progress rollups from child nodes.
+58. Finance log — transactions as nodes, summarized (ties to a Binance/Plaid MCP).
+
+6. AI & THE ASSISTANT LOOP (the "judgment" pillar)
+--------------------------------------------------
+59. Headless agent runner — Agent SDK from the scheduler (the "brain"), not the localhost endpoint.
+60. Per-node AI actions — summarize/improve/translate/extract-tasks on any html node.
+61. Chat-with-your-notes (RAG) — ai-chat grounded in the store via retrieval.
+62. AI node-type/handler scaffolder — describe it, get a script/handler node.
+63. Ghost-text AI autocomplete in the HTML editor.
+64. Tree-gardener agent — auto-files inbox, tags, links related notes on a schedule.
+65. Voice loop — speak → transcribe → agent → node/action (transcribe + telegram voice exist).
+66. Prompt-library nodes — reusable prompts, callable via x.x into ai-chat.
+67. "Explain this node" — AI walkthrough of any script node for learning/onboarding.
+68. AI-drafted node from a one-line title (expand a stub note).
+
+7. NEW MCP SERVERS / EXTERNAL I/O
+---------------------------------
+69. ocraft self-MCP — nodes/scheduler/services as tools [ext, on roadmap].
+70. Binance/crypto MCP — market data + read-only portfolio.
+71. GitHub MCP — issues/PRs/repos as tools (feeds the autonomous dev loop).
+72. Email-send MCP — gmail is read-only today; add guarded send.
+73. RSS/news/weather MCP — feeds the daily briefing.
+74. Home Assistant MCP — the "OS" controls the physical environment.
+75. Filesystem/markdown bridge MCP — two-way markdown sync.
+76. Notion/Linear/Todoist import MCP — pull tasks from where they live now.
+77. Plaid/bank MCP — finance aggregation (careful with secrets).
+78. Generic REST/GraphQL MCP — describe an API in a node, get tools (meta).
+
+8. AUTOMATION: TASKS / SCHEDULER / SERVICES
+-------------------------------------------
+79. Cron-expression scheduling UI — visually edit the scheduler's jobs[].
+80. Task DAG / dependencies — run B after A.
+81. Webhook trigger — a kernel endpoint that fires a task on inbound HTTP.
+82. Event-driven tasks — run when a node of type X changes (reactive automation).
+83. Retry/backoff + failure alert to Telegram.
+84. Execution history + log viewer in the editor [ext].
+85. Dry-run / simulate a task before running.
+86. Shareable tasks-as-nodes — import/export automations.
+
+9. SCENES, CREATIVE & GENERATIVE
+--------------------------------
+87. Scene timeline / keyframe sequencer for scene2d/3d.
+88. Audio-reactive scenes — react to mic via a Tone.js analyser.
+89. GLSL shader node type — fragment shader with live uniforms.
+90. Hydra/Strudel livecoding embed nodes [ext generative-art].
+91. Scene → mp4/gif export (ffmpeg) for sharing.
+92. Physics in scenes (matter.js / rapier).
+93. Web MIDI node — drive/record scenes + the Ableton idea.
+94. Generative-art gallery category — auto-rendered scene thumbnails.
+
+10. QUERY & PROGRAMMABILITY OF THE TREE
+---------------------------------------
+95. Node query language — SELECT … WHERE type/tag/prop → live set (Dataview-style).
+96. Saved-query nodes — a node that renders its result set live.
+97. Smart folders — a category whose children are a query result.
+98. Aggregation nodes — sum/count/rollup over children (dashboards, goals).
+
+11. COLLABORATION, SHARING & PUBLISHING
+---------------------------------------
+99.  Publish a node/subtree as a public read-only page (shareable link).
+100. Export subtree → static site (digital garden / blog from notes).
+101. Embeddable node widget — iframe a scene/script into an external page.
+102. Comments/annotations as child nodes.
+103. Live node sharing between two ocraft instances via ws-exchange.
+104. Multiplayer co-editing (Yjs/CRDT) — if it ever goes multi-user.
+
+12. SYNC, MOBILE & CLOUD
+------------------------
+105. PWA + offline-first editor, sync on reconnect.
+106. Mobile quick-capture PWA (lighter than Flutter) → inbox.
+107. Multi-device sync via ws-exchange + a hosted store.
+108. Hosted ocraft (multi-tenant SaaS) — a monetization path.
+109. End-to-end encrypted node bodies at rest (echoing local-custody trends).
+110. Git-like merge / conflict resolution for divergent stores.
+111. Dead-simple personal tunnel (ngrok-style) — expose ONE local url publicly, personal use only; ideally ride the existing ws-exchange relay as transport (the public exchange point forwards inbound HTTP to your instance over the ws it already holds open), so remote/mobile control of ocraft needs no separate cloud deploy and no open inbound port [ext ws-exchange].
+
+13. SECURITY, SANDBOX & PERMISSIONS
+-----------------------------------
+112. Capability-scoped x — each node gets an allow-list of powers [ext sandbox].
+113. Per-node ACL — private vs shareable nodes.
+114. Secret-manager node type — encrypted secrets injected via x.auth (beyond localStorage).
+115. Audit log of every node mutation (who / when / what).
+116. Signed nodes — verify a (shared) handler body wasn't tampered.
+
+14. DEV EXPERIENCE & TOOLING
+----------------------------
+117. Node test harness — acceptance checks per node (unblocks the autonomous-dev-loop gate).
+118. Node REPL / console — run x snippets against the store interactively.
+119. TypeScript types for the x API [ext TS plan].
+120. Step-through debugger for script nodes.
+121. Hot-reload for handler nodes [ext keystone].
+122. Visual node-version diff [ext versioning].
+123. CLI parity — every editor action scriptable via bin/cli.js.
+124. Onboarding/demo tour — a seeded sample tree showing every node type.
+
+15. IMPORT / EXPORT / INTEROP
+-----------------------------
+125. Whole-store Markdown export (portability / escape hatch).
+126. Scheduled git-snapshot of the node store (versioned backup) [ext].
+127. Import from Notion / Roam / Logseq.
+128. iCal export of date-nodes; RSS feed of a category.
+
+
+PRIORITIZATION NOTE
+-------------------
+Most direction-aligned (turn the substrate into a USED life-management system):
+#36-38 (navigable memory), #48-51 (todo/calendar/briefing/inbox), #59-61 (the brain),
+#69 (self-MCP), #95-98 (query the tree). The rest are platform depth, polish, or
+optional product bets — schedule them as enablers, not ends.

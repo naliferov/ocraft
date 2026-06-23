@@ -71,20 +71,28 @@ const onDragStart = (node, event) => {
   setTimeout(() => ghost.remove(), 0)
 }
 const onDragOver = (node, event) => {
-  if (!isCategory(node)) return
+  if (!isCategory(node)) {
+    return
+  }
   event.preventDefault() // preventDefault here is what marks the row a valid drop target
   event.dataTransfer.dropEffect = 'move'
   dragOverId.value = node.id
 }
 const onDragLeave = (node) => {
-  if (dragOverId.value === node.id) dragOverId.value = null
+  if (dragOverId.value === node.id) {
+    dragOverId.value = null
+  }
 }
 const onDrop = (node, event) => {
-  if (!isCategory(node)) return
+  if (!isCategory(node)) {
+    return
+  }
   event.preventDefault()
   const draggedId = event.dataTransfer.getData('text/plain')
   dragOverId.value = null
-  if (draggedId && draggedId !== node.id) emit('reparent', { id: draggedId, parentId: node.id })
+  if (draggedId && draggedId !== node.id) {
+    emit('reparent', { id: draggedId, parentId: node.id })
+  }
 }
 
 // Inline rename: a row swaps its label for an input. Per-instance state is fine —
@@ -102,16 +110,22 @@ const startRename = async (node) => {
   input?.focus()
 }
 const commitRename = (node) => {
-  if (renamingId.value !== node.id) return
+  if (renamingId.value !== node.id) {
+    return
+  }
   const name = renameDraft.value.trim()
-  if (name && name !== node.name) emit('rename', { id: node.id, name })
+  if (name && name !== node.name) {
+    emit('rename', { id: node.id, name })
+  }
   renamingId.value = null
 }
 
 // Delete asks for a native confirm first; removed nodes still go to the store's undo
 // pool, so the "Recently deleted" restore remains the safety net after confirming.
 const requestRemove = (node) => {
-  if (confirm(`Delete "${node.name}"?`)) emit('remove', node.id)
+  if (confirm(`Delete "${node.name}"?`)) {
+    emit('remove', node.id)
+  }
 }
 </script>
 

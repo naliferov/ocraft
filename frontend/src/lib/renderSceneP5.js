@@ -33,7 +33,9 @@ const getGrainDelta = ({ baseColor, color, intensity }) => {
 const applyGrain = (sketch, props) => {
   const { rangeColor, intensity, color, amount = 1, grainSize = 10 } = props ?? {}
   const clampedAmount = Math.min(1, Math.max(0, amount))
-  if (clampedAmount <= 0) return
+  if (clampedAmount <= 0) {
+    return
+  }
 
   const baseColor = rangeColor ? getBaseGrainColor(rangeColor) : null
 
@@ -78,7 +80,9 @@ const applyGrain = (sketch, props) => {
     // coverage that random scattering wouldn't give at high density.
     for (let cy = 0; cy < rows; cy++) {
       for (let cx = 0; cx < cols; cx++) {
-        if (Math.random() < clampedAmount) fillBlock(cx, cy)
+        if (Math.random() < clampedAmount) {
+          fillBlock(cx, cy)
+        }
       }
     }
   }
@@ -112,7 +116,9 @@ const assetUrl = (src) => {
 
 const getClipart = (src) => {
   let entry = clipartCache.get(src)
-  if (entry) return entry
+  if (entry) {
+    return entry
+  }
   entry = { status: 'loading', canvas: null, aspect: 1 }
   clipartCache.set(src, entry)
 
@@ -149,17 +155,25 @@ const drawClipart = (sketch, node) => {
     scale = 1,
     rotation = 0,
   } = node.props ?? {}
-  if (!src) return
+  if (!src) {
+    return
+  }
   const entry = getClipart(src)
-  if (entry.status !== 'ready') return // not loaded yet; a later frame will draw it
+  if (entry.status !== 'ready') {
+    return
+  } // not loaded yet; a later frame will draw it
 
   const drawWidth = width ?? (height != null ? height * entry.aspect : 40)
   const drawHeight = height ?? drawWidth / entry.aspect
 
   sketch.push()
   sketch.translate(centerX, centerY) // center, so rotation/scale pivot on the clipart's middle
-  if (rotation) sketch.rotate((rotation * Math.PI) / 180)
-  if (scale !== 1) sketch.scale(scale)
+  if (rotation) {
+    sketch.rotate((rotation * Math.PI) / 180)
+  }
+  if (scale !== 1) {
+    sketch.scale(scale)
+  }
   sketch.drawingContext.drawImage(
     entry.canvas,
     -drawWidth / 2,
@@ -170,10 +184,23 @@ const drawClipart = (sketch, node) => {
   sketch.pop()
 }
 
+// A scene's viewport is its logical coordinate space — every element's x/y/size is
+// in these units, and the letterbox transform divides by it. There is no sane
+// default (a guessed 160×90 silently mis-scales the whole scene), so require it.
+const requireViewport = (node) => {
+  const { width, height } = node.viewport ?? {}
+  if (!width || !height) {
+    throw new Error(
+      `scene node "${node.name ?? node.id}" has no viewport (got ${JSON.stringify(node.viewport)})`,
+    )
+  }
+  return { width, height }
+}
+
 export const renderSceneP5 = (sketch, { width, height }, node) => {
   sketch.clear()
 
-  const { width: vw, height: vh } = node.viewport ?? { width: 160, height: 90 }
+  const { width: vw, height: vh } = requireViewport(node)
   const scale = Math.min(width / vw, height / vh)
 
   const offsetX = (width - vw * scale) / 2
@@ -189,7 +216,9 @@ export const renderSceneP5 = (sketch, { width, height }, node) => {
   )
 
   for (const element of elements) {
-    if (element.enabled === false) continue
+    if (element.enabled === false) {
+      continue
+    }
     if (element.type === 'background' && element.props.fill) {
       sketch.noStroke()
       sketch.fill(element.props.fill)
@@ -221,7 +250,9 @@ export const renderSceneP5 = (sketch, { width, height }, node) => {
   sketch.pop()
 
   for (const effect of node.effects ?? []) {
-    if (effect.enabled === false) continue
+    if (effect.enabled === false) {
+      continue
+    }
     if (effect.type === 'grain') {
       applyGrain(sketch, effect.props)
     }
@@ -232,7 +263,7 @@ export const renderSceneP5 = (sketch, { width, height }, node) => {
 // The same letterbox transform renderSceneP5 uses, factored out so screen↔logical
 // conversions and hit-testing stay in sync with what's actually drawn.
 const viewportTransform = (canvasWidth, canvasHeight, node) => {
-  const { width: vw, height: vh } = node.viewport ?? { width: 160, height: 90 }
+  const { width: vw, height: vh } = requireViewport(node)
   const scale = Math.min(canvasWidth / vw, canvasHeight / vh)
   return {
     scale,
@@ -288,16 +319,21 @@ export const pickElement = (canvasWidth, canvasHeight, node, screenX, screenY) =
   )
   for (let index = ordered.length - 1; index >= 0; index--) {
     const element = ordered[index]
-    if (element.enabled === false) continue
+    if (element.enabled === false) {
+      continue
+    }
     const bounds = elementBounds(element)
-    if (!bounds) continue
+    if (!bounds) {
+      continue
+    }
     if (
       logicalX >= bounds.left &&
       logicalX <= bounds.right &&
       logicalY >= bounds.top &&
       logicalY <= bounds.bottom
-    )
+    ) {
       return element
+    }
   }
   return null
 }

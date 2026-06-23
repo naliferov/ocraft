@@ -51,10 +51,13 @@ function tokenize(src) {
     // "@word" -> a keyword/builtin token (e.g. @a, @w, @r, @l)
     if (char === '@') {
       let j = i + 1
-      while (j < src.length && isAlnum(src[j])) j++
+      while (j < src.length && isAlnum(src[j])) {
+        j++
+      }
       const name = src.slice(i + 1, j)
-      if (name.length === 0)
+      if (name.length === 0) {
         throw new SyntaxError(`'@' must be followed by a name at position ${i}`)
+      }
       tokens.push({ type: 'AT', name })
       i = j
       continue
@@ -63,7 +66,9 @@ function tokenize(src) {
     // identifier
     if (isAlpha(char)) {
       let j = i
-      while (j < src.length && isAlnum(src[j])) j++
+      while (j < src.length && isAlnum(src[j])) {
+        j++
+      }
       tokens.push({ type: 'IDENT', name: src.slice(i, j) })
       i = j
       continue
@@ -72,7 +77,9 @@ function tokenize(src) {
     // number (integer or decimal)
     if (isDigit(char)) {
       let j = i
-      while (j < src.length && (isDigit(src[j]) || src[j] === '.')) j++
+      while (j < src.length && (isDigit(src[j]) || src[j] === '.')) {
+        j++
+      }
       tokens.push({ type: 'NUMBER', value: Number(src.slice(i, j)) })
       i = j
       continue
@@ -128,11 +135,15 @@ function parse(tokens) {
   const next = () => tokens[pos++]
   const expect = (type) => {
     const token = next()
-    if (token.type !== type) throw new SyntaxError(`Expected ${type} but got ${token.type}`)
+    if (token.type !== type) {
+      throw new SyntaxError(`Expected ${type} but got ${token.type}`)
+    }
     return token
   }
   const skipNewlines = () => {
-    while (peek().type === 'NEWLINE') next()
+    while (peek().type === 'NEWLINE') {
+      next()
+    }
   }
 
   // Parse statements until `endType` (EOF for the program, RBRACE for a block).
@@ -140,11 +151,15 @@ function parse(tokens) {
     const body = []
     skipNewlines()
     while (peek().type !== endType) {
-      if (peek().type === 'EOF') throw new SyntaxError(`Unexpected EOF: expected ${endType}`)
+      if (peek().type === 'EOF') {
+        throw new SyntaxError(`Unexpected EOF: expected ${endType}`)
+      }
       body.push(parseStatement())
-      if (peek().type === 'NEWLINE') skipNewlines()
-      else if (peek().type !== endType)
+      if (peek().type === 'NEWLINE') {
+        skipNewlines()
+      } else if (peek().type !== endType) {
         throw new SyntaxError(`Expected end of statement but got ${peek().type}`)
+      }
     }
     return body
   }
@@ -178,7 +193,9 @@ function parse(tokens) {
   }
 
   function parseExpression() {
-    if (peek().type === 'AT' && (peek().name === 'a' || peek().name === 'f')) return parseFn()
+    if (peek().type === 'AT' && (peek().name === 'a' || peek().name === 'f')) {
+      return parseFn()
+    }
     return parseAdditive()
   }
 
@@ -246,7 +263,9 @@ function parse(tokens) {
       return { type: 'Var', name: token.name }
     }
     if (token.type === 'AT') {
-      if (token.name === 'a' || token.name === 'f') return parseFn()
+      if (token.name === 'a' || token.name === 'f') {
+        return parseFn()
+      }
       next()
       return { type: 'Builtin', name: token.name } // e.g. @l — a callable value
     }
@@ -280,8 +299,12 @@ class Scope {
     return this.vars.has(name) || (this.parent !== null && this.parent.has(name))
   }
   get(name) {
-    if (this.vars.has(name)) return this.vars.get(name)
-    if (this.parent !== null) return this.parent.get(name)
+    if (this.vars.has(name)) {
+      return this.vars.get(name)
+    }
+    if (this.parent !== null) {
+      return this.parent.get(name)
+    }
     throw new Error(`Undefined variable: ${name}`)
   }
   set(name, value) {
@@ -306,7 +329,9 @@ async function evaluate(node, env) {
     case 'Program':
     case 'Block': {
       let last
-      for (const stmt of node.body) last = await evaluate(stmt, env)
+      for (const stmt of node.body) {
+        last = await evaluate(stmt, env)
+      }
       return last
     }
 
@@ -332,7 +357,9 @@ async function evaluate(node, env) {
 
     case 'Builtin': {
       const key = '@' + node.name
-      if (!env.has(key)) throw new Error(`Unknown keyword: @${node.name}`)
+      if (!env.has(key)) {
+        throw new Error(`Unknown keyword: @${node.name}`)
+      }
       return env.get(key)
     }
 
@@ -363,7 +390,9 @@ async function evaluate(node, env) {
           try {
             return await evaluate(node.body, local)
           } catch (error) {
-            if (error instanceof ReturnSignal) return error.value
+            if (error instanceof ReturnSignal) {
+              return error.value
+            }
             throw error
           }
         })()
@@ -372,15 +401,21 @@ async function evaluate(node, env) {
 
     case 'Await': {
       const value = await evaluate(node.expr, env)
-      if (value instanceof Async) return await value.promise
+      if (value instanceof Async) {
+        return await value.promise
+      }
       return value // awaiting a plain value is a no-op, like JS `await 2`
     }
 
     case 'Call': {
       const callee = await evaluate(node.callee, env)
       const args = []
-      for (const argNode of node.args) args.push(await evaluate(argNode, env))
-      if (typeof callee !== 'function') throw new Error('Attempt to call a non-function')
+      for (const argNode of node.args) {
+        args.push(await evaluate(argNode, env))
+      }
+      if (typeof callee !== 'function') {
+        throw new Error('Attempt to call a non-function')
+      }
       return callee(...args)
     }
 

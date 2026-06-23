@@ -10,7 +10,9 @@ export default (x) => {
 
   const disconnect = () => {
     if (socket) {
-      try { socket.close() } catch {}
+      try {
+        socket.close()
+      } catch {}
       socket = null
     }
   }
@@ -26,17 +28,27 @@ export default (x) => {
       panel.push(`bad URL: ${err.message}`, 'sys')
       return
     }
-    socket.onopen = () => { status.set('open'); panel.push('open ✅', 'sys') }
+    socket.onopen = () => {
+      status.set('open')
+      panel.push('open ✅', 'sys')
+    }
     socket.onmessage = (event) => {
-      const data = typeof event.data === 'string'
-        ? event.data
-        : `[binary ${event.data.size ?? event.data.byteLength ?? '?'} bytes]`
+      const data =
+        typeof event.data === 'string'
+          ? event.data
+          : `[binary ${event.data.size ?? event.data.byteLength ?? '?'} bytes]`
       panel.push(data, 'down')
     }
-    socket.onerror = () => { status.set('error'); panel.push('error ❌ (see devtools Network/Console)', 'sys') }
+    socket.onerror = () => {
+      status.set('error')
+      panel.push('error ❌ (see devtools Network/Console)', 'sys')
+    }
     socket.onclose = (event) => {
       status.set('closed')
-      panel.push(`closed 🔌 code=${event.code}${event.reason ? ' reason=' + event.reason : ''}`, 'sys')
+      panel.push(
+        `closed 🔌 code=${event.code}${event.reason ? ' reason=' + event.reason : ''}`,
+        'sys',
+      )
     }
   }
 
@@ -51,7 +63,11 @@ export default (x) => {
   }
 
   x.ui.row((row) => {
-    urlField = row.input({ value: 'wss://stream.x8.deno.net/ws', placeholder: 'wss://host/path', onEnter: connect })
+    urlField = row.input({
+      value: 'wss://stream.x8.deno.net/ws',
+      placeholder: 'wss://host/path',
+      onEnter: connect,
+    })
     row.button('Connect', connect)
     row.button('Disconnect', disconnect)
     status = row.text('idle')

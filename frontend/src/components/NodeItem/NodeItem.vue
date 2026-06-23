@@ -94,6 +94,7 @@ const commitName = () => {
 <template>
   <div class="wrap">
     <div class="info">
+      <span class="node-id" title="Node id">#{{ node.id }}</span>
       <input
         v-if="editingName"
         ref="nameInput"
@@ -156,6 +157,16 @@ const commitName = () => {
 
 span.name {
   cursor: pointer;
+}
+
+.node-id {
+  font-family: 'JetBrains Mono', monospace;
+  font-feature-settings:
+    'liga' 0,
+    'calt' 0; /* no programming ligatures */
+  font-size: 0.7em;
+  color: #999;
+  flex-shrink: 0;
 }
 
 /* No border/padding and box-sizing: border-box, so the measured width/height map

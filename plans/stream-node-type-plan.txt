@@ -1,0 +1,204 @@
+===============================================================================
+ `stream` node type (reimplement) — plan
+ (roadmap: "`stream` node type (removed — reimplement later)")
+ (written 2026-06-19; for later review)
+===============================================================================
+
+## What & why
+The `stream` node type was removed — frontend Stream.vue (a placeholder black
+canvas reusing the shared Stage chrome), its NODE_TYPES registration, and the
+`sample stream` node — to keep the type list to things that actually work. The
+placeholder rendered nothing and had no run semantics behind it. Reintroduce it
+*properly*, which the README says needs two halves that don't exist yet:
+  (1) a real **frontend** editor/preview (not a dead black canvas), and
+  (2) a **backend run model** — today nodes are inert stored JSON with no execution;
+      a stream node must be *configured* and actually *run/executed* somewhere.
+
+A "stream" is a node that produces a **continuous, live sequence of values/frames
+over a WebSocket**, as opposed to: an `html` node (static body), a `scene2d`/`scene3d`
+node (a render loop driven by local timeline state), or a `script` node (run-once,
+returns a value). The natural home for the live channel is the already-deployed
+cloud WS exchange, wss://stream.x8.deno.net/ws (Deno Deploy) — the stream node is
+the first real *consumer/producer* of that hub, which currently only has the
+websocket-tester (node 11) poking it.
+
+## What a stream node IS (the model decision)
+A stream node = { a SOURCE that emits messages } -> { the WS exchange, on a topic }
+-> { SUBSCRIBERS that render }. Pick a small, honest set of source kinds rather than
+one vague "stream":
+  - `subscribe`  — pure consumer: subscribe to a topic on the exchange and render
+    whatever arrives (the simplest real thing; no backend producer needed).
+  - `script`     — a producer: a JS body (like a script node) that, instead of
+    returning once, is handed an `emit(value)` and a `signal` and pushes messages on
+    an interval/loop until stopped. This is the new RUN MODEL (see below).
+  - `relay`      — bridge an external upstream WS/HTTP-SSE source onto an exchange
+    topic (e.g. a price feed, a sensor). Producer that doesn't author values, just
+    forwards.
+Start with `subscribe` + `script`; `relay` is a later add. The kind + config live in
+state.json; a `script`-kind stream also has a body sidecar (reuse NODE_BODY).
+
+state.json shape (config is inline, like scene nodes keep elements/tracks inline):
+  {
+    "name": "btc ticker", "type": "stream", "parentId": "3",
+    "stream": {
+      "kind": "subscribe" | "script" | "relay",
+      "topic": "ticker.btc",          // exchange topic to pub/sub on
+      "render": "log" | "scene",       // how the preview shows messages
+      "intervalMs": 1000,              // script-kind: emit cadence (advisory)
+      "upstream": "wss://…"            // relay-kind only
+    }
+  }
+For render:"scene", the stream's messages drive a scene2d-style canvas (each message
+mutates element positions/values) — this is where it "relates to scene rendering":
+a scene is a *local* timeline-driven loop; a stream-scene is the *same renderer* fed
+by *remote* messages. Phase 1 ships render:"log" (a live message log, identical to
+the websocket-tester's x.ui log); render:"scene" is phase 3.
+
+## Fit with the node model / architecture
+  - Storage: a stream node is a folder like any other; config inline in state.json,
+    optional body for the `script` kind via the existing NODE_BODY map (add
+    `stream: { file: 'stream.js', contentType: 'text/javascript' }` — or reuse
+    script.js; a distinct name keeps the run model legible). No new store concepts.
+  - Frontend handler: one new entry in NODE_TYPES (NodeItem.vue) — `stream:
+    { label: 'stream', component: Stream }` — exactly the "adding a type = one entry"
+    contract. The removed Stream.vue is reborn with real content.
+  - Backend run model: this is the genuinely new part. Today nothing *runs* a node
+    server-side (script nodes run in the browser; the kernel only does CRUD). A
+    `script`-kind stream needs a long-lived producer. ocraft already has the right
+    primitive for "long-lived process": the **service manager** (runtime/
+    serviceManager.js supervises long-running services with state + rotating logs).
+    A stream producer is conceptually a service (it stays up, unlike a finite task).
+    Two viable execution sites — pick per §run model.
+  - The hub: wss://stream.x8.deno.net/ws. Producers PUBLISH to a topic; the editor
+    SUBSCRIBES. This replaces the poll-based pattern with the live exchange the
+    README's "Integrate stream.x8.deno.net" item wants — the stream node is its
+    first concrete user. (Pub/sub topic protocol + auth on the exchange are open;
+    see plans/deno-deploy-mcp-plan.txt §3 for the token gate.)
+
+## Backend run model (the new part — concrete)
+The exchange today is likely a naive broadcast relay (every message to every client).
+Step 0 is to give it minimal **topics**: a client sends {type:"sub", topic} /
+{type:"pub", topic, data}; the relay routes pub messages only to subscribers of that
+topic. (Small change in ws-exchange/main.ts; coordinate with the deno-deploy plan.)
+
+A `script`-kind stream producer:
+  - Body contract (the run model, distinct from script nodes' run-once default):
+      export default async ({ emit, signal, args, log }) => {
+        let n = 0
+        const timer = setInterval(() => emit({ n: n++, t: Date.now() }), 1000)
+        signal.addEventListener('abort', () => clearInterval(timer))
+      }
+    `emit(value)` publishes to the node's configured topic; `signal` is an
+    AbortSignal that fires on Stop; it runs until aborted (no return value, unlike
+    `export default (x) => result`). This deliberately mirrors but does NOT reuse
+    script nodes' `x` — a stream is a different lifecycle (continuous vs. one-shot).
+  - WHERE it runs — two options, choose:
+    (A) IN-EDITOR producer [phase 1, recommended to start]: the browser runs the
+        body (blob-import, like runNodeCode), opens a WS to the exchange, and emit()
+        publishes on the topic. Zero new backend execution; "run" = the Stream.vue
+        editor has Start/Stop. Honest limit: only produces while the tab is open —
+        fine for authoring/demo, not a true always-on stream.
+    (B) HEADLESS producer [phase 2, the real run model]: a backend runner executes
+        the body server-side as a supervised process. Cleanest fit: a single
+        `stream-host` SERVICE (runtime/services/) that, on start, reads all stream
+        nodes with kind:"script", spawns each body in a worker_thread (isolation +
+        the AbortSignal maps to worker.terminate()), connects to the exchange, and
+        publishes. Lifecycle via the existing service manager
+        (service start/stop/status/logs stream-host). This is where "nodes get run
+        semantics on the backend" actually lands — and it reuses the supervisor
+        rather than inventing a scheduler. (The README's sandbox/resource-limits
+        item is the natural follow-on: a producer is untrusted code in a loop.)
+    Decision: ship (A) to make the type real and demoable; design the body contract
+    so the SAME body runs unchanged under (B). (B) is the substantive backend work.
+
+A `subscribe`-kind stream needs no producer — the editor just subscribes and renders.
+A `relay`-kind is a producer that connects upstream and forwards — runs under the
+same (A)/(B) split, (B) strongly preferred (a relay should be always-on).
+
+## Implementation plan (phased)
+  PHASE 0 — exchange topics: add sub/pub/topic routing to ws-exchange/main.ts
+    (coordinate w/ plans/deno-deploy-mcp-plan.txt; redeploy via the deno-deploy MCP).
+    Without topics, "stream" is just the broadcast tester again.
+  PHASE 1 — `subscribe` + in-editor `script` producer, render:"log":
+    - Re-add Stream.vue (frontend/src/components/NodeItem/nodeTypes/Stream.vue):
+      reuse Stage.vue chrome (toolbar + optional canvas); toolbar = Start/Stop +
+      topic field + kind/render selects; body = a live message log (reuse the
+      makeLog styling from useScriptUi.js, or factor it into a shared lib so both
+      the script x.ui log and the stream log share one implementation).
+    - New composable frontend/src/composables/useStream.js: openStream({ topic,
+      onMessage, token }) -> { send, close } wrapping a WS to the exchange with
+      sub/pub framing + reconnect/backoff. The websocket-tester (node 11) is the
+      reference for connecting; lift the reusable bits here.
+    - `script` kind in-editor: blob-import the body, call default({ emit, signal,
+      args, log }) where emit -> stream.send({type:'pub',topic,data}); Start opens
+      the socket + runs the body, Stop aborts the signal + closes.
+    - Register `stream` in NODE_TYPES (NodeItem.vue). Add the NODE_BODY entry for
+      the script kind in kernel/api.js. Recreate a `sample stream` node (a
+      subscribe-kind on a demo topic + a script-kind that emits a counter) so the
+      type ships with a working example, like before.
+  PHASE 2 — headless producer (option B): runtime/streamHost.js + a `stream-host`
+    service config (runtime/services/stream-host.js, {cmd,args,cwd,env}); it reads
+    stream nodes from the kernel API (or the data dir), runs script-kind bodies in
+    worker_threads, publishes to the exchange. Wire start/stop via serviceManager.
+    This is the real "backend run model"; gate on the exchange token.
+  PHASE 3 — render:"scene": feed incoming messages into the scene2d renderer
+    (renderSceneP5) so a stream drives a live canvas (positions/values from
+    messages). Reuses the scene renderer; the message shape maps to element updates.
+
+## Key files / components
+  - frontend/src/components/NodeItem/nodeTypes/Stream.vue     (NEW/reborn — editor+preview)
+  - frontend/src/components/NodeItem/NodeItem.vue             (+stream in NODE_TYPES)
+  - frontend/src/composables/useStream.js                     (NEW — WS sub/pub client)
+  - frontend/src/composables/useScriptUi.js                   (factor out makeLog to share)
+  - kernel/api.js                                             (+stream in NODE_BODY)
+  - ws-exchange/main.ts                                        (sub/pub topic routing)
+  - runtime/streamHost.js + runtime/services/stream-host.js   (NEW — phase 2 headless)
+  - kernel/data/nodes/<new>/                                   (recreate `sample stream`)
+
+## Open questions / risks
+  - Exchange protocol is unspecified (broadcast vs. topics, auth). This plan assumes
+    a minimal sub/pub layer is added first — it's a hard prerequisite and couples to
+    plans/deno-deploy-mcp-plan.txt. Settle topic naming + the token gate there.
+  - Backend execution = running arbitrary node-authored JS in a loop server-side.
+    Phase-2 worker_threads give isolation but NOT resource caps; this is precisely
+    the README "sandboxed execution with resource limits" item — treat phase 2 as
+    its first real driver, not an afterthought.
+  - In-editor producers (phase 1) only run while the tab is open — set expectations
+    in the UI ("producing — tab must stay open"); the always-on story is phase 2.
+  - Backpressure / volume: a fast emit() could flood the log/exchange. Cap render to
+    the last K lines (the log already auto-scrolls); advisory intervalMs on producers.
+  - Run-model divergence: a stream body's signature ({emit,signal}) differs from a
+    script node's (x). Keep them deliberately distinct (different lifecycles) and
+    documented, rather than overloading `x` with streaming.
+  - `state.json` config churn vs. the versioning plan: stream config edits are
+    metadata; if node versioning lands, don't version every topic tweak.
+
+## Monetization
+Niche but the most plausible paid surface of the three plans, IF hosted. A stream
+node is "a live data feed authored as a node" — the closest thing here to a thing
+people pay for (live dashboards, alerting, feed relays). Realistic angles, honestly
+ranked: (1) a hosted/always-on producer is metered compute — you'd charge for the
+headless `stream-host` running 24/7 (it's literally an always-on process = a cost =
+a usage tier); (2) a marketplace of relay templates (a node that bridges feed X).
+For the current single-user local tool: no charge — but the phase-2 headless runner
+is the one feature here that has an obvious "this costs money to keep running, so
+meter it" story if ocraft ever hosts.
+
+## Marketing
+The most visually compelling of the three. Artifact: two browser windows side by
+side — one editing a `script`-kind stream emitting values, the other a `subscribe`
+node rendering them live (and, in phase 3, a scene canvas moving in real time from
+the feed). Hook: "a node that's a live stream — author the feed and watch it render,
+through a cloud relay." Channel: YouTube (the realtime-across-windows demo is strong
+video; fits plans/youtube-content-plan.txt), X clip. Target user: people into live
+data / creative-coding / realtime viz — and it doubles as the proof the cloud WS
+exchange is real and useful, not just a deployed endpoint.
+
+## Effort — S/M/L
+  L overall (it spans frontend, the exchange, and a new backend run model).
+  - Phase 0 (exchange topics): S, but cross-repo (ws-exchange + redeploy).
+  - Phase 1 (Stream.vue + useStream + in-editor producer, render:log, sample node): M.
+  - Phase 2 (headless stream-host service + worker producers): L — this is the real
+    backend run model and the bulk of the value/risk; pairs with sandboxing.
+  - Phase 3 (render:scene via the p5 renderer): M.
+  Phases 0–1 make the type real and demoable; 2 is the substantive engineering.

@@ -54,7 +54,9 @@ async function waitForActive(id) {
   for (let attempt = 0; attempt < 60; attempt++) {
     const droplet = await getDroplet(id)
     const publicIp = droplet.ipv4.find((network) => network.type === 'public')?.ip
-    if (droplet.status === 'active' && publicIp) return publicIp
+    if (droplet.status === 'active' && publicIp) {
+      return publicIp
+    }
     await sleep(5000)
   }
   throw new Error('droplet did not become active within ~5 min')

@@ -1,0 +1,215 @@
+===============================================================================
+ Self-extending node types — make a handler itself a node (the keystone)
+ (roadmap: "Self-extending node types — make a handler itself a node")
+===============================================================================
+
+## What & why
+
+ocraft's identity claim is "you can create any node *type* you want." Graded
+honestly against the code, only two-thirds is true:
+
+  - create any node DATA — TRUE. The store is type-agnostic; `POST /api/nodes`
+    accepts any `type` string, the tree is computed from `parentId`, and a
+    running script can raw-`fetch` the API to manufacture nodes at runtime.
+  - a note that IS a program — TRUE, and the real differentiator (`x.x` compose,
+    `x.ui`, `x.auth`, AssemblyScript→WASM).
+  - create any node TYPE — FALSE today. A type only becomes real once it has a
+    *handler*, and handlers are five hardcoded compile-time Vue imports
+    (`NodeItem.vue:5-9`, registered in `NODE_TYPES`, lines 30-42), plus a
+    two-entry `NODE_BODY` dict (`kernel/api.js:124-127`). You cannot register a
+    handler from inside the running app: Vue resolves components at build time,
+    and the server has no hot-reload.
+
+So ocraft is **open in its data plane but closed/build-time in its behavior
+plane**. Closing that is THE keystone: it turns "create any node type" from the
+name's aspiration into an accurate description, and it is the same move that
+the life-management direction needs — a system that can grow its own organs
+(a new renderer, a new automation surface) without a source edit + rebuild.
+
+The elegant part: the runtime ALREADY dynamic-imports from the store — for
+script *bodies* (`useNodeScripts.js:86-104` blob-imports `script.js` from
+`/api/nodes/:id/body`) — just never for *views*. We reuse that exact mechanism
+for handlers.
+
+## Fit with the node model / architecture
+
+A handler becomes a node like any other — a node whose body is a JS module that
+default-exports a Vue render function / component object. The type→renderer map
+moves OUT of the hardcoded `NODE_TYPES` constant and INTO the store: a node of
+(new) type `handler` declares which `type` string it renders. `NodeItem.vue`
+resolves a node's component by looking up that registry and, on a miss, lazily
+blob-imports the handler node's body via `defineAsyncComponent`. Surfaces:
+
+  - frontend: `NodeItem.vue` (resolution), a new `useHandlers.js` composable
+    (the registry + loader, sibling to `useNodeScripts.js`), the no-handler card
+    (already shipped) becomes the "create one?" entry point.
+  - kernel: `NODE_BODY` (`kernel/api.js:124`) becomes data-driven so a new
+    bodied type needs no server restart.
+  - x context: a cycle-guarded graph-mutation affordance (`x.create`/`x.save`/
+    `x.tree`) so a script can author the handler node from inside.
+
+## Implementation plan (phased), in leverage order
+
+Steps 1-2 are the whole ballgame. Ship them and the claim becomes true; the
+rest is ergonomics + safety.
+
+### Phase 1 — kill the silent fallback (DONE — note as shipped)
+Already done: `NodeItem.vue:59` resolves an unknown type to `null` and the
+template renders an explicit *"no handler for type X"* card (lines 121-131)
+instead of masquerading as an empty Scene. This turned the gap into a visible
+authoring affordance — the hook the rest of the plan hangs on. Leave as-is now;
+Phase 3 upgrades the card's copy to a "create a handler" button.
+
+### Phase 2 — make the handler a node (THE step)
+Introduce a `handler` node type whose body is a JS module:
+
+    // body of a `handler` node (plain JS, NOT an .vue SFC)
+    export const rendersType = 'kanban'          // the type string it handles
+    export default {                              // a Vue component options object
+      props: { node: { type: Object, required: true } },
+      setup(props) { /* … */ },
+      render() { /* h(...) */ },
+    }
+
+Decision — **avoid in-browser SFC compilation.** Compiling `.vue` single-file
+components in the browser needs `@vue/compiler-sfc` (heavy, and a fresh attack
+surface). Instead a handler body is a plain JS module exporting a component
+*options object* with a `render()` (or a `setup()` returning a render fn). Vue's
+`h()` is enough for real editors; authors who want templates can use
+`html`-string render helpers. This keeps the loader identical to the script
+loader — fetch text → Blob → `import()`.
+
+Build the registry in a new `frontend/src/composables/useHandlers.js`:
+
+  - `loadHandlerComponent(nodeId)` — mirror `loadModule` in `useNodeScripts.js`
+    (`:86-104`): fetch `/api/nodes/:id/body`, `URL.createObjectURL`, dynamic
+    `import()`, cache by id, `revokeObjectURL`. Returns the module's default
+    (the component options).
+  - `handlerRegistry` — a reactive `Map<typeString, handlerNodeId>` built by
+    scanning the node list for `type === 'handler'` nodes and reading their
+    `rendersType` (stored in `state.json`, so it's in the cheap node-list
+    payload — no body fetch to build the map).
+  - `clearHandlerCache()` — called on handler-node save, exactly like
+    `clearCache()` for scripts, so an edited handler re-imports.
+
+In `NodeItem.vue`, replace the static `NODE_TYPES` lookup with a two-tier
+resolve:
+
+    const builtin = NODE_TYPES[nodeType.value]?.component
+    const dynamicHandlerId = handlerRegistry.value.get(nodeType.value)
+    const activeComponent = computed(() =>
+      builtin
+        ?? (dynamicHandlerId
+              ? defineAsyncComponent(() => loadHandlerComponent(dynamicHandlerId))
+              : null))
+
+Built-ins win (so `html`/`script`/scenes keep their hand-tuned components and
+their perf characteristics); a store-defined handler fills any other type; a
+genuinely unregistered type still hits the no-handler card. The type picker's
+options become `builtinTypes ∪ registeredHandlerTypes`.
+
+Contract for a handler component: receives `node` as a prop (same as every
+built-in node-type component), MAY `defineExpose({ save })` to persist its own
+body (NodeItem's single Save already calls `componentRef.value?.save?.()`,
+lines 21-24 — dynamic components inherit this for free).
+
+### Phase 3 — graph-mutation affordance on `x`
+Today a script can manufacture nodes only by incidental raw `fetch`. Give the
+running `x` (built in `makeCtx`, `useNodeScripts.js:147-177`) first-class,
+cycle-aware helpers so a script can *author a handler node from inside the app*:
+
+  - `x.create({ type, name, parentId, body })` → `POST /api/nodes` (+ a body
+    `POST` when `body` is given). Returns the new id.
+  - `x.save(id, { state?, body? })` → `POST /api/nodes/:id` and/or `/body`.
+  - `x.tree(rootId?)` → the node subtree from the store (read).
+
+These reuse the same store/API the editor uses; they're the programmatic twin
+of the tree UI. Cycle note: graph *reads* are safe; the existing `x.x` cycle
+guard (the `stack`, lines 156-159) is unaffected — `x.create`/`x.save` mutate,
+they don't re-enter scripts, so no new guard is needed, but a depth/quantity
+cap belongs in the sandbox (see sandboxed-execution-plan.txt). With these, a
+"make me a kanban type" script writes a `handler` node and the new type is live
+on the next render — the self-extension loop closed end to end.
+
+### Phase 4 — data-driven NODE_BODY (no server restart for a new bodied type)
+`NODE_BODY` (`kernel/api.js:124-127`) currently hardcodes `script`→`script.js`
+and `html`→`content.html`, read by `bodySpecOf` (`:131-138`). Make it
+data-driven so a brand-new bodied type (e.g. a `handler` node's body, or a
+future custom type's sidecar) is served without editing the kernel:
+
+  - default convention: a node of type `T` with no explicit spec stores its body
+    at `body.<ext>` (or just `body`) with a sane content-type, so `bodySpecOf`
+    returns a spec for ANY type rather than `null`. Keep the two named specs
+    (`script.js`, `content.html`) as overrides for the existing on-disk layout.
+  - register `handler` → `{ file: 'handler.js', contentType: 'text/javascript' }`.
+  - optional: let a `handler` node DECLARE the body filename/content-type of the
+    type it defines (read from its `state.json`), folding the kernel's body map
+    into the same store-as-source-of-truth the renderer map now uses.
+
+### Phase 5 — pair with a sandbox (hard dependency for safety)
+Loading a handler from a node body means **executing arbitrary code from data**,
+and scripts already run unsandboxed in the page. A malicious/buggy handler can
+read `localStorage` (tokens via `x.auth`), spin the event loop, or exfiltrate.
+Before this is anything but a single-user local toy, handlers + scripts must run
+capability-scoped (Worker/iframe in the browser). This is its own roadmap item —
+see **sandboxed-execution-plan.txt** — and is the gate on ever exposing ocraft
+to anyone else's nodes.
+
+## Key files / components
+  - `frontend/src/components/NodeItem/NodeItem.vue` — two-tier component resolve;
+    upgrade the no-handler card (Phase 1, done) to a create-handler CTA.
+  - `frontend/src/composables/useHandlers.js` — NEW: registry + blob-loader for
+    handler nodes (mirror of `useNodeScripts.js`).
+  - `frontend/src/composables/useNodeScripts.js` — extend `makeCtx` with
+    `x.create`/`x.save`/`x.tree` (Phase 3).
+  - `kernel/api.js` — make `NODE_BODY`/`bodySpecOf` data-driven (Phase 4); add a
+    `handler` body spec.
+  - a seed `handler` node (under a `system/` category) as the worked example +
+    living docs — e.g. a minimal `kanban` or `table` renderer.
+
+## Open questions / risks
+  - Component contract drift: built-in node-type components are SFCs; handler
+    nodes are render-fn objects. Two authoring shapes for "a node type" is a
+    papercut — acceptable (built-ins are privileged/perf-critical), but document
+    it loudly so it isn't mistaken for a bug.
+  - No SFC = no `<template>`/`<style scoped>` for handler authors. `h()` + a tiny
+    helper is the trade for not shipping the SFC compiler. Revisit only if
+    authoring friction proves real.
+  - Reactivity/lifecycle of a blob-imported component: `defineAsyncComponent` +
+    cache-bust-on-save is proven for scripts; verify HMR-like behavior (edit
+    handler → re-render) doesn't leak old module instances.
+  - Hard dependency on the sandbox (Phase 5) for any non-single-user use. Ship
+    1-4 for the single-user case; do not open to others' handlers without it.
+
+## Monetization
+The keystone is what makes ocraft a *platform* rather than a personal tool, so
+the monetization is indirect but the largest of any roadmap item: a hosted,
+multi-user "scriptable node OS" only makes sense once types are self-extending
+AND sandboxed. Concrete near-term angle: a **handler/type marketplace** — sell or
+share node-type packs (a kanban type, a habit-tracker type, a synth type) as
+importable `handler` nodes, taking a marketplace cut. Who pays: power users who
+want a capability without writing it. Cheapest viable charge: a paid "type pack"
+download (static, no infra) before any hosted runtime exists. Honest: no revenue
+until both this and the sandbox land — it's an enabler, not a product.
+
+## Marketing
+The demo writes itself and is the single best "show, don't tell" artifact ocraft
+has: a screen recording where someone hits the **no-handler card**, asks an
+in-editor script (or the ai-chat node) to "make a kanban node type," and the new
+type appears in the picker and *renders a real board* — all without touching the
+codebase or restarting. Hook: "I added a new node type to my app from inside the
+app, while it was running." Channel: a short clip on X / HN ("Show HN: a node OS
+that grows its own UI") + a longer YouTube build-along (fits
+`plans/youtube-content-plan.txt`). Target user: tool-builders / devs drawn to
+self-modifying, Smalltalk-image-like systems.
+
+## Effort — L
+  - Phase 1 — DONE (the no-handler card).
+  - Phase 2 — M: the loader is a copy of the script loader; the work is the
+    two-tier resolve, the registry, and the render-fn component contract + one
+    seed handler.
+  - Phase 3 — S: three thin methods on `makeCtx` over the existing API.
+  - Phase 4 — S: generalize `NODE_BODY`/`bodySpecOf`.
+  - Phase 5 — separate L (its own plan), and the real gate on going multi-user.
+  Single-user "create any type" is reachable with Phases 2-4 alone (M-ish);
+  the L rating is dominated by doing it *safely* (Phase 5).

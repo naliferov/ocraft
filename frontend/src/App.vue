@@ -13,7 +13,9 @@ const route = useRoute()
 watch(
   () => route.params.id,
   (id) => {
-    if (id) store.activeNodeId = id
+    if (id) {
+      store.activeNodeId = id
+    }
   },
   { immediate: true },
 )
@@ -30,7 +32,9 @@ const pruneBySearch = (nodes, needle) => {
   for (const node of nodes) {
     const children = pruneBySearch(node.children, needle)
     const selfMatches = (node.name || '').toLowerCase().includes(needle)
-    if (selfMatches || children.length) kept.push({ ...node, children })
+    if (selfMatches || children.length) {
+      kept.push({ ...node, children })
+    }
   }
   return kept
 }
@@ -52,7 +56,9 @@ const removeNode = async (id) => {
   deleteError.value = ''
   try {
     await store.remove(id)
-    if (store.activeNodeId) navigate(store.activeNodeId)
+    if (store.activeNodeId) {
+      navigate(store.activeNodeId)
+    }
   } catch (err) {
     deleteError.value = err.message
   }
@@ -61,7 +67,9 @@ const removeNode = async (id) => {
 // Switch a deleted node back in from the undo pool and land on it.
 const restoreNode = async (id) => {
   const node = await store.restore(id)
-  if (node) navigate(node.id)
+  if (node) {
+    navigate(node.id)
+  }
 }
 
 const renameNode = ({ id, name }) => store.rename(id, name)
@@ -143,12 +151,44 @@ const reparentNode = async ({ id, parentId }) => {
           :key="store.activeNode.id"
           :node="store.activeNode"
         />
+        <!-- Explicit not-found state: an id that resolves to no node (deleted, or a
+             bad address). Guarded by store.nodes.length so it doesn't flash before
+             the tree has loaded. Mirrors NodeItem's "no handler for type" card. -->
+        <div v-else-if="route.params.id && store.nodes.length" class="node-missing">
+          <p>
+            No node <code>#{{ route.params.id }}</code>.
+          </p>
+          <p>
+            This address doesn't resolve to a node in the store — it may have been deleted, or the id
+            is wrong. Pick a node from the tree, or
+            <a href="#" @click.prevent="router.push('/')">go home</a>.
+          </p>
+        </div>
       </n-layout-content>
     </n-layout>
   </n-config-provider>
 </template>
 
 <style scoped>
+/* Shown for /node/:id when the id resolves to no node — the explicit not-found
+   card (was a blank content pane). Mirrors NodeItem's .no-handler styling. */
+.node-missing {
+  max-width: 460px;
+  margin: 18vh auto 0;
+  padding: 20px 24px;
+  border: 1px dashed #555;
+  border-radius: 8px;
+  color: #bbb;
+  font-size: 0.9em;
+  line-height: 1.5;
+  text-align: center;
+}
+.node-missing code {
+  color: #ffd56b;
+}
+.node-missing a {
+  color: #3d7eff;
+}
 .tree-toolbar {
   display: flex;
   align-items: center;

@@ -1,9 +1,9 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, computed, nextTick } from 'vue'
-import { NButton, NPopselect, NCheckbox } from 'naive-ui'
+import { NButton, NPopselect, NCheckbox, NSelect } from 'naive-ui'
 import { useNodesStore } from '../../../stores/nodes.js'
-import { runNodeCode, runWasmNode, clearCache } from '../../../composables/useNodeScripts.js'
-import { createScriptUi } from '../../../composables/useScriptUi.js'
+import { clearCache } from '../../../composables/useNodeScripts.js'
+import { runScriptType, scriptTypes } from '../../../composables/useScriptTypes.js'
 
 const props = defineProps({
   node: { type: Object, required: true },
@@ -15,13 +15,30 @@ const savedCode = ref('') // last persisted script.js — lets save() skip no-op
 const txtAreaRef = ref(null)
 const insertTarget = ref(null) // bound model for the picker; reset after each pick
 
-// Host for the script's own controls (x.ui). The panel lives above the editor;
-// a run fills it, and we tear down the previous run's UI/sockets first.
-const uiHostRef = ref(null)
-let uiHost = null
-const teardownUi = () => {
-  uiHost?.cleanup()
-  uiHost = null
+// Host above the editor for whatever a run produces — EITHER the script's imperative
+// controls (x.ui, js scripts) OR a mounted view component (vue-esm / vue-sfc).
+// A run fills it; we tear down the previous run first (x.ui sockets/timers, or the
+// view app's unmount → its onUnmounted hooks).
+const scriptViewRef = ref(null)
+// A run returns a cleanup fn (close x.ui sockets/timers, or unmount a view app); we
+// call it before the next run and on unmount.
+let cleanup = null
+const teardown = () => {
+  cleanup?.()
+  cleanup = null
+}
+
+// Script-type picker, derived from the registry (single source of truth) so adding a
+// type in useScriptTypes.js updates this dropdown automatically.
+const scriptTypeOptions = scriptTypes.map((type) => ({ label: type, value: type }))
+
+// Plain 'js' is the default (absent field), so picking it clears scriptType.
+const setScriptType = (value) => {
+  if (value === 'js') {
+    delete props.node.scriptType
+  } else {
+    props.node.scriptType = value
+  }
 }
 
 // Live name hints. On load we inject `/*→name*/` right after each x.x("id") so
@@ -42,7 +59,7 @@ const callableOptions = computed(() =>
   store.nodes
     .filter((candidate) => candidate.type === 'script' && candidate.id !== props.node.id)
     .map((candidate) => ({
-      label: `${candidate.name || '(unnamed)'}${candidate.isWasm ? ' ⚙' : ''}  ·  ${candidate.id}`,
+      label: `${candidate.name || '(unnamed)'}${candidate.scriptType === 'assembly-script' ? ' ⚙' : ''}  ·  ${candidate.id}`,
       value: candidate.id,
     })),
 )
@@ -56,34 +73,36 @@ onMounted(async () => {
   }
   // Run-on-open: nodes that are really mini-apps (auth token field, the WS
   // tester) auto-run when opened, so their x.ui panel is there without a click.
-  if (props.node.runOnOpen) await runScript()
+  if (props.node.runOnOpen) {
+    await runScript()
+  }
 })
 
 const runScript = async () => {
   try {
-    if (props.node.isWasm) {
-      // wasm compiles from the SAVED source on the backend — persist first.
-      await save()
-      await runWasmNode(props.node.id)
-    } else {
-      // Fresh UI surface each run: drop the prior run's controls + cleanups
-      // (e.g. open sockets) before building anew.
-      teardownUi()
-      uiHost = createScriptUi(uiHostRef.value)
-      await runNodeCode(scriptCode.value, props.node.id, uiHost.ui)
-    }
+    // Fresh surface each run: tear down the prior run (x.ui sockets/timers, or unmount
+    // the prior view app) before building anew. The scriptType registry does the rest.
+    teardown()
+    cleanup = await runScriptType(props.node.scriptType || 'js', {
+      code: scriptCode.value,
+      selfId: props.node.id,
+      hostEl: scriptViewRef.value,
+      save,
+    })
   } catch (err) {
     console.error(`[node ${props.node.id}] run failed:`, err)
   }
 }
 
-onBeforeUnmount(teardownUi)
+onBeforeUnmount(teardown)
 
 // Persist script.js — called by NodeItem's single Save. Strips the injected name
 // hints so stored source stays clean ids; no-ops if unchanged.
 const save = async () => {
   const cleanStr = stripMarks(scriptCode.value)
-  if (cleanStr === savedCode.value) return
+  if (cleanStr === savedCode.value) {
+    return
+  }
   await fetch(`/api/nodes/${props.node.id}/body`, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain' },
@@ -130,7 +149,7 @@ const onKeydown = (event) => {
       >Run on open</n-checkbox
     >
     <n-popselect
-      v-if="!node.isWasm"
+      v-if="(node.scriptType || 'js') !== 'assembly-script'"
       v-model:value="insertTarget"
       :options="callableOptions"
       trigger="click"
@@ -139,16 +158,24 @@ const onKeydown = (event) => {
     >
       <n-button size="small" :disabled="callableOptions.length === 0">Insert call</n-button>
     </n-popselect>
-    <n-checkbox v-model:checked="node.isWasm">WASM (AssemblyScript)</n-checkbox>
+    <n-select
+      :value="node.scriptType ?? 'js'"
+      :options="scriptTypeOptions"
+      size="small"
+      style="width: 150px; flex-shrink: 0"
+      title="How this script node runs: js · vue-esm · vue-sfc · assembly-script"
+      @update:value="setScriptType"
+    />
   </div>
   <!-- Panel + editor split the body's height equally (see CSS). The panel stays
        collapsed (host empty) until the script adds an x.ui control, so the editor
        gets the full height otherwise; on short windows the body scrolls so neither
        half collapses below its floor. -->
   <div class="script-body">
-    <!-- Script-built controls (x.ui) mount here, above the editor. Stays empty
-         unless the running script adds a control (createScriptUi mounts lazily). -->
-    <div ref="uiHostRef" class="ui-host" />
+    <!-- A run mounts here, above the editor: imperative x.ui controls (normal
+         scripts) or a mounted view component (vue-esm / vue-sfc). Stays empty
+         until a run fills it (x.ui mounts lazily; a view replaces the content). -->
+    <div ref="scriptViewRef" class="script-view" />
     <textarea
       ref="txtAreaRef"
       v-model="scriptCode"
@@ -179,15 +206,15 @@ const onKeydown = (event) => {
   gap: 12px;
 }
 
-/* Empty until a run's script adds an x.ui control. While empty it collapses out
-   of the flex flow entirely (`:empty` → display:none) so it consumes no height
-   and — crucially — no `.script-body` gap above the editor. The moment
-   createScriptUi mounts the panel inside it, it's no longer empty and reappears. */
-.ui-host {
+/* Empty until a run fills it (an x.ui control, or a mounted view component). While
+   empty it collapses out of the flex flow (`:empty` → display:none) so it consumes
+   no height and no `.script-body` gap above the editor; the moment a run mounts
+   content it's no longer empty and reappears. */
+.script-view {
   flex-shrink: 0;
 }
 
-.ui-host:empty {
+.script-view:empty {
   display: none;
 }
 
@@ -200,6 +227,9 @@ const onKeydown = (event) => {
   box-sizing: border-box;
   resize: none;
   font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-feature-settings:
+    'liga' 0,
+    'calt' 0; /* no programming ligatures (=> != ===) */
   font-size: 13px;
   line-height: 1.6;
   padding: 12px;

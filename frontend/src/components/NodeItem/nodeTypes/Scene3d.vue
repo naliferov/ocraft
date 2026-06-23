@@ -17,7 +17,9 @@ let resizeObserver = null
 
 onMounted(() => {
   const container = preview.value
-  if (!container) return
+  if (!container) {
+    return
+  }
   controller = createScene3d(container, props.node)
   controller.setPlaying(isPlaying.value)
   resizeObserver = new ResizeObserver(() => controller?.resize())

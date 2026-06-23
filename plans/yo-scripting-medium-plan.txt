@@ -1,0 +1,184 @@
+===============================================================================
+ `yo` as a node scripting medium
+ (roadmap: "`yo` as a node scripting medium")
+===============================================================================
+
+## What & why
+
+`experiments/js-engine/yo.js` is a tiny, async-first toy interpreter — a full
+lexer → parser → evaluator for a language whose keywords are `@`-mentions
+("yo, @log this"): `name = expr` bindings, `@a`/`@f` async/sync functions,
+`@w` await, `@r` return, `@l` print, arithmetic. It already runs entirely in
+JS with no `eval`, no `Function`, no DOM, no filesystem (the only host touch is
+`fs.readFileSync` in `main()`, lines 403-407, which is just the CLI loader).
+
+That last property is the whole point of growing it: **`yo` evaluates an AST it
+fully controls** — a guest program can only do what the evaluator's switch
+(`evaluate`, lines 304-390) lets it do. That makes it a *capability-by-
+construction* scripting medium: a safer alternative to raw-JS `script` nodes,
+which today run unsandboxed in the page with full `fetch`/DOM/`localStorage`
+access. A `yo` node can only reach the world through host functions WE inject
+into its global scope (today just `@l`), so "what a node script may do" becomes
+an allow-list instead of "everything the browser can do."
+
+This fits the node-OS direction two ways: (1) it's the cheapest path to *some*
+sandboxing for the keystone (running data-as-code) while real OS-level isolation
+is built; (2) it's a candidate symbolic medium for the generative-art roadmap
+(a constrained language Claude can "play" — see the Generative art item).
+
+## Fit with the node model / architecture
+
+A new `yo` node type, body sidecar `script.yo`, served through the existing
+`/api/nodes/:id/body` endpoint (add `yo` to `NODE_BODY`, `kernel/api.js:124`).
+Frontend handler `Yo.vue` (a sibling of `Script.vue`) with the same Run flow:
+fetch the body, tokenize → parse → evaluate in the browser, render output. The
+interpreter is plain ESM, so it moves from `experiments/js-engine/` into the
+frontend (or a shared `lib/`) and is imported directly — no build step, no
+worker required for v1 (the eval loop is JS).
+
+The decisive integration is the **`x` context**. A raw-JS node gets `x` as a
+real JS object (`makeCtx`, `useNodeScripts.js:147-177`). A `yo` node can't be
+handed JS values directly — it gets them as host functions seeded into its
+global `Scope` (`makeGlobalScope`, `yo.js:392-399`). So `x` is *projected* into
+`yo` as builtins:
+
+  - `@x(id, args)`  → wraps `x.x` — call another node, cycle-guarded (the guard
+    already lives in `makeCtx`; `yo` just calls through it).
+  - `@log(...)`     → `x.log` (rename/extend the current `@l`).
+  - `@auth(name)`   → `x.auth.get` (read-only into `yo`; writes stay in JS).
+  - `@arg(i)`       → `x.args[i]`.
+
+Because these are injected per-run, a `yo` node's *capabilities are exactly the
+builtins we seed* — the natural enforcement point a raw-JS node lacks. (`x.ui`
+DOM mounting is deliberately NOT projected in v1 — mounting arbitrary DOM is the
+opposite of constrained; revisit only behind the sandbox.)
+
+## Implementation plan (phased)
+
+### Phase 1 — relocate + package as an embeddable library
+Split `yo.js` so the language is importable without running the CLI:
+
+  - `tokenize`, `parse`, `evaluate`, `Scope` → exported from the module (the CLI
+    `main()` stays behind an `import.meta.main`-style guard or moves to a thin
+    `bin`). No behavior change; just make the three stages callable from the
+    frontend.
+  - add a single entrypoint `runYo(source, globals)` that does
+    tokenize→parse→evaluate against a scope seeded from `globals`, returns the
+    last value, and surfaces `SyntaxError`/runtime errors as structured results
+    (line/position already present in the lexer's `position` errors).
+
+### Phase 2 — the `yo` node type (frontend)
+  - register `yo` in `NodeItem.vue` `NODE_TYPES` (or, once the keystone lands,
+    as a *handler node* — see self-extending-handlers-plan.txt; `yo` is a clean
+    first real handler).
+  - `Yo.vue`: textarea editor (same as `Script.vue:152`), a Run button, an
+    output pane. On Run, build the `x`→builtins projection (Phase "Fit" above)
+    and call `runYo(code, builtins)`. Reuse `x.ui`'s log surface for output if
+    present, else a plain pane.
+  - add `yo` to `NODE_BODY` (`kernel/api.js`) → `{ file: 'script.yo',
+    contentType: 'text/plain; charset=utf-8' }` so the body round-trips.
+
+### Phase 3 — language maturation (the load-bearing gaps)
+`yo` is expressive enough to demo but too thin to script real nodes. In rough
+priority:
+
+  - **Function parameters.** `Fn` ignores call args (`yo.js:360`, `(..._args)`)
+    and the body just closes over the defining scope. Parse a param list
+    (`@a (x, y) -> …`) and bind args into the child `Scope` on call. Without
+    this, `@x`-style composition can't pass values cleanly. Highest priority.
+  - **Strings.** The lexer has no string literal — only numbers/idents
+    (`tokenize`, lines 21-105). Node scripting needs text (ids, messages,
+    tokens). Add `"…"` literals + a `String` AST node.
+  - **Collections + member access.** Arrays/objects (or at least lists) and
+    `a.b` / `a[i]`, so a `yo` script can handle the JSON shapes `x.x` returns.
+  - **Comparison + branching.** `==`/`<`/`>`, an `@if`/`@else` (or ternary), and
+    booleans. The evaluator's `BinaryOp` (lines 339-353) currently does only
+    `+ - * /`.
+  - **Iteration.** A bounded loop (`@each`/`@times`) — bounded on purpose, so
+    runaway loops are structurally hard (ties into resource caps below).
+  - **Async over real promises.** Already designed for it: `evaluate` is `async`
+    and `@w` unwraps an `Async` (lines 373-377). Confirm `@x` returning a real
+    promise threads through `@w` correctly — this is `yo`'s headline feature and
+    the reason it's "async-first."
+  - **Error ergonomics.** Carry line/column through parse + eval so a `yo` node
+    reports `error at line N`, not a bare message.
+
+### Phase 4 — capability scoping + the sandbox link
+Even pure-JS-evaluated `yo` can hang the page (infinite `@each`) or allocate
+unbounded. Two layers:
+
+  - **In-interpreter caps (cheap, v1):** an *operation/step budget* — increment a
+    counter per `evaluate` call and throw past a ceiling (turns the soft timeout
+    into a hard, deterministic cap the JS task executor can't give — see
+    `runtime/taskExecutor.js:14`, which notes a promise can't be hard-killed).
+    Bounded loops + a step ceiling = no runaway by construction.
+  - **Worker isolation (real):** run `runYo` inside a Web Worker so even a hot
+    loop can't freeze the editor and can be terminated. This is the same
+    mechanism the broader sandbox plan uses — see
+    **sandboxed-execution-plan.txt**; `yo` is the *easiest* thing to put in a
+    Worker because its only host access is the builtins we choose to expose
+    (proxy them over `postMessage`), whereas raw-JS nodes assume direct DOM.
+
+### Phase 5 — headless `yo` (scheduler can run a `yo` node)
+Because the interpreter is runtime-agnostic plain JS, the same `runYo` runs in
+Node. Pair with the backend `x` re-implementation in the sandbox plan: a
+scheduler task loads a `yo` node's `script.yo` and runs it with a backend
+builtins projection (`@x` calls the headless node runner, `@log` → execution
+logs). A `yo` node is then a *portable, capability-scoped automation unit* the
+scheduler can fire — exactly the safe-execution shape the life-management loop
+wants, without trusting raw Node access.
+
+## Key files / components
+  - `experiments/js-engine/yo.js` — split into an importable library +
+    `runYo(source, globals)`; CLI behind a guard. Move to a shared `lib/` (or
+    frontend) once imported by `Yo.vue`.
+  - `frontend/src/components/NodeItem/nodeTypes/Yo.vue` — NEW node-type handler
+    (editor + Run + output), mirrors `Script.vue`.
+  - `frontend/src/components/NodeItem/NodeItem.vue` — register `yo` (or ship it
+    as the first handler node once the keystone lands).
+  - `kernel/api.js` — add `yo` to `NODE_BODY`.
+  - test programs under `experiments/js-engine/` (extend `program.yo`) for the
+    new language features.
+
+## Open questions / risks
+  - Build-vs-buy: a hand-rolled toy language will always trail QuickJS-in-WASM
+    (a real, sandboxable JS engine) on power. `yo`'s justification is NOT power —
+    it's pedagogy + a deliberately tiny, fully-owned capability surface. If the
+    goal is just "sandboxed JS," QuickJS/WASM is the pragmatic answer and `yo`
+    stays an experiment/art medium. Decide which problem `yo` is solving before
+    investing in Phase 3 breadth.
+  - Scope creep: each Phase-3 feature is "add a real language feature." Easy to
+    sink weeks. Gate on a concrete target program (e.g. "a `yo` node that polls
+    another node and logs a digest") and build only what that needs.
+  - Depends on the keystone for the cleanest delivery (ship `yo` as a handler
+    node) and on the sandbox plan for real isolation — but Phases 1-3 stand
+    alone.
+
+## Monetization
+No direct angle, and that's fine — say so plainly. `yo` is infrastructure /
+differentiation, not a sellable unit; nobody pays for a bespoke toy language.
+Indirect value: it's the *safe* execution story that makes a hosted multi-user
+ocraft conceivable (untrusted users run `yo`, not raw JS), and a credible
+"how it works" hook for content. If anything ever charges, it's the hosted
+platform `yo` helps make safe — not `yo` itself.
+
+## Marketing
+Strong "show, don't tell" / educational artifact, weak product pitch — so lean
+into the build-along. A YouTube series "I built a tiny language and made my node
+app scriptable with it" (lexer → parser → evaluator → running inside a node)
+fits `plans/youtube-content-plan.txt` perfectly: it's visual (tokens/AST dump,
+then a live node running `yo`), teaches a topic devs love (writing an
+interpreter), and demonstrates the node-OS differentiator. Hook:
+"`yo, @log this` — my node app runs a language I wrote." Channel: YouTube
+long-form + an X clip of a `yo` node calling another node. Target user:
+language-nerd / interpreter-curious devs.
+
+## Effort — M (library + node type) / L (a genuinely capable language)
+  - Phase 1 (split into a library) — S.
+  - Phase 2 (the `yo` node type + Run flow) — S/M.
+  - Phase 3 (language maturation) — L, and unbounded if not gated; params +
+    strings + branching is the minimum useful slice (M on its own).
+  - Phase 4 (caps + Worker) — M, shared with the sandbox plan.
+  - Phase 5 (headless) — S once the backend `x` from the sandbox plan exists.
+  A demoable `yo` node (Phases 1-2 + step cap) is reachable quickly; a language
+  worth scripting real automation in is the L.

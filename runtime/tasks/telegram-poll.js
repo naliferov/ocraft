@@ -5,13 +5,17 @@ import { getTelegramUpdates } from '../api/telegramBot.js'
 // Telegram still has buffered (~24h) and hasn't been confirmed by an offset yet.
 export const run = async (ctx) => {
   const token = ctx.env.TELEGRAM_BOT_TOKEN
-  if (!token) throw new Error('TELEGRAM_BOT_TOKEN is not set')
+  if (!token) {
+    throw new Error('TELEGRAM_BOT_TOKEN is not set')
+  }
 
   const updates = await getTelegramUpdates({ token })
 
   for (const update of updates) {
     const msg = update.message
-    if (!msg) continue
+    if (!msg) {
+      continue
+    }
     ctx.log(
       `[${update.update_id}] chat ${msg.chat.id} ${msg.from?.username ?? ''}: ${msg.text ?? '<non-text>'}`,
     )

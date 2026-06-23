@@ -13,20 +13,28 @@ const busy = ref(false)
 const scroller = ref(null)
 
 onMounted(() => {
-  if (!Array.isArray(props.node.messages)) props.node.messages = []
+  if (!Array.isArray(props.node.messages)) {
+    props.node.messages = []
+  }
   scrollToBottom()
 })
 
 const scrollToBottom = async () => {
   await nextTick()
   const element = scroller.value
-  if (element) element.scrollTop = element.scrollHeight
+  if (element) {
+    element.scrollTop = element.scrollHeight
+  }
 }
 
 const send = async () => {
   const text = input.value.trim()
-  if (!text || busy.value) return
-  if (!Array.isArray(props.node.messages)) props.node.messages = []
+  if (!text || busy.value) {
+    return
+  }
+  if (!Array.isArray(props.node.messages)) {
+    props.node.messages = []
+  }
 
   props.node.messages.push({ role: 'user', text })
   input.value = ''
@@ -42,7 +50,9 @@ const send = async () => {
       body: JSON.stringify({ message: text, history: props.node.messages.slice(0, -1) }),
     })
     const data = await response.json()
-    if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`)
+    if (!response.ok || data.error) {
+      throw new Error(data.error || `HTTP ${response.status}`)
+    }
     props.node.messages.push({
       role: 'assistant',
       text: data.text || '(no text returned)',

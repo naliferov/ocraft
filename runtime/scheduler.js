@@ -7,8 +7,12 @@ const minutes = (count) => count * 60 * 1000
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 const match = (schedule, date) => {
-  if (schedule.hour !== '*' && schedule.hour !== date.getHours()) return false
-  if (schedule.minute !== '*' && schedule.minute !== date.getMinutes()) return false
+  if (schedule.hour !== '*' && schedule.hour !== date.getHours()) {
+    return false
+  }
+  if (schedule.minute !== '*' && schedule.minute !== date.getMinutes()) {
+    return false
+  }
   return true
 }
 
@@ -42,11 +46,17 @@ export const runScheduler = () =>
 
       if (job.intervalMs) {
         const lastRunAt = state[job.id]?.lastRunAt ?? 0
-        if (now - lastRunAt < job.intervalMs) continue
+        if (now - lastRunAt < job.intervalMs) {
+          continue
+        }
       } else if (job.schedule) {
-        if (!match(job.schedule, date)) continue
+        if (!match(job.schedule, date)) {
+          continue
+        }
         const lastRunAt = state[job.id]?.lastRunAt ?? 0
-        if (now - lastRunAt < minutes(1)) continue
+        if (now - lastRunAt < minutes(1)) {
+          continue
+        }
       }
 
       log(`[scheduler] running ${job.id}`)

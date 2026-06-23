@@ -12,7 +12,7 @@ backend/state
 
 # Deno service — different runtime (JSR imports, Deno globals); format it with
 # deno's own tooling, not this Node toolchain.
-backend/transport
+runtime/transport/ws-exchange
 
 # Generated / vendored
 package-lock.json

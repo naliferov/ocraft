@@ -109,9 +109,12 @@ const fmtAddrs = (list) =>
 // Walk a bodyStructure tree and collect attachment-like parts (those with a
 // filename or an "attachment" disposition), keyed by their IMAP part id.
 function collectAttachments(node, out = []) {
-  if (!node) return out
-  if (Array.isArray(node.childNodes))
+  if (!node) {
+    return out
+  }
+  if (Array.isArray(node.childNodes)) {
     node.childNodes.forEach((child) => collectAttachments(child, out))
+  }
   const filename = node.dispositionParameters?.filename || node.parameters?.name || null
   const isAttachment = node.disposition === 'attachment' || (!!filename && node.part)
   if (isAttachment && node.part) {
@@ -192,7 +195,9 @@ server.registerTool(
       return await withClient(async (client) =>
         withMailbox(client, mailbox, async () => {
           const total = client.mailbox.exists || 0
-          if (total === 0) return ok([])
+          if (total === 0) {
+            return ok([])
+          }
           const start = Math.max(1, total - limit + 1)
           const out = []
           for await (const msg of client.fetch(`${start}:*`, {
@@ -231,7 +236,9 @@ server.registerTool(
         const box = mailbox || (await resolveAllMail(client))
         return withMailbox(client, box, async () => {
           const uids = await client.search({ gmailRaw: query }, { uid: true })
-          if (!uids || uids.length === 0) return ok({ mailbox: box, count: 0, messages: [] })
+          if (!uids || uids.length === 0) {
+            return ok({ mailbox: box, count: 0, messages: [] })
+          }
           const pick = uids.slice(-limit) // highest (newest) uids
           const out = []
           for await (const msg of client.fetch(
@@ -283,7 +290,9 @@ server.registerTool(
             bodyStructure = msg.bodyStructure
             flags = msg.flags
           }
-          if (!source) return fail(`message uid ${uid} not found in ${mailbox}`)
+          if (!source) {
+            return fail(`message uid ${uid} not found in ${mailbox}`)
+          }
           const parsed = await simpleParser(source)
           return ok({
             uid,
@@ -326,7 +335,9 @@ server.registerTool(
       return await withClient(async (client) =>
         withMailbox(client, mailbox, async () => {
           const { content, meta } = await client.download(`${uid}`, part, { uid: true })
-          if (!content) return fail(`no content for uid ${uid} part ${part}`)
+          if (!content) {
+            return fail(`no content for uid ${uid} part ${part}`)
+          }
           const dir = outDir || path.join(import.meta.dirname, 'downloads')
           fs.mkdirSync(dir, { recursive: true })
           const safe = (meta?.filename || `attachment-${uid}-${part}`).replace(/[/\\]/g, '_')
@@ -375,7 +386,9 @@ server.registerTool(
           for await (const _ of client.fetch(`${uid}`, { uid: true }, { uid: true })) {
             found = true
           }
-          if (!found) return fail(`message uid ${uid} not found in ${mailbox}`)
+          if (!found) {
+            return fail(`message uid ${uid} not found in ${mailbox}`)
+          }
           // In Gmail, moving to Trash drops all other labels — this is exactly
           // what the web UI's "Delete" button does.
           await client.messageMove(`${uid}`, trash, { uid: true })

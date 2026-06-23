@@ -1,0 +1,8 @@
+mine structural narrative elements (dialogue, scene/setting/nature):<br /><br />
+text → <strong>BookNLP + LitBank/PDNC + sentence-transformer embeddings</strong><br />
+film → <strong>WhisperX → PySceneDetect → videogrep</strong> (Descript/Reduct = no-code editing)<br />
+music → <strong>librosa/madmom/Essentia + Demucs + AudioStellar</strong><br />
+paintings → <strong>CLIP/OpenCLIP + museum CC0 apis (Met, AIC, Rijksmuseum)</strong><br /><br />
+<strong>cross-media glue = shared embedding space</strong>: CLIP (images), sentence-transformers
+(text/subtitles), LLM (thematic ordering); index all in FAISS → retrieve "forest description"/"city
+scene" fragments across books, films, lyrics, paintings w/ 1 query<br />

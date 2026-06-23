@@ -1,0 +1,186 @@
+===============================================================================
+ Node / script versioning (version-on-save) — plan
+ (roadmap: "Node / script versioning (version-on-save)")
+ (written 2026-06-19; for later review)
+===============================================================================
+
+## What & why
+Saving a node script overwrites it. POST /api/nodes/:id/body (kernel/api.js:180)
+does a single `fs.writeFile(.../script.js, body)` — the previous source is gone,
+no history, no undo across sessions, no diff, no rollback. The old Varcraft note
+flagged exactly this: "need fx versioning, i.e. a new save." For a tool whose whole
+pitch is "a note that *is* a program," losing prior program versions on every Save
+is the sharpest rough edge.
+
+Goal: version-on-save. Each save appends an immutable version under the node's
+folder instead of clobbering; the editor gets a history panel with diff + rollback;
+old versions are pruned by a retention policy. Scope it to **bodies first**
+(script.js / content.html) — that's where the destructive edit hurts — with a
+clean path to also version state.json later.
+
+## Fit with the node model / architecture
+A node is already a folder, kernel/data/nodes/<id>/, holding state.json + an
+optional body sidecar. Versioning is "more files in the same folder" — it stays
+filesystem-native, framework-free, and inspectable, exactly like the rest of the
+store. No DB. The kernel remains the single source of truth; the editor is just a
+client that reads/writes new /versions endpoints. The current `script.js` /
+`content.html` sidecar stays the live working copy (so x.x, the wasm compile at
+GET /api/nodes/:id/wasm, and content rendering all keep reading one canonical file
+— no reader changes). Versions are a side-channel history of that file.
+
+## Storage model (where versions live)
+Per node, a versions subfolder mirroring the body filename:
+
+  kernel/data/nodes/<id>/
+    state.json                 # live metadata (unchanged)
+    script.js                  # live working copy (unchanged — what runs)
+    versions/
+      index.json               # ordered manifest (newest last)
+      body/
+        0001.script.js
+        0002.script.js
+        0003.script.js
+
+  - One version dir per node; filename = zero-padded sequence + the live
+    sidecar name, so a `script` node yields `NNNN.script.js`, an `html` node
+    `NNNN.content.html`. Reuses NODE_BODY's `file` for the suffix — no new
+    type map.
+  - index.json (the metadata, kept small & loadable without reading bodies):
+      {
+        "current": 3,
+        "versions": [
+          { "seq": 1, "savedAt": "2026-06-19T01:10:00.000Z", "bytes": 412,
+            "sha256": "…", "note": null },
+          { "seq": 2, "savedAt": "…", "bytes": 460, "sha256": "…", "note": null },
+          { "seq": 3, "savedAt": "…", "bytes": 460, "sha256": "…", "note": null }
+        ]
+      }
+    `current` = the seq the live sidecar equals (so the panel can mark "you are
+    here" and a rollback updates it). `sha256` lets us skip writing a version when
+    the content is byte-identical to the current one (dedup; matches the existing
+    no-op-write skip in Script.vue:savedCode).
+  - Why padded sequence files (not git): git is heavier, brings a second mental
+    model, and the data folder is already plain JSON the user inspects. A sequence
+    + manifest is the smallest thing that gives list/diff/rollback and stays in the
+    same store everything else lives in. (If full history/branching is ever wanted,
+    a per-node `git` shadow is a future option — note it, don't build it.)
+
+## API (additions to kernel/api.js)
+Keep the existing /body pair; make POST /body the *append* point, add read routes.
+
+  1. CHANGE  POST /api/nodes/:id/body
+       - Today: writes the sidecar and returns "Saved".
+       - New: (a) write the live sidecar as now (working copy stays canonical);
+         (b) compute sha256; if it differs from index.current's sha256, append
+         versions/body/<next>.<file>, push an entry to index.json, bump `current`.
+         If identical, skip the version (no-op, like the editor's dirty-check) but
+         still 200. Return { saved: true, seq } so the editor can refresh history.
+       - An optional `X-Save-Note` header (or `?note=`) lets the editor attach a
+         short label to the version (e.g. "before refactor"); stored in the entry.
+  2. NEW  GET /api/nodes/:id/versions
+       -> index.json (the manifest only — cheap; bodies not included).
+  3. NEW  GET /api/nodes/:id/versions/:seq
+       -> that version's stored body text (for the diff pane / preview). Reuses
+          sendText (gzip) like /body. 404 if seq unknown.
+  4. NEW  POST /api/nodes/:id/versions/:seq/restore
+       -> copy versions/body/<seq>.<file> back over the live sidecar AND append it
+          as a *new* version (restore-as-forward-commit, never rewrites history),
+          bump current. Returns the new seq. (So "rollback" is non-destructive — you
+          can always roll forward again.)
+  Helpers to add (mirroring nodeDirSafe / bodySpecOf): versionsDirOf(id),
+  readVersionIndex(id), appendVersion(id, spec, text, note), all path-guarded
+  under NODES_DIR. Writes use the same lock discipline as the rest of the kernel
+  (single-user local server; a small write-serialize per node id avoids a torn
+  index.json if two saves race).
+
+## Editor UI (frontend)
+A history panel hung off the editor, reusing the single Save flow.
+  - NodeItem.vue already routes Save through componentRef.save(); Script.vue.save()
+    (and Html's equivalent) keep calling POST /body — now they also re-fetch the
+    version list after a save. No change to the strip-marks/dirty-check logic;
+    versioning sits behind the same endpoint.
+  - New component: frontend/src/components/NodeItem/VersionPanel.vue — a collapsible
+    drawer/side list:
+      * lists versions newest-first (seq, relative time, byte delta, note),
+      * "you are here" marker at `current`,
+      * click a version -> diff view (selected vs. current),
+      * "Restore" button -> POST .../restore, then reload the body into the editor.
+  - Diff: a line diff. Cheapest path is a tiny dependency-free LCS line-diff util
+    (frontend/src/lib/lineDiff.js) rendered as added/removed rows — no new heavy
+    dep. (If CodeMirror 6 lands first per plans/codemirror-editor-plan.txt, its
+    merge addon / @codemirror/merge gives a real side-by-side diff for free —
+    prefer that once CM6 is in.)
+  - This is the durable, cross-session counterpart to the existing in-memory
+    delete-undo pool: that protects node *existence*; this protects node *content*.
+
+## state.json — version it too?
+Not in phase 1. Bodies are where the irreversible loss is (a Save replaces the whole
+program text). state.json changes are small, mostly structural (name, parentId,
+collapsed, frameRate) and already feel low-stakes. But the design generalizes: the
+same versions/ folder can hold versions/state/NNNN.state.json with its own index,
+written by POST /api/nodes/:id (the metadata upsert). Defer it; if added, gate it so
+trivial churn (a `collapsed` toggle, a drag-reparent) does NOT spam versions —
+version state only on meaningful field changes, or coalesce. Decision: bodies now,
+state.json behind a follow-up once the body flow is proven.
+
+## Retention / pruning
+Unbounded history would bloat the repo (the data folder is committed). Policy:
+  - Keep the last N versions per node (default N=50) AND everything from the last
+    M days (default 14), whichever is more generous, plus always keep `current`.
+  - Prune on append (after writing the new version): drop the oldest body files
+    beyond the policy, trim their index entries. O(1) amortized, no background job.
+  - Make N/M env-configurable (VERSIONS_KEEP / VERSIONS_DAYS) with the defaults
+    above. A future "pin this version" flag in an entry exempts it from pruning
+    (cheap to add; note it).
+  - Bodies are text and dedup'd by sha256 (identical saves don't add files), so the
+    common churn (Save, Save, Save while iterating) stays compact.
+
+## Key files / components
+  - kernel/api.js                                   (POST /body -> append; +3 routes,
+                                                     +versionsDirOf/readVersionIndex/
+                                                     appendVersion helpers)
+  - frontend/src/components/NodeItem/nodeTypes/Script.vue   (re-fetch history on save)
+  - frontend/src/components/NodeItem/nodeTypes/Html.vue     (same, for content.html)
+  - frontend/src/components/NodeItem/VersionPanel.vue        (NEW — history/diff/restore)
+  - frontend/src/lib/lineDiff.js                             (NEW — or @codemirror/merge)
+  - frontend/src/stores/nodes.js                            (helpers to call the new routes)
+
+## Open questions / risks
+  - Repo bloat: the data folder is git-tracked, so every version is committed.
+    Retention + sha256 dedup mitigate, but heavy editors will still grow history.
+    Option: a .gitignore for versions/ (history is local-only, not shared) — but
+    that loses cross-machine history. Decide by use: probably ignore versions/ in
+    git and treat history as a local safety net, not shared state. CONFIRM.
+  - Concurrency: two saves of the same node racing could interleave the index write.
+    Single-user local server makes this rare; still serialize writes per node id.
+  - WASM nodes: the AS source IS the body (script.js), so it versions for free; no
+    special handling — the wasm is recompiled from whatever the live sidecar holds.
+  - Restore semantics: restore-as-new-version (chosen) vs. true rewind (delete newer
+    versions). New-version is safer and matches "no clobber"; document it so users
+    aren't surprised history keeps growing on restore.
+  - The current editor injects `/*→name*/` marks and strips them on save — versions
+    store the STRIPPED (clean-id) body, same as the live sidecar, so diffs are clean.
+
+## Monetization
+Weak direct angle for a single-user local tool — you're not selling version history
+to yourself. The honest read: it's reliability/trust infrastructure, not a SKU. The
+*only* realistic paid framing is downstream: if ocraft ever offered a hosted/team
+"scriptable node OS," shared version history + audit/restore is a classic
+team/pro-tier line (think "edit history" in hosted note apps). Until multi-user
+exists, don't try to charge — call it foundational, not monetizable.
+
+## Marketing
+Demoable and emotionally resonant (everyone has lost work). Artifact: a clip that
+deletes half a script, Saves, then opens the history panel and rolls back — "undo,
+but across sessions and forever." Pairs naturally with the CodeMirror diff view for
+a slick side-by-side. Channel: X / YouTube short (plans/youtube-content-plan.txt),
+hook: "my notes app keeps every version of every program in it." Target user:
+tinkerers who iterate on scripts and fear the destructive Save.
+
+## Effort — S/M/L
+  M overall.
+  - Kernel: POST /body -> append + 3 read/restore routes + helpers + retention: M
+    (the manifest/dedup/prune logic is the bulk; routing reuses existing patterns).
+  - Editor VersionPanel + wiring save()->refresh: M (panel UI + restore round-trip).
+  - Line diff: S (tiny LCS util) or XS (free via @codemirror/merge if CM6 landed).
+  - state.json versioning: deferred (separate S–M follow-up).

@@ -1,0 +1,191 @@
+===============================================================================
+ AUTONOMOUS DEV LOOP — plan it, build one task, PR it (never main)
+ plan / (roadmap: "Autonomous dev loop")
+ (written 2026-06-19; decisions marked "CONFIRM" are yours)
+===============================================================================
+
+Paths: README/skill text say "backend/"; on disk the automation engine is
+runtime/ (tasks/, scheduler.js, taskExecutor.js) and the store is kernel/. This
+plan uses the real paths. The Agent SDK is already a dep
+(@anthropic-ai/claude-agent-sdk in package.json), `gh` is authed (account
+naliferov, ssh), and origin = git@github.com:naliferov/ocraft.git — so the
+prereqs the roadmap names are MET.
+
+## What & why
+-------------------------------------------------------------------------------
+Close the AI-driven-dev loop on ocraft itself. Two halves, already half-built:
+  PLAN half — EXISTS: the `ocraft-dev-plan-day` skill (.claude/skills/) writes a
+    sequenced, sized, PR-shaped plan and stops for human sign-off. (The roadmap
+    says weekly / `dev-plans/<date>-week.md`; the shipped skill is per-DAY /
+    `<date>-day.md`. Same machine, different cadence — see Open Qs.)
+  EXECUTE half — MISSING: a dedicated `dev-task` RUNTIME TASK that reads the
+    approved plan, picks ONE not-yet-done task, does it on a BRANCH via the Agent
+    SDK, gates on that task's acceptance check, and opens a PR for human review —
+    never main, never auto-merge.
+
+The whole point is the firewall: the interactive ai-chat surface (bypassPermissions,
+no-auth, localhost-only) must NEVER touch git/branches/PRs; a separate, explicit
+`dev-task` owns that workflow. One concern per surface.
+
+## Fit with the node model / architecture
+-------------------------------------------------------------------------------
+`dev-task` is a normal runtime TASK (runtime/tasks/dev-task.js, exports run(ctx)),
+run by the executor, schedulable by scheduler.js's jobs[] exactly like every other
+task. So it inherits the lifecycle ocraft already has: execution records in
+runtime/executions/, the timeout budget, ctx.log/state. It is finite by
+construction — one task, then exit — which is precisely what the executor demands
+(a task MUST terminate). The plan it consumes is just a Markdown file in
+dev-plans/ (created by the skill); the plan could later BE a node, but a file is the
+honest MVP and matches the skill's current output.
+
+Critically, execution is NOT POST /api/ai-chat. That endpoint runs the Agent SDK
+with permissionMode 'bypassPermissions' and is documented localhost-only with a loud
+security banner in kernel/api.js — it exists for interactive local chat and must
+never do git/PR or be network-reachable. `dev-task` instead invokes the Agent SDK
+directly inside the task process, with a SCOPED prompt and an EXPLICIT git workflow
+the task itself drives (branch -> commit -> push -> gh pr create) — the SDK writes
+code, the TASK owns the git/PR steps, so the dangerous "open a PR" action lives in
+exactly one auditable place, not behind an unauthenticated HTTP route.
+
+## Implementation plan (phased)
+-------------------------------------------------------------------------------
+PHASE 0 — plan format the executor can consume
+  - The skill already writes dev-plans/<date>-day.md with per-task Title / Why /
+    Touchpoints / Acceptance check / Size / Risk. Pin a STABLE machine-readable
+    marker per task so `dev-task` can select one deterministically: a checkbox +
+    a stable slug, e.g. `### [ ] task: <slug>` ... `- Acceptance: <cmd or check>`.
+    `dev-task` picks the first unchecked task, ticks it `[x]` on success (commit the
+    tick in the PR or a follow-up). Keep it human-readable Markdown; the marker is
+    the only contract.
+  - CONFIRM: marker convention (checkbox+slug above) and where "done" is recorded
+    (tick in the plan file vs. a sidecar dev-plans/<date>-state.json).
+
+PHASE 1 — the dev-task itself (the arm)
+  runtime/tasks/dev-task.js, run(ctx):
+    1. PRECHECKS (fail fast, log, exit non-fatally): on `main`, clean tree, `gh
+       auth status` ok, origin set. (All currently true — but check, don't assume;
+       a dirty tree or detached state must abort before touching git.)
+    2. SELECT one task from the latest approved dev-plans/*.md (first unchecked).
+       If none, log "nothing to do" and exit success.
+    3. BRANCH: git switch -c dev/<date>-<slug> off main. (NB: the repo's "develop on
+       main" rule is for HUMAN feature work; the autonomous loop is the explicit
+       exception — its whole safety model is branch + PR, never commit to main. Call
+       this out so the convention isn't misread.)
+    4. BUILD: Agent SDK query() with a prompt = the single task's spec
+       (title/touchpoints/acceptance) + ocraft conventions (the README rules: .js
+       ESM, no single-letter vars, no boolean-flag params) + a hard instruction to
+       implement ONLY this task. Use a BOUNDED maxTurns and a tools allowlist
+       (Read/Edit/Write/Bash for checks) — NOT bypassPermissions blanket; scope it.
+       cwd = the branch worktree (see Open Qs re: worktree isolation).
+    5. GATE on the acceptance check. Today's available gates (honest, weak — see
+       caveat): `node --check` on changed .js, `npm run build` in frontend/ if
+       frontend touched, an entry/task run if specified, and for VISUAL changes a
+       claude-in-chrome screenshot+DOM assertion of the running editor. If the gate
+       fails: do NOT open a PR — push the branch (or discard), log the failure, mark
+       the task blocked, exit. No PR on red.
+    6. PR: on green, git push -u origin <branch>; `gh pr create` with a body that
+       quotes the task spec + the acceptance evidence (command output / screenshot
+       path). NEVER merge. NEVER target anything but a PR into main for human review.
+    7. RECORD: ctx.state + the execution record capture branch, PR url, gate result.
+
+PHASE 2 — wiring + cadence
+  - Manual first: `node bin/cli.js run dev-task` (one task per invocation —
+    naturally "one per run"). Verify end-to-end on a trivial planned task.
+  - Then optionally a scheduler job (scheduler.js jobs[]) firing dev-task on a slow
+    cadence during a chosen window (activeHours) — BUT only against an already-
+    approved plan. The skill's contract is plan-then-human-signoff; the loop must
+    never invent work. CONFIRM whether to schedule it at all vs. keep it manual-
+    trigger-only until the test gate exists.
+
+PHASE 3 — the missing keystone (flagged, not built here)
+  - A REAL behavior/test gate. Until one exists, every PR genuinely needs a human.
+    Building it (even a thin smoke-test harness) is itself a high-value early task
+    the plan skill should schedule. Note it; don't pretend the loop is safe to
+    auto-merge without it.
+
+## Key files / components
+-------------------------------------------------------------------------------
+  .claude/skills/ocraft-dev-plan-day/SKILL.md   EXISTS — the plan half (sign-off gate)
+  dev-plans/<date>-day.md                        the approved plan (skill output; dir
+                                                 doesn't exist yet, skill creates it)
+  runtime/tasks/dev-task.js                      NEW — the execute half (the arm)
+  runtime/taskExecutor.js                        runs it; may need a wider timeoutMs
+                                                 export (an agent build > 15min default)
+  runtime/scheduler.js                           optional jobs[] entry (Phase 2)
+  @anthropic-ai/claude-agent-sdk                 already a dep — the build engine
+  gh CLI + origin                                already authed/set — the PR path
+  kernel/api.js (POST /api/ai-chat)              the surface dev-task must NOT be —
+                                                 referenced only as the anti-pattern
+  claude-in-chrome MCP                           the "eyes" for visual acceptance checks
+
+## Open questions / risks
+-------------------------------------------------------------------------------
+  - NO REAL TEST GATE (the honest caveat, load-bearing). Only `node --check` +
+    `npm run build` + screenshots exist — syntax/compile + a look, not proof of
+    behavior. So PRs MUST get human review; the loop is "draft a reviewable PR,"
+    not "ship." Auto-merge stays OFF until a behavior gate exists. This is the #1
+    risk and the reason the loop is bounded to PR-for-review.
+  - WORKTREE ISOLATION: running the Agent SDK in the live checkout while the editor/
+    services run off the same files is messy. Prefer a `git worktree` (or a fresh
+    clone) per dev-task run so the build is isolated from the running app, then PR
+    from there. Adds complexity; decide MVP (same checkout, accept the mess) vs.
+    worktree (cleaner, more setup). Recommend worktree once past the first manual
+    proof.
+  - timeout: the executor's DEFAULT_TIMEOUT_MS is 15min and a soft (promise) timeout
+    — an Agent SDK build can exceed it and can't be hard-killed. dev-task must export
+    a generous timeoutMs and the prompt must stay tightly scoped so runs are short.
+  - AGENT SCOPE CREEP: an under-specified task prompt makes the SDK wander and touch
+    unrelated files. Mitigate: feed ONLY the single task's spec, name the
+    touchpoints, cap maxTurns, and reject the PR (don't open it) if the diff strays
+    far outside the declared touchpoints (a cheap diff-scope check).
+  - SECRETS / COST: the SDK uses the user's Claude subscription (like ai-chat). A
+    scheduled loop could burn turns/credits unattended — bound runs/day and require
+    an approved plan so it can't free-run.
+  - plan cadence mismatch: roadmap says weekly, the shipped skill is per-day. Pick
+    one (per-day is what exists and is easier to keep honest about throughput);
+    `dev-task` just reads "the latest approved plan file" regardless. CONFIRM.
+  - DEPLOY is broken/unrelated: ci.yml SSHes into a destroyed droplet (DEPLOY_HOST),
+    so a merged PR currently fails CI at deploy. The loop opens PRs into main, so a
+    human merge would hit that broken deploy — out of scope here, but don't conflate
+    "PR opened" with "shipped." (See the deploy-target roadmap item.)
+
+## Monetization
+-------------------------------------------------------------------------------
+No direct angle as a personal tool — but this is the most genuinely PRODUCTIZABLE
+item in the batch, because "an autonomous-dev loop with a hard human-review gate and
+a one-concern firewall around the git/PR arm" is a pattern lots of people want and
+few get right. Honest paths, cheapest first: (1) it's pure CONTENT — a build-in-
+public series showing the loop opening real PRs is the cheapest "charge" (audience ->
+sponsorship/YouTube, fits plans/youtube-content-plan.txt); (2) the *pattern* (skill +
+dev-task firewall + acceptance-gate) packaged as a template/repo others adopt — a
+paid template or a sponsorware repo. There's NO clean SaaS angle for a single-user
+loop, and pretending otherwise would be dishonest. Recommend treating it as a
+content/credibility asset, not a paid feature.
+
+## Marketing
+-------------------------------------------------------------------------------
+  - Demo artifact (strong): a time-lapse / split-screen — left, the plan file with a
+    task ticking from [ ] to [x]; right, the GitHub PR list filling with `dev/...`
+    PRs the loop opened, each green-checked on its acceptance gate, awaiting review.
+    Punchline: "it plans its own week, builds one task at a time on a branch, and
+    asks ME to merge — it never touches main." The human-in-the-loop honesty is the
+    hook, not a weakness.
+  - Channel: YouTube (the flagship for plans/youtube-content-plan.txt), X thread,
+    HN ("Show HN: an autonomous dev loop that opens PRs but never merges").
+  - Hook: "I let an agent develop my project autonomously — with one rule: it can
+    open a PR, but only I can merge. Here's the firewall that makes that safe."
+  - Target: AI-engineering / agent builders + the "is autonomous coding real?"
+    skeptics, who are won by the guardrails, not by hype.
+
+## Effort (M)
+-------------------------------------------------------------------------------
+  Phase 0 (plan marker convention; tiny skill tweak)                   ~S, 0.5 day
+  Phase 1 (dev-task.js: prechecks, select, branch, SDK build, gate,    ~M, 2–3 days
+           gh pr create, record) — the bulk; the git workflow + gate
+           wiring is the real work
+  Phase 2 (manual proof, then optional scheduler job + activeHours)    ~S, 0.5–1 day
+  Phase 3 (real test gate)                                             SEPARATE,
+           flagged as the keystone prereq for any auto-merge — NOT in this effort.
+  Total ~M for a working "draft-a-PR" loop. Prereqs (gh, origin, Agent SDK) are
+  already satisfied. The honest ceiling: without Phase 3 it stays a PR-drafting
+  assistant with a human gate — which is exactly the safe, demoable scope to ship.

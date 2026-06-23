@@ -22,7 +22,9 @@ const repoDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 // Optionally pull CLAUDE_CODE_OAUTH_TOKEN from the repo-root .env (for non-interactive
 // use). An exported env var wins. .env is gitignored. Missing token is fine.
 const loadTokenFromEnvFile = () => {
-  if (process.env.CLAUDE_CODE_OAUTH_TOKEN) return
+  if (process.env.CLAUDE_CODE_OAUTH_TOKEN) {
+    return
+  }
   let contents
   try {
     contents = readFileSync(path.join(repoDir, '.env'), 'utf-8')
@@ -77,7 +79,9 @@ const dockerArgs = [
   `${repoDir}:/workspace`,
 ]
 // Forward the token only if present (helps non-interactive use; harmless otherwise).
-if (process.env.CLAUDE_CODE_OAUTH_TOKEN) dockerArgs.push('-e', 'CLAUDE_CODE_OAUTH_TOKEN')
+if (process.env.CLAUDE_CODE_OAUTH_TOKEN) {
+  dockerArgs.push('-e', 'CLAUDE_CODE_OAUTH_TOKEN')
+}
 dockerArgs.push(IMAGE)
 
 console.log(`-> launching Claude Code (YOLO) in ${repoDir} ...`)

@@ -1,4 +1,46 @@
+import {
+  ref,
+  reactive,
+  computed,
+  watch,
+  watchEffect,
+  onMounted,
+  onUnmounted,
+  defineComponent,
+  markRaw,
+  h,
+  isVNode,
+  nextTick,
+} from 'vue'
 import { useNodesStore } from '../stores/nodes.js'
+import { compileSfc } from './useVueSfc.js'
+
+// Vue surface handed to scripts as `x.vue`. Blob-imported script modules can't
+// resolve bare imports (`import { ref } from 'vue'` — no import map), so the
+// reactivity + render API is injected through the context instead. A VIEW script
+// (node.scriptType = 'vue-esm'/'vue-sfc') use these to build a component; a plain script
+// can use them too (e.g. a reactive computation). It's the app's own (runtime-only) Vue —
+// a `template` string compiles via the lazily-registered compiler (useScriptTypes.js).
+const vueApi = {
+  ref,
+  reactive,
+  computed,
+  watch,
+  watchEffect,
+  onMounted,
+  onUnmounted,
+  defineComponent,
+  markRaw,
+  h,
+  isVNode,
+  nextTick,
+  // ocraft sugar for view nodes: build a component from a template + its bindings,
+  // skipping the `{ setup: () => bindings, template }` boilerplate. `bindings` is the
+  // setup return (refs/handlers from the factory closure):
+  //   return x.vue.view(`<button @click="inc">{{ count }}</button>`, { count, inc })
+  // One root instance per mounted view, so sharing the bindings object is fine.
+  view: (template, bindings = {}) => ({ setup: () => bindings, template }),
+}
 
 // Runtime for "scripts calling other scripts by id".
 //
@@ -41,7 +83,9 @@ function createWasmDebugImports(id) {
   let memory = null
   const decoder = new TextDecoder('utf-16le')
   const liftString = (pointer) => {
-    if (!pointer || !memory) return String(pointer)
+    if (!pointer || !memory) {
+      return String(pointer)
+    }
     // AS string layout: UTF-16LE data at `pointer`, byte length in the object
     // header one word before it.
     const byteLength = new Uint32Array(memory.buffer)[(pointer - 4) >>> 2]
@@ -76,7 +120,9 @@ function createWasmDebugImports(id) {
 // can console.log / trace / assert.
 async function loadWasmExports(id) {
   const res = await fetch(`/api/nodes/${id}/wasm`)
-  if (!res.ok) throw new Error(`wasm compile failed:\n${await res.text()}`)
+  if (!res.ok) {
+    throw new Error(`wasm compile failed:\n${await res.text()}`)
+  }
   const { imports, useMemory } = createWasmDebugImports(id)
   const { instance } = await WebAssembly.instantiate(await res.arrayBuffer(), imports)
   useMemory(instance.exports.memory)
@@ -89,7 +135,9 @@ async function loadModule(id) {
       id,
       (async () => {
         const res = await fetch(`/api/nodes/${id}/body`)
-        if (!res.ok) throw new Error(`node "${id}": no script found`)
+        if (!res.ok) {
+          throw new Error(`node "${id}": no script found`)
+        }
         const code = await res.text()
         const url = URL.createObjectURL(new Blob([code], { type: 'application/javascript' }))
         try {
@@ -149,6 +197,7 @@ function makeCtx(selfId, args, stack, ui) {
     args,
     log: (...messages) => console.log(`[${nodeLabel(selfId)}]`, ...messages),
     auth: authStore,
+    vue: vueApi,
     ...(ui ? { ui } : {}),
     // x.x(id, ...args) — run another node's script by its bare id.
     // x.x(id, args?) — args is an ARRAY of arguments (it becomes the callee's
@@ -163,7 +212,7 @@ function makeCtx(selfId, args, stack, ui) {
       // main, hand back the exports so the caller picks a named function:
       // `const w = await x.x("10"); w.add(2, 3)`.
       const target = useNodesStore().nodes.find((candidate) => candidate.id === id)
-      if (target?.isWasm) {
+      if (target?.scriptType === 'assembly-script') {
         const ex = await loadWasmExports(id)
         return typeof ex.main === 'function' ? ex.main(...args) : ex
       }
@@ -194,7 +243,15 @@ export async function runNodeCode(code, selfId, ui) {
   }
 }
 
-// Run an isWasm node: the backend compiles its (saved) AssemblyScript source to
+// Compile + return an SFC view component (node.scriptType = 'vue-sfc'). The body is .vue
+// source, not JS — so there's no blob import; useVueSfc compiles it and we hand it
+// the same `x` context the esm path gets, so <script setup> can call x.x / x.auth.
+export async function runSfcCode(source, selfId) {
+  const id = String(selfId)
+  return compileSfc(source, makeCtx(id, [], [id]))
+}
+
+// Run an assembly-script node: the backend compiles its (saved) AssemblyScript source to
 // wasm at GET /api/nodes/:id/wasm; we instantiate it. `main()` is just our Run
 // convention (the wasm analog of a JS node's `export default`) — it is NOT
 // required by AssemblyScript. If present, Run calls it; otherwise we report the

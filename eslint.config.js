@@ -17,7 +17,7 @@ export default [
       'kernel/data/**',
       'runtime/executions/**',
       'runtime/state/**',
-      'ws-exchange/**',
+      'runtime/transport/ws-exchange/**',
       'experiments/js-engine/program.yo',
     ],
   },
@@ -43,6 +43,12 @@ export default [
       'prefer-const': 'error',
       'no-var': 'error',
       eqeqeq: ['error', 'smart'],
+      // Always brace control bodies — no one-line `if (x) foo()`. This is ESLint's
+      // job (Prettier never adds braces); auto-fixable via `npm run lint:fix`.
+      // NOTE: eslint-config-prettier (kept last) defensively turns `curly` OFF, so
+      // it is RE-ASSERTED in a final block below — without that, this line is
+      // silently overridden and the convention goes unenforced.
+      curly: ['error', 'all'],
       // Node-type components are intentionally single-word (Scene, Html, …).
       'vue/multi-word-component-names': 'off',
       // The editor edits the `node` prop in place, then persists via store.save()
@@ -70,4 +76,14 @@ export default [
 
   // Keep last: turn off stylistic rules that would fight Prettier.
   prettier,
+
+  // Re-assert rules eslint-config-prettier disables defensively but that the repo
+  // genuinely wants. `curly: 'all'` requires braces everywhere — it does NOT fight
+  // Prettier (Prettier never adds/removes braces; the conflict prettier guards
+  // against only exists for the 'multi'/'multi-line' options, not 'all'). Placed
+  // after the prettier block so last-wins keeps it on.
+  {
+    files: ['**/*.js', '**/*.vue'],
+    rules: { curly: ['error', 'all'] },
+  },
 ]

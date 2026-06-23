@@ -8,6 +8,7 @@
 import { ref, watch, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton } from 'naive-ui'
+import { useNodesStore } from '../../../stores/nodes.js'
 
 const props = defineProps({
   node: { type: Object, required: true },
@@ -28,7 +29,9 @@ onMounted(async () => {
 // Persist the body to the content.html sidecar — called by NodeItem's single Save.
 // No-ops when unchanged so saving metadata-only edits doesn't rewrite the file.
 const save = async () => {
-  if (content.value === savedContent.value) return
+  if (content.value === savedContent.value) {
+    return
+  }
   await fetch(`/api/nodes/${props.node.id}/body`, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain' },
@@ -55,11 +58,63 @@ const bodyRef = ref(null) // the contenteditable element (rich edit mode only)
 // browser, and modifier/middle clicks are left alone so "open in new tab" works.
 const router = useRouter()
 const onViewClick = (event) => {
-  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+    return
+  }
   const href = event.target.closest('a')?.getAttribute('href')
-  if (!href || !href.startsWith('/node/')) return
+  if (!href || !href.startsWith('/node/')) {
+    return
+  }
   event.preventDefault()
   router.push(href)
+}
+
+// Action: compress this note in place via the `minimal-txt` skill, run as a tracked
+// AI run (POST /api/runs, kind 'ai'). The agent rewrites content.html headlessly,
+// so we navigate to the api-runs-monitor node to watch it + read the result. The
+// edit is in-place but recoverable via git (node files are committed).
+const store = useNodesStore()
+const running = ref(false)
+const runMinimalTxt = async () => {
+  if (running.value) {
+    return
+  }
+  if (
+    !confirm(
+      'Run the minimal-txt skill on this note? It compresses the note in place (recoverable via git).',
+    )
+  ) {
+    return
+  }
+  running.value = true
+  try {
+    const id = props.node.id
+    const message =
+      `Use the "minimal-txt" skill to losslessly compress ocraft html node ${id}. ` +
+      `Its body is the file kernel/data/nodes/${id}/content.html — read it, apply the skill's rules ` +
+      `(aggressive lowercase compression, keep every fact, flat <br> layout, no headings/lists), and ` +
+      `overwrite that file in place. Change no other file. Report briefly what changed.`
+    const res = await fetch('/api/runs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'ai', input: { message, label: `minimal-txt #${id}` } }),
+    })
+    if (!res.ok) {
+      throw new Error((await res.json().catch(() => ({})))?.error || `HTTP ${res.status}`)
+    }
+    const monitor = store.nodes.find((n) => n.name === 'api-runs-monitor')
+    if (monitor) {
+      router.push(`/node/${monitor.id}`)
+    } else {
+      alert(
+        'Run started — open the "api-runs-monitor" node to watch it (reload if not listed yet).',
+      )
+    }
+  } catch (error) {
+    alert(`Failed to start run: ${error.message}`)
+  } finally {
+    running.value = false
+  }
 }
 
 // Two ways into edit mode, picked from the view bar. editRich seeds the
@@ -70,7 +125,9 @@ const editRich = async () => {
   source.value = false
   editing.value = true
   await nextTick()
-  if (bodyRef.value) bodyRef.value.innerHTML = content.value || ''
+  if (bodyRef.value) {
+    bodyRef.value.innerHTML = content.value || ''
+  }
 }
 const editSource = () => {
   source.value = true
@@ -78,7 +135,9 @@ const editSource = () => {
 }
 
 const syncFromDom = () => {
-  if (bodyRef.value) content.value = bodyRef.value.innerHTML
+  if (bodyRef.value) {
+    content.value = bodyRef.value.innerHTML
+  }
 }
 
 // The one "insert a part" primitive: execCommand inserts HTML/format at the
@@ -132,7 +191,9 @@ const normalizeUrl = (url) => (/^(https?:|mailto:|tel:|#|\/)/i.test(url) ? url :
 
 const applyLink = () => {
   const raw = linkUrl.value.trim()
-  if (!raw) return cancelLink()
+  if (!raw) {
+    return cancelLink()
+  }
   const url = normalizeUrl(raw)
   bodyRef.value?.focus()
   const sel = window.getSelection()
@@ -179,6 +240,13 @@ const applyLink = () => {
       <template v-else>
         <n-button size="small" @click="editRich">Edit</n-button>
         <n-button size="small" @click="editSource">&lt;/&gt; HTML</n-button>
+        <n-button
+          size="small"
+          :loading="running"
+          title="Compress this note in place via the minimal-txt skill (runs Claude as a tracked /api/runs job)"
+          @click="runMinimalTxt"
+          >⚡ minimal-txt</n-button
+        >
         <n-button
           size="small"
           :type="readMode ? 'primary' : 'default'"
@@ -325,6 +393,9 @@ const applyLink = () => {
   resize: none;
   white-space: pre-wrap;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-feature-settings:
+    'liga' 0,
+    'calt' 0; /* no programming ligatures */
   font-size: 13px;
 }
 

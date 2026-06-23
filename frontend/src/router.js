@@ -12,5 +12,7 @@ export const router = createRouter({
 
 router.beforeEach(async () => {
   const store = useNodesStore()
-  if (!store.nodes.length) await store.load()
+  if (!store.nodes.length) {
+    await store.load()
+  }
 })

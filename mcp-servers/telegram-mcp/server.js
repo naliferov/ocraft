@@ -76,7 +76,9 @@ async function resolveEntity(ref) {
       dialog.entity?.username?.toLowerCase() === reference.replace(/^@/, '').toLowerCase() ||
       dialog.title === reference,
   )
-  if (match) return match.entity
+  if (match) {
+    return match.entity
+  }
   throw new Error(
     `Could not resolve chat "${ref}". Use @username, numeric id, or exact title (see tg_list_chats).`,
   )
@@ -312,7 +314,9 @@ server.registerTool(
   },
   async ({ chat, path: filePath, caption, replyToMsgId }) => {
     try {
-      if (!fs.existsSync(filePath)) return fail(`File not found: ${filePath}`)
+      if (!fs.existsSync(filePath)) {
+        return fail(`File not found: ${filePath}`)
+      }
       const entity = await resolveEntity(chat)
       const sent = await client.sendFile(entity, { file: filePath, caption, replyTo: replyToMsgId })
       return ok(formatMessage(sent))

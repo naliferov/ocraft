@@ -3,6 +3,13 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import zlib from 'node:zlib'
 import { fileURLToPath } from 'node:url'
+import * as runs from './runs.js'
+import * as aiRunner from './runners/ai.js'
+
+// Register the AI runner with the generic run controller (both kernel-side — the
+// kernel still depends on nothing in runtime/). A "run" is an on-demand, tracked
+// job; AI is the first kind. See kernel/runs.js.
+runs.registerRunner('ai', aiRunner)
 
 // Inlined (was lib/path.js) so the kernel depends on nothing in runtime/.
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
@@ -13,7 +20,9 @@ const ASSETS_DIR = path.join(currentDir, 'data/assets')
 // Render prior chat turns as plain context so each ai-chat request carries the
 // conversation (the endpoint is stateless; the node stores the history).
 const buildChatPrompt = (history, message) => {
-  if (!history?.length) return message
+  if (!history?.length) {
+    return message
+  }
   const transcript = history
     .map((turn) => `${turn.role === 'user' ? 'User' : 'Assistant'}: ${turn.text}`)
     .join('\n\n')
@@ -26,7 +35,9 @@ const nodePath = (id) => path.join(NODES_DIR, id, 'state.json')
 // (an `id` of `..` would otherwise let DELETE rm a folder outside the data store).
 const nodeDirSafe = (id) => {
   const full = path.resolve(NODES_DIR, id)
-  if (full !== NODES_DIR && full.startsWith(NODES_DIR + path.sep)) return full
+  if (full !== NODES_DIR && full.startsWith(NODES_DIR + path.sep)) {
+    return full
+  }
   return null
 }
 
@@ -49,7 +60,9 @@ const childrenOf = async (parentId) => {
   for (const dir of dirs) {
     try {
       const { parentId: nodeParentId } = JSON.parse(await fs.readFile(nodePath(dir), 'utf-8'))
-      if (nodeParentId === parentId) children.push(dir)
+      if (nodeParentId === parentId) {
+        children.push(dir)
+      }
     } catch {
       // skip unreadable/partial node dirs
     }
@@ -108,13 +121,17 @@ const sendText = (req, res, body, contentType) => {
 
 const readBody = async (req) => {
   const chunks = []
-  for await (const chunk of req) chunks.push(chunk)
+  for await (const chunk of req) {
+    chunks.push(chunk)
+  }
   return JSON.parse(Buffer.concat(chunks).toString('utf-8'))
 }
 
 const readText = async (req) => {
   const chunks = []
-  for await (const chunk of req) chunks.push(chunk)
+  for await (const chunk of req) {
+    chunks.push(chunk)
+  }
   return Buffer.concat(chunks).toString('utf-8')
 }
 
@@ -164,16 +181,29 @@ const routes = {
   // NODE_BODY). Kept out of state.json so the node list stays tiny (GET /api/nodes);
   // gzipped on read since bodies are the heavy part.
   'GET /api/nodes/:id/body': async (req, res, { id }) => {
-    const spec = await bodySpecOf(id)
-    if (!spec) {
+    // The node itself must exist (a genuinely missing node → 404). But an existing
+    // node with no body *yet* returns an empty 200, not a 404 — this covers a node
+    // whose type carries no body sidecar, and (the reported case) a freshly-created
+    // node switched to html/script in the editor before its first Save: the server
+    // still sees the old type, or content.html isn't written yet. Returning 200
+    // empty lets the editor load cleanly instead of logging a spurious 404.
+    let node
+    try {
+      node = JSON.parse(await fs.readFile(nodePath(id), 'utf-8'))
+    } catch {
       res.writeHead(404).end('Not found')
+      return
+    }
+    const spec = NODE_BODY[node.type] ?? null
+    if (!spec) {
+      sendText(req, res, '', 'text/plain; charset=utf-8')
       return
     }
     try {
       const raw = await fs.readFile(path.join(NODES_DIR, id, spec.file), 'utf-8')
       sendText(req, res, raw, spec.contentType)
     } catch {
-      res.writeHead(404).end('Not found')
+      sendText(req, res, '', spec.contentType)
     }
   },
 
@@ -283,9 +313,11 @@ const routes = {
       })) {
         if (event.type === 'assistant') {
           for (const block of event.message.content) {
-            if (block.type === 'text') text += block.text
-            else if (block.type === 'tool_use')
+            if (block.type === 'text') {
+              text += block.text
+            } else if (block.type === 'tool_use') {
               toolUses.push({ name: block.name, input: block.input })
+            }
           }
         } else if (event.type === 'result') {
           result = {
@@ -307,12 +339,96 @@ const routes = {
       .writeHead(200, { 'Content-Type': 'application/json' })
       .end(JSON.stringify({ text: text.trim(), toolUses, result }))
   },
+
+  // --- Generic RUNS controller — on-demand, tracked jobs (see kernel/runs.js) ---
+  // A "run" is API-started and observable; AI is the first kind. Distinct from
+  // runtime/tasks (scheduled/finite) and services (permanent). ⚠️ The 'ai' runner
+  // runs Claude with bypassPermissions — same localhost-only caveat as ai-chat.
+  'POST /api/runs': async (req, res) => {
+    try {
+      const { kind, input = {} } = await readBody(req)
+      if (!kind) {
+        throw new Error('kind (string) required')
+      }
+      const run = runs.start(kind, input)
+      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(run))
+    } catch (error) {
+      res
+        .writeHead(400, { 'Content-Type': 'application/json' })
+        .end(JSON.stringify({ error: error.message }))
+    }
+  },
+
+  'GET /api/runs': async (req, res) => {
+    const kind = new URL(req.url, 'http://localhost').searchParams.get('kind') || undefined
+    res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(runs.list(kind)))
+  },
+
+  'GET /api/runs/:id': async (req, res, { id }) => {
+    const run = runs.get(id)
+    if (!run) {
+      res
+        .writeHead(404, { 'Content-Type': 'application/json' })
+        .end(JSON.stringify({ error: 'not found' }))
+      return
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(run))
+  },
+
+  // Server-Sent Events: a snapshot, then live deltas until the run ends or the
+  // client disconnects. The handler returns immediately; the socket stays open
+  // (no res.end) and is fed by the controller's listener.
+  'GET /api/runs/:id/stream': async (req, res, { id }) => {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    })
+    const send = (event) => res.write(`data: ${JSON.stringify(event)}\n\n`)
+    const unsubscribe = runs.subscribe(id, send)
+    if (!unsubscribe) {
+      send({ type: 'error', error: 'not found' })
+      res.end()
+      return
+    }
+    const heartbeat = setInterval(() => res.write(': ping\n\n'), 15000)
+    req.on('close', () => {
+      clearInterval(heartbeat)
+      unsubscribe()
+    })
+  },
+
+  'POST /api/runs/:id/cancel': async (req, res, { id }) => {
+    const ok = runs.cancel(id)
+    res
+      .writeHead(ok ? 200 : 404, { 'Content-Type': 'application/json' })
+      .end(JSON.stringify({ cancelled: ok }))
+  },
+
+  'POST /api/runs/:id/resume': async (req, res, { id }) => {
+    try {
+      let input = {}
+      try {
+        input = await readBody(req)
+      } catch {
+        // empty body is fine — resume with no new input
+      }
+      const run = runs.resume(id, input)
+      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(run))
+    } catch (error) {
+      res
+        .writeHead(400, { 'Content-Type': 'application/json' })
+        .end(JSON.stringify({ error: error.message }))
+    }
+  },
 }
 
 const matchUrl = (method, url) => {
   for (const key of Object.keys(routes)) {
     const [routeMethod, routePath] = key.split(' ')
-    if (routeMethod !== method) continue
+    if (routeMethod !== method) {
+      continue
+    }
 
     const pattern = routePath.replace(/:\w+/g, '([^/]+)')
     const match = url.match(new RegExp(`^${pattern}$`))

@@ -52,19 +52,24 @@ export function useTimeline(getNode) {
 
   const buildVoices = () => {
     disposeVoices()
-    for (const track of tracks.value) voices[track.name] = makeVoice(track)
+    for (const track of tracks.value) {
+      voices[track.name] = makeVoice(track)
+    }
   }
 
   const disposeVoices = () => {
-    for (const voice of Object.values(voices))
+    for (const voice of Object.values(voices)) {
       voice.nodes.forEach((audioNode) => audioNode.dispose())
+    }
     voices = {}
   }
 
   // Build the transport + voices + loop on demand. Idempotent: only the first
   // play creates them (and thus the AudioContext); later plays reuse them.
   const ensureEngine = async () => {
-    if (transport) return
+    if (transport) {
+      return
+    }
     Tone = await import('tone') // load the library on demand (first play only)
     transport = Tone.getTransport()
     transport.bpm.value = bpm.value
@@ -74,15 +79,18 @@ export function useTimeline(getNode) {
     loop = new Tone.Loop((time) => {
       const currentStep = step % totalSteps.value
       for (const track of tracks.value) {
-        if (Array.isArray(track.events) && track.events.includes(currentStep))
+        if (Array.isArray(track.events) && track.events.includes(currentStep)) {
           voices[track.name]?.trigger(time)
+        }
       }
       step++
     }, '16n').start(0)
   }
 
   const tickPlayhead = () => {
-    if (!transport) return // engine not started yet — nothing to track
+    if (!transport) {
+      return
+    } // engine not started yet — nothing to track
     if (isPlaying.value) {
       // Read the real audio clock (context.currentTime) and map it to the transport
       // position playing *right now*, rather than transport.progress, which tracks the
@@ -102,7 +110,9 @@ export function useTimeline(getNode) {
     await Tone.start() // resumes/creates the AudioContext — valid here: play is a user gesture
     transport.start()
     isPlaying.value = true
-    if (requestAnimationFrameId == null) tickPlayhead()
+    if (requestAnimationFrameId == null) {
+      tickPlayhead()
+    }
   }
 
   const pause = () => {
@@ -118,15 +128,22 @@ export function useTimeline(getNode) {
   }
 
   const toggleStep = (track, stepIndex) => {
-    if (!Array.isArray(track.events)) track.events = []
+    if (!Array.isArray(track.events)) {
+      track.events = []
+    }
     const idx = track.events.indexOf(stepIndex)
-    if (idx === -1) track.events.push(stepIndex)
-    else track.events.splice(idx, 1)
+    if (idx === -1) {
+      track.events.push(stepIndex)
+    } else {
+      track.events.splice(idx, 1)
+    }
   }
 
   onBeforeUnmount(() => {
     transport?.stop()
-    if (requestAnimationFrameId != null) cancelAnimationFrame(requestAnimationFrameId)
+    if (requestAnimationFrameId != null) {
+      cancelAnimationFrame(requestAnimationFrameId)
+    }
     loop?.dispose()
     disposeVoices()
   })

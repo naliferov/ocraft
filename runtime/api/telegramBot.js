@@ -20,7 +20,9 @@ export async function getTelegramUpdates({ token, offset } = {}) {
   const api = `https://api.telegram.org/bot${token}`
 
   const url = new URL(`${api}/getUpdates`)
-  if (offset != null) url.searchParams.set('offset', offset)
+  if (offset != null) {
+    url.searchParams.set('offset', offset)
+  }
 
   const res = await fetch(url)
   const data = await res.json()

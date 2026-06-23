@@ -1,6 +1,6 @@
 {
   "name": "wasm-functions",
   "type": "script",
-  "isWasm": true,
+  "scriptType": "assembly-script",
   "parentId": "3"
 }

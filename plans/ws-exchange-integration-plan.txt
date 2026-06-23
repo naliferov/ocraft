@@ -1,0 +1,222 @@
+===============================================================================
+ WS-EXCHANGE INTEGRATION — wiring stream.x8.deno.net into the ocraft stack
+ plan / (roadmap: "Cloud WebSocket exchange" + "Integrate stream.x8.deno.net
+ into ocraft" — grouped; they're two halves of one job)
+ (written 2026-06-19; decisions marked "CONFIRM" are yours)
+===============================================================================
+
+A note on paths: the README/deno-plan still say "backend/"; on disk the tree is
+kernel/ (node store + api.js) + runtime/ (scheduler, tasks, services). This plan
+uses the real paths. The relay lives in ws-exchange/main.ts.
+
+## What & why
+-------------------------------------------------------------------------------
+The relay is DONE and deployed: wss://stream.x8.deno.net/ws (Deno Deploy, Hono +
+Deno.upgradeWebSocket — ws-exchange/main.ts). What is NOT done is everything that
+makes it useful: today it's a dumb broadcast bus (every message fans out to all
+other sockets, type "msg"/"system") with no topics, no auth, and nothing in the
+ocraft stack actually connects to it except the manual websocket-tester node (id
+11) and the ws-exchange-test smoke task.
+
+The open work is the DESIGN + WIRING:
+  1. a real message protocol (pub/sub topics, not blind broadcast),
+  2. an auth gate (coordinate with plans/deno-deploy-mcp-plan.txt §3),
+  3. the local backend joining as a CLIENT that publishes node/service/execution
+     events,
+  4. the editor SUBSCRIBING for live updates — replacing today's poll/refetch
+     model for the (future) service UI and the request/response chat node,
+  5. a documented contract so future clients (the Flutter app) join the same hub.
+
+Why it matters: this is the spine the Flutter mobile-control idea needs, and it
+turns the editor from "refetch on action" into "live". It's also the only way the
+headless brain (scheduler + chat-node) can push state to a human who isn't sitting
+at the editor.
+
+## Fit with the node model / architecture
+-------------------------------------------------------------------------------
+The hub is deliberately OUTSIDE the node store — it's transport, not data. The
+node store stays the source of truth (kernel/api.js, port 3001); the exchange just
+carries *change notifications and commands* between clients of that store. Mental
+model:
+
+    kernel/api.js (truth) --writes--> publisher --> ws-exchange (cloud) --> subscribers
+      [local backend]                                                        [editor, Flutter]
+
+The relay is a peer deployable, like frontend/ and mcp-servers/* — same status as
+in the deno-deploy plan. The local backend is "just another client" (per the
+roadmap's open question "origin or just another client?" — answer: just a client;
+keeping the relay origin-agnostic is what lets the Flutter app talk to it even when
+the laptop is asleep, by reading last-known state, see Open questions).
+
+ocraft already has the probe surface: node 11 (websocket-tester, x.ui connect/send/
+log panel) and runtime/tasks/ws-exchange-test.js (one-shot connectivity check).
+Both become the test harness for the protocol below.
+
+## Message protocol (the core design decision)
+-------------------------------------------------------------------------------
+Today every frame is `{type:"msg"|"system", text}` broadcast to all. That cannot
+distinguish a node-update from a service-log line from a Flutter command. Define a
+minimal envelope, JSON, one object per frame:
+
+    { v:1, kind:"pub"|"sub"|"unsub"|"event"|"req"|"res",
+      topic:"<string>", from:"<clientId>", id:"<uuid?>", data:<any> }
+
+Two addressing modes, both over the one socket:
+
+  A. PUB/SUB TOPICS — the default. Clients `sub` to topics; a `pub` to a topic
+     fans out as `event` to that topic's subscribers only (not blind broadcast).
+     Topic namespace (start small, hierarchical, prefix-matchable later):
+       nodes            node created/updated/deleted   (data: {op,id,...})
+       services         service status changed          (data: {id,status,pid})
+       services.<id>.log  a service's new log lines      (data: {lines})
+       executions       a task run started/finished      (data: {id,task,status})
+       chat.<nodeId>    streaming tokens for a chat node (data: {delta|done})
+     The editor subs to what the open view needs; the backend pubs as things change.
+
+  B. DIRECT REQUEST/RESPONSE — for "Flutter taps a button -> run task X". A `req`
+     carries an `id` + target topic (e.g. `cmd.run-task`); the backend (subscribed
+     to `cmd.*`) handles it and replies with a `res` echoing the `id`. This is RPC
+     over the same bus — it's how a remote client *drives* the backend without a
+     direct connection to :3001.
+
+The relay change is small but real: replace the single `sockets:Set` broadcast with
+a `Map<topic, Set<socket>>` and route by the envelope's `kind`/`topic`. Keep a
+back-compat path (treat a bare string / legacy `{type:"msg"}` as `pub` to a
+`debug` topic) so node 11 keeps working during migration.
+
+CONFIRM: topic taxonomy above (flat vs. hierarchical-with-wildcards). Recommend
+start flat, add `prefix.*` matching only when a client actually needs it.
+
+## Auth (coordinate with plans/deno-deploy-mcp-plan.txt §3)
+-------------------------------------------------------------------------------
+DO NOT re-decide this here — the deno-deploy plan already specced it; this plan
+just consumes that decision. Recap of what lands there:
+  - WS_EXCHANGE_TOKEN: a shared secret, set as a Deno Deploy env var on the app,
+    checked in main.ts BEFORE Deno.upgradeWebSocket; reject the upgrade 401 if
+    absent/mismatched; fail-closed in prod.
+  - Mechanism: query param (?token=) [simple] or Sec-WebSocket-Protocol
+    [token out of URL] — browser WebSocket can't set headers, so Bearer is out.
+  - HONEST CAVEAT (carried from that plan): any token shipped to the browser
+    editor (as a VITE_ env) is semi-public — gates CASUAL access, not a determined
+    attacker. True per-client auth = server-minted short-lived tokens, out of scope.
+
+What THIS plan adds on top: identity in the protocol. The token gates *connecting*;
+it does not say *who* connected. Add a `from` clientId (and optionally a `role`:
+"backend"|"editor"|"mobile") in the envelope so the backend can refuse a `cmd.*`
+req that doesn't come from a trusted role. With a single shared token this is
+advisory only (anyone with the token can claim any role) — note it; it becomes real
+only once per-client tokens exist.
+
+## Implementation plan (phased)
+-------------------------------------------------------------------------------
+PHASE 0 — protocol on the relay (no ocraft client changes)
+  - Edit ws-exchange/main.ts: envelope parse, Map<topic,Set>, route pub/sub/event/
+    req/res; legacy fallback to a `debug` topic. Add the WS_EXCHANGE_TOKEN gate
+    (from the deno-deploy plan). Redeploy via the deno-deploy MCP.
+  - Extend runtime/tasks/ws-exchange-test.js from "did it open?" to a real protocol
+    assertion: sub to a test topic, pub to it, assert the event fans back. Gate on
+    that. (Its own header already anticipates this.)
+  - Teach node 11 (websocket-tester) the envelope: a topic field + sub/pub buttons,
+    token from a Vite env. It stays the human probe.
+
+PHASE 1 — local backend as PUBLISHER (one shared client)
+  - New module runtime/exchange/client.js: a single long-lived WS client to the hub
+    (Node 22+ global WebSocket — no `ws` dep, matching ws-exchange-test.js). Auto-
+    reconnect w/ backoff; a `publish(topic, data)` + `subscribe(topic, handler)` API.
+  - It runs inside a SERVICE so it stays up: add runtime/services/exchange.js
+    ({cmd:'node', args:['bin/cli.js','exchange-loop']}) supervised by serviceManager
+    exactly like `scheduler`. (serviceManager already does start/stop/logs/restart.)
+  - Wire publishers at the existing write points:
+      * kernel/api.js node CRUD (POST/DELETE /api/nodes*) -> pub "nodes".
+        Cleanest: api.js POSTs a tiny notify to the exchange service over loopback,
+        OR the exchange service tails a change feed — see Open questions (api.js
+        must not grow a hard dep on a network socket).
+      * runtime/taskExecutor.js execute() start/finish -> pub "executions".
+      * runtime/serviceManager.js start/stop/markFailed -> pub "services".
+  - Now a remote subscriber sees the system breathe with zero polling.
+
+PHASE 2 — editor as SUBSCRIBER (replace poll/refetch)
+  - composables/useExchange.js: connect once, expose subscribe(topic, cb). One
+    socket for the app (not per-component).
+  - Service UI (when built — see the process-management-UI roadmap item): subscribe
+    "services" + "services.<id>.log" instead of polling status/log endpoints.
+  - Chat node (AiChat.vue): today it's a blocking POST /api/ai-chat that returns the
+    whole answer at once (no streaming). Two honest options:
+      (a) keep POST for the request, but have the backend `pub chat.<nodeId>` token
+          deltas as the agent streams, and the node subscribes -> live typing.
+      (b) leave chat as-is for now; it's the lower-value half. Recommend (a) only
+          after Phase 1 proves the publisher path.
+    NB: the ai-chat endpoint stays localhost-only and untouched as an endpoint —
+    we only add a side-channel that publishes its progress.
+
+PHASE 3 — document the contract
+  - ws-exchange/README.md: the envelope, the topic list, the auth, "how to be a
+    client". This is the spec the Flutter plan (plans/flutter-mobile-control-plan.txt)
+    builds against.
+
+## Key files / components
+-------------------------------------------------------------------------------
+  ws-exchange/main.ts                 relay — add envelope routing + token gate
+  runtime/tasks/ws-exchange-test.js   smoke task — upgrade to protocol assertion
+  kernel/data/nodes/11/script.js      websocket-tester — add topic + token fields
+  runtime/exchange/client.js          NEW — backend's shared hub client (publish/subscribe)
+  runtime/services/exchange.js        NEW — service config so the client stays up
+  bin/cli.js                          add an `exchange-loop` command (like scheduler-loop)
+  kernel/api.js                       emit node-CRUD events (carefully — see Open Qs)
+  runtime/taskExecutor.js             emit execution events
+  runtime/serviceManager.js           emit service-status events
+  frontend/src/composables/useExchange.js  NEW — editor's single subscriber
+  ws-exchange/README.md               the protocol contract (the public spec)
+
+## Open questions / risks
+-------------------------------------------------------------------------------
+  - HOW does kernel/api.js notify the exchange without a hard network dep? api.js is
+    the source of truth and must boot/work even if the hub is down. Options: (a) it
+    POSTs a fire-and-forget notify to the local exchange service (loopback, failures
+    swallowed); (b) the exchange service watches a change feed/journal the store
+    appends to; (c) api.js stays dumb and the editor's own writes echo through the
+    hub. Recommend (a) — smallest, keeps the store decoupled, hub-down just means no
+    live events (editor can still poll as a fallback).
+  - LAPTOP ASLEEP: the relay is stateless (in-memory sockets only). If the backend
+    isn't connected, a Flutter client sees nothing and its `cmd.*` reqs go nowhere.
+    Do we want last-known-state retention on the relay (a tiny per-topic "last
+    event" cache it replays to new subscribers)? Cheap and high-value for mobile —
+    flag for the Flutter plan.
+  - back-compat window: node 11 + anything pointing at the old blind-broadcast must
+    not break mid-migration — hence the legacy `debug`-topic fallback in Phase 0.
+  - ordering/delivery: no acks, no replay, at-most-once. Fine for "live UI hints";
+    NOT a substitute for the store. Never treat an event as the source of truth.
+  - the auth caveat (browser token semi-public) is inherited, not solved here.
+
+## Monetization
+-------------------------------------------------------------------------------
+No direct angle, and that's the honest answer — a personal pub/sub bus isn't a
+product. The INDIRECT angle is real though: this is the enabling layer for a
+"control your home automation / personal agent from your phone" story, which is the
+only thing in ocraft a hosted tier could plausibly charge for (a managed relay +
+auth so a non-technical user doesn't run their own Deno app). Cheapest viable
+charge IF it ever goes there: a few $/mo for hosted relay + real per-user auth
+(the thing this plan explicitly defers). Don't build toward billing now; just don't
+architect it shut — keep the relay deployable and the protocol documented.
+
+## Marketing
+-------------------------------------------------------------------------------
+  - Demo artifact: a split-screen screen-recording — left, the editor; right, a
+    phone (or second tab). Run a task / edit a node on one; the other updates LIVE
+    with no refresh. "My note-OS is now realtime across devices over a 50-line Deno
+    relay." That's a strong show-don't-tell clip.
+  - Channel: X / YouTube short (fits plans/youtube-content-plan.txt), r/selfhosted.
+  - Hook: "I added realtime sync to my framework-free node OS — the whole server is
+    one Deno file."
+  - Target: indie-hacker / self-hoster / "I build my own tools" crowd.
+
+## Effort (M)
+-------------------------------------------------------------------------------
+  Phase 0 (protocol + token on relay, upgrade smoke test + node 11)   ~S–M, 1 day
+  Phase 1 (backend publisher client + service + 3 publish points)     ~M, 1–2 days
+  Phase 2 (editor subscriber; service UI + chat streaming)            ~M, depends on
+           the service-UI roadmap item landing first; chat-stream ~0.5 day
+  Phase 3 (write the contract README)                                 ~S, 0.5 day
+  Total ~M. Phase 0 is independently shippable and unblocks both the Flutter plan
+  and the live service UI. The risky bit is the api.js notify decision (Open Qs) —
+  settle that before Phase 1.

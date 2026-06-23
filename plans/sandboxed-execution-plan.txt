@@ -1,0 +1,209 @@
+===============================================================================
+ Sandboxed execution with resource limits
+ (roadmap: "Sandboxed execution with resource limits")
+===============================================================================
+
+## What & why
+
+Node/script execution in ocraft runs with **full access and no limits** today,
+on both surfaces:
+
+  - Browser: a `script` node's body is blob-imported into the page
+    (`useNodeScripts.js:86-104`, `runNodeCode` at `:183-195`) and runs with the
+    full DOM, `fetch`, `localStorage` (where `x.auth` tokens live, `:118-141`),
+    and the editor's own globals. No isolation, no caps.
+  - Backend: tasks run in-process (`runtime/taskExecutor.js`). The timeout there
+    is explicitly *soft* — the code's own comment (lines 9-15) says "a JS promise
+    can't be hard-killed, so stray work keeps running... Hard isolation would
+    need a subprocess." A task can already exhaust memory/CPU or start a stray
+    server and only get *flagged* failed, not stopped.
+
+This matters now for two reasons, both load-bearing for the roadmap:
+
+  1. **The keystone needs it.** Self-extending node types (see
+     self-extending-handlers-plan.txt) means *loading a handler from a node
+     body = executing arbitrary code from data*. Shipping that to anyone but a
+     single trusted user without a sandbox is reckless — a handler can read
+     tokens, spin the loop, or exfiltrate.
+  2. **Life-management automation needs it.** The direction is a scheduler that
+     runs nodes headlessly as judgment/automation. The moment a node runs
+     *unattended* (cron, an assistant's decision) rather than under a human
+     hitting Run, "it can't take down the host" stops being optional.
+
+The original Varcraft vision already assumed containerised, resource-limited
+module execution — this is paying that down.
+
+## Fit with the node model / architecture
+
+Two execution surfaces → two sandboxes, sharing one principle: **a node runs
+against a capability-scoped `x`, not ambient authority.** The `x` context was
+kept deliberately small (`makeCtx`, `useNodeScripts.js:147-177`) precisely so it
+can be re-implemented behind an isolation boundary and behind a backend runner.
+
+  - Browser (script/`yo`/handler nodes): a Web Worker (for compute/script
+    bodies) or a sandboxed `<iframe>` (when a node needs DOM, e.g. `x.ui`). The
+    node body runs inside; `x` becomes a *proxy* that forwards capability calls
+    over `postMessage` to the host, which decides what's allowed.
+  - Backend (the scheduler runs nodes): a headless runner that re-implements the
+    small `x` server-side and executes the node body in an isolated child
+    (Worker thread → subprocess → container, escalating isolation). The DO
+    droplet (or a Deno Deploy worker) is the natural home for the strongest tier.
+
+## Implementation plan (phased)
+
+### Phase 1 — define the capability boundary (no isolation yet)
+Refactor so a node NEVER touches ambient globals directly — everything goes
+through `x`. This is the prerequisite that makes every later boundary a drop-in.
+
+  - audit `makeCtx`: `x.x`, `x.log`, `x.auth`, `x.args`, `x.ui` are the surface.
+    The leaks are direct `fetch`/`localStorage`/DOM a body can reach because it
+    runs in the page. Document the intended capability set: compose (`x.x`),
+    log, scoped auth read, scoped network (an allow-listed `x.fetch`), and
+    scoped UI (`x.ui`). Anything outside `x` is to-be-denied once isolated.
+  - introduce a single `runNode({ code, id, capabilities })` seam that both the
+    current in-page path and the future Worker path implement, so the call sites
+    (`Script.vue` Run, `x.x`) don't change when isolation lands.
+
+### Phase 2 — browser: Web Worker for compute script nodes
+  - run a `script` node's body in a `Worker` (module worker). Build `x` on the
+    host; inside the worker `x.*` are stubs that `postMessage` a request
+    (`{ cap: 'x', args }`, `{ cap: 'auth', name }`, …) and await a reply. The
+    host enforces: `x.auth` returns only the named slot (never the whole store),
+    `x.x` runs the target through the SAME mechanism (cycle guard stays on the
+    host), `x.fetch` (new) is checked against an allow-list.
+  - **resource caps the worker makes possible:** a watchdog `setTimeout` on the
+    host `terminate()`s a worker past its wall-clock budget (the *hard* kill the
+    soft task timeout can't do). A heartbeat (worker pings every N ms) detects a
+    frozen event loop. Memory: cap via the worker's own measurement
+    (`performance.measureUserAgentSpecificMemory()` where available) or simply
+    accept that `terminate()` reclaims it. This alone removes "a node freezes the
+    editor."
+  - caveat: a Worker has **no DOM**, so `x.ui` (which mounts real DOM,
+    `useScriptUi.js`) can't live inside it. Split node bodies into *compute*
+    (Worker-isolated) vs *UI* (needs the iframe path, Phase 3). The WebSocket
+    tester (node 11) is a UI node; most logic nodes are compute.
+
+### Phase 3 — browser: sandboxed iframe for UI/DOM nodes
+For nodes that present their own UI (`x.ui`) or, post-keystone, handler nodes
+that render arbitrary components:
+
+  - host the body in a `<iframe sandbox="allow-scripts">` (no `allow-same-origin`
+    → its own opaque origin: no access to the parent's `localStorage`, cookies,
+    or DOM). `x` is again a `postMessage` proxy; `x.ui` builds controls *inside*
+    the iframe's document (the panel moves into the frame), and only structured
+    capability requests cross the boundary.
+  - this is the boundary the **keystone** depends on: a store-loaded handler
+    component runs in the iframe, so untrusted type-defining code can't reach
+    the page. Built-in handlers (html/scenes) stay in-page (trusted, perf);
+    only *node-defined* handlers get sandboxed.
+  - CPU/wall-clock caps via the same watchdog + `iframe.remove()`.
+
+### Phase 4 — backend: a headless node runner (re-implement `x` server-side)
+So the scheduler can execute nodes (the long-stated "headless runner" gap,
+README "Running nodes" note). Re-implement the small `x` backend-side:
+
+  - `runtime/nodeRunner.js`: given a node id, fetch its body from the kernel
+    (`/api/nodes/:id/body`), and run it with a backend `x`:
+    `x.x` (load + run another node via the same runner, cycle-guarded — port the
+    `stack` logic from `makeCtx`), `x.log` → execution logs, `x.auth` → a
+    server-side secret store (NOT browser localStorage; env / a vault file),
+    `x.fetch` → allow-listed. No `x.ui` (headless).
+  - isolation tiers, escalating, pick per trust level:
+      (a) `node:worker_threads` — cheap, in-process-but-separable, hard
+          `terminate()`, a `resourceLimits` option for max old-space size. Good
+          default for *own* trusted nodes.
+      (b) child process (`node --max-old-space-size=… --cpu-prof`?) with the
+          body fed in — stronger memory/CPU isolation; killable.
+      (c) container — the real disk/memory/CPU caps + filesystem isolation. The
+          repo already has the pattern: `bin/yolo.js` builds a Docker image and
+          runs work in it as the non-root `node` user with mounts. Reuse that
+          shape for a "run this node in a throwaway container with `--memory`,
+          `--cpus`, read-only rootfs, no network unless `x.fetch` is used" runner.
+          The DO droplet is the natural host for always-on isolated workers.
+  - wire into the scheduler: a node becomes runnable as a task target — a new
+    task/entry `run-node <id>` that calls `nodeRunner` with the chosen tier, so
+    `runtime/scheduler.js` jobs can fire nodes, not just hand-written tasks.
+
+### Phase 5 — resource accounting + policy
+  - per-run record (extend the execution record in `taskExecutor`/storage):
+    wall-clock, peak memory (from worker_threads/container stats), and *which
+    capabilities were exercised* (did it network? mutate the graph?). This is
+    the audit trail unattended execution needs.
+  - a small policy object per node (or per type): `{ timeoutMs, maxMemoryMb,
+    network: 'none'|'allowlist', allowGraphMutation }`. Defaults tight; widen
+    per node. This is also where the keystone's `x.create`/`x.save` get a
+    quantity/depth cap (a handler-authoring script shouldn't be able to spawn
+    10k nodes).
+
+## Key files / components
+  - `frontend/src/composables/useNodeScripts.js` — the `runNode` seam; `x` as a
+    `postMessage` proxy; cycle guard stays host-side.
+  - `frontend/src/composables/useScriptUi.js` — `x.ui` moves into the iframe
+    document for sandboxed UI nodes.
+  - `frontend/src/components/NodeItem/nodeTypes/Script.vue` — Run goes through
+    the worker/iframe path; add a "sandboxed" indicator.
+  - `runtime/nodeRunner.js` — NEW: headless `x` + the isolation-tier executor.
+  - `runtime/taskExecutor.js` — the soft-timeout note (lines 9-15) is the exact
+    gap this closes; a `run-node` task/entry bridges scheduler → `nodeRunner`.
+  - `bin/yolo.js` — existing Docker-launcher pattern to crib for tier (c).
+  - kernel: a server-side `x.auth`/secret store (replacing browser localStorage
+    for headless runs).
+
+## Open questions / risks
+  - **Browser memory caps are weak.** Workers/iframes give hard *termination* and
+    origin isolation, but precise memory ceilings in-browser are best-effort
+    (`measureUserAgentSpecificMemory` is gated/approximate). True memory/CPU/disk
+    caps come only from the container tier — so "real limits" effectively means
+    the backend container path; the browser side is mostly *kill-on-runaway* +
+    *capability scoping*, which is honest and still a big upgrade.
+  - **`x.ui` ↔ Worker split.** Worker = no DOM, so UI nodes need the iframe path;
+    splitting node bodies into compute vs UI is real work and a slightly leaky
+    abstraction. Decide the split rule early.
+  - **postMessage `x` is async + structured-clone only.** `x.x` is already
+    async; non-cloneable returns (functions, class instances — e.g. raw wasm
+    exports handed back today, `:166-169`) must be reshaped or denied across the
+    boundary.
+  - **Perf cost** of proxying every capability over `postMessage`; keep built-in,
+    trusted node types in-page and reserve isolation for *node-authored* code.
+  - **Container tier needs a host** — depends on the DO-droplet question (its own
+    roadmap item: does an always-on box still earn its place?). Worker_threads
+    tier needs no new infra and is the pragmatic first backend isolation.
+
+## Monetization
+This is the **gate on every paid, multi-user, or hosted version of ocraft** — the
+one feature without which "let other people run nodes on my infra" is impossible.
+No standalone product (nobody buys "a sandbox"), but it directly unlocks: a
+hosted "scriptable node OS" (usage-metered compute — you pay for CPU-seconds your
+nodes run, the classic serverless model), and the handler/type marketplace from
+the keystone plan (you can only safely run a stranger's node-type if it's
+sandboxed). Cheapest viable charge once it exists: metered backend execution
+(per-run or per-CPU-second) on the container tier. Until then there's no revenue
+— it's pure enabler — but it's the *highest-leverage* enabler, because it's the
+precondition for ocraft ever being more than single-user-local.
+
+## Marketing
+Harder to make flashy than a visual feature — sandboxing is invisible when it
+works. The honest "show, don't tell" is an *adversarial* demo: run a deliberately
+hostile node (`while(true){}`, or one that tries to read another node's auth
+token) and show the editor staying responsive / the capability being denied /
+the run getting killed at its budget — a before (freezes the app) / after
+(killed at 2s, editor fine) split. Hook: "I let my app run untrusted code on
+purpose — here's why it's safe." Channel: a technical write-up + clip for HN / X
+(the security-minded dev crowd rewards this), and it's the credibility backstop
+for the keystone's "create any type" demo ("...and yes, it's sandboxed"). Target
+user: devs who'd never run arbitrary node code without isolation — i.e. the ones
+who'd actually adopt a hosted version.
+
+## Effort — L (and genuinely the hardest item, done properly)
+  - Phase 1 (capability seam) — M: refactor `x` to be the only authority; no new
+    runtime, but it touches the run path.
+  - Phase 2 (Worker for compute nodes) — M: worker + postMessage `x` proxy +
+    watchdog/terminate.
+  - Phase 3 (iframe for UI/handler nodes) — M/L: moving `x.ui` into the frame is
+    fiddly; this is the boundary the keystone rides on.
+  - Phase 4 (headless runner + tiers) — L: worker_threads tier is M; the
+    container tier + scheduler wiring is the bulk, and depends on a host.
+  - Phase 5 (accounting + policy) — S/M, layered on once a boundary exists.
+  Ship the Worker tier (Phase 2) + worker_threads backend (part of Phase 4)
+  first for the 80%; the container tier is the long pole and pairs with the
+  DO-droplet decision.

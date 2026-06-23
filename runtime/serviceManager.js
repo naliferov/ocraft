@@ -64,7 +64,9 @@ const saveServiceState = async (id, rec) => {
 // doubles as a liveness probe. (Caveat: the OS can recycle a pid after a crash,
 // so this can occasionally report a stale pid as alive — acceptable here.)
 const isAlive = (pid) => {
-  if (!pid) return false
+  if (!pid) {
+    return false
+  }
   try {
     process.kill(pid, 0)
     return true
@@ -81,7 +83,9 @@ const appendLog = async (id, line) => {
 const rotateIfLarge = async (id) => {
   try {
     const { size } = await fsp.stat(logPath(id))
-    if (size > MAX_LOG_BYTES) await fsp.rename(logPath(id), `${logPath(id)}.1`)
+    if (size > MAX_LOG_BYTES) {
+      await fsp.rename(logPath(id), `${logPath(id)}.1`)
+    }
   } catch {
     /* no log yet */
   }
@@ -128,17 +132,23 @@ export const listServices = async () => {
 
 export const getService = async (id) => {
   const cfg = await loadConfig(id)
-  if (!cfg) throw new Error(`No service config "${id}"`)
+  if (!cfg) {
+    throw new Error(`No service config "${id}"`)
+  }
   return statusOf(cfg, await loadServiceState(id))
 }
 
 export const startService = (id) =>
   withLock(lockName(id), async () => {
     const cfg = await loadConfig(id)
-    if (!cfg) throw new Error(`No service config "${id}"`)
+    if (!cfg) {
+      throw new Error(`No service config "${id}"`)
+    }
 
     const rec = await loadServiceState(id)
-    if (isAlive(rec.pid)) return statusOf(cfg, rec) // one instance per config
+    if (isAlive(rec.pid)) {
+      return statusOf(cfg, rec)
+    } // one instance per config
 
     await fsp.mkdir(STATE_DIR, { recursive: true })
     await rotateIfLarge(id)
@@ -191,7 +201,9 @@ export const startService = (id) =>
 export const stopService = (id, { graceMs = 3000 } = {}) =>
   withLock(lockName(id), async () => {
     const cfg = await loadConfig(id)
-    if (!cfg) throw new Error(`No service config "${id}"`)
+    if (!cfg) {
+      throw new Error(`No service config "${id}"`)
+    }
 
     const rec = await loadServiceState(id)
     const pid = rec.pid
@@ -239,7 +251,9 @@ export const restartService = async (id) => {
 }
 
 export const readLog = async (id, { lines = 200 } = {}) => {
-  if (!(await loadConfig(id))) throw new Error(`No service config "${id}"`)
+  if (!(await loadConfig(id))) {
+    throw new Error(`No service config "${id}"`)
+  }
   try {
     const raw = await fsp.readFile(logPath(id), 'utf-8')
     return raw.split('\n').slice(-lines).join('\n')
@@ -249,6 +263,8 @@ export const readLog = async (id, { lines = 200 } = {}) => {
 }
 
 export const clearLog = async (id) => {
-  if (!(await loadConfig(id))) throw new Error(`No service config "${id}"`)
+  if (!(await loadConfig(id))) {
+    throw new Error(`No service config "${id}"`)
+  }
   await fsp.writeFile(logPath(id), '')
 }

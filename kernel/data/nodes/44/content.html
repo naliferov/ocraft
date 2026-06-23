@@ -1,29 +1,47 @@
-<h2>generative art — livecoding stack</h2>
-<p>Text-driven generative audio + visuals. All of it is <em>code</em>, so it iterates fast and pairs well with an AI collaborator.</p>
-
-<h3>Strudel (audio)</h3>
-<p><strong>TidalCycles ported to JavaScript / the browser</strong> (strudel.cc). A <strong>pattern language</strong> whose sample functions are literally Prefuse-style chopping primitives:</p>
-<ul>
-  <li><code>chop</code>, <code>striate</code>, <code>slice</code>, <code>bite</code>, <code>chew</code> — granular/chop a loaded sample</li>
-  <li><code>degradeBy</code>, <code>sometimes</code>, <code>somecycles</code>, <code>rand</code>, <code>irand</code>, <code>choose</code>, <code>wchoose</code> — first-class randomization</li>
-  <li>mini-notation for Euclidean / polyrhythm / ratchets</li>
-</ul>
-<p>Load a sample and one line gives randomized, beat-locked granular chopping:</p>
-<pre><code>s("durov").slice(16, irand(16).segment(8)).sometimesBy(.3, rev).chop(4)</code></pre>
-<p>Runs on its own web-audio engine (superdough), or sends to <strong>SuperDirt / SuperCollider</strong> for sample playback. Likely the <em>shortest path</em> to the chopped-vocal aesthetic, and it is pure text.</p>
-
-<h3>SuperCollider (audio)</h3>
-<p>The heavyweight underneath: a full synthesis <strong>language + server</strong> (scsynth). <code>SynthDef</code>s, <code>Pbind</code> patterns, deep granular (<code>TGrains</code>, <code>GrainBuf</code>, <code>Warp1</code>), buffer DSP, total control. Notably it is the engine room beneath TidalCycles/Strudel: their default sample backend, <strong>SuperDirt</strong>, runs on SuperCollider. Steeper curve, highest ceiling.</p>
-
-<h3>Hydra (video)</h3>
-<p>Browser-based <strong>livecoding visuals</strong> (Olivia Jack). Analog-synth-style functional chains on WebGL:</p>
-<pre><code>osc(150, -0.1).rotate(1.57).out(o0)
-osc(20, 0.1, 0.8).kaleid(5).modulate(noise(3)).out()</code></pre>
-<p>Audio-reactive via FFT (<code>a.fft[0]</code>), and can ingest external video / webcam / screen (<code>s0.initVideo(...)</code>) — so footage can be fed in and glitched generatively.</p>
-
-<h3>How they connect</h3>
-<ul>
-  <li><strong>TidalCycles/Strudel → SuperDirt (SuperCollider)</strong> for samples.</li>
-  <li><strong>Strudel &harr; Hydra</strong> integrate; <strong>Flok</strong> is a collaborative editor hosting Strudel + Hydra + SC together.</li>
-  <li><strong>OSC</strong> is the universal glue — links SC, Tidal, Max, and Ableton (via AbletonOSC). See [[prefuse-style-glitch-chopping-tools]].</li>
-</ul>
+<strong>Strudel (audio)</strong> — TidalCycles ported to js/browser (strudel.cc); pattern language
+whose sample fns = prefuse-style chopping primitives<br />
+<code>chop</code>, <code>striate</code>, <code>slice</code>, <code>bite</code>, <code>chew</code> —
+granular/chop a loaded sample<br />
+<code>degradeBy</code>, <code>sometimes</code>, <code>somecycles</code>, <code>rand</code>,
+<code>irand</code>, <code>choose</code>, <code>wchoose</code> — first-class randomization<br />
+mini-notation for euclidean / polyrhythm / ratchets<br />
+1 line = randomized beat-locked granular chopping:
+<code>s("durov").slice(16, irand(16).segment(8)).sometimesBy(.3, rev).chop(4)</code><br />
+runs on superdough (own web-audio engine), or → SuperDirt / SuperCollider for sample playback<br /><br />
+<strong>SuperCollider (audio)</strong> — full synthesis language + server (scsynth):
+<code>SynthDef</code>s, <code>Pbind</code> patterns, deep granular (<code>TGrains</code>,
+<code>GrainBuf</code>, <code>Warp1</code>), buffer DSP, total control; engine beneath
+TidalCycles/Strudel (default backend SuperDirt runs on it); steeper curve, highest ceiling<br /><br />
+<strong>Hydra (video)</strong> — browser livecoding visuals (olivia jack); analog-synth-style
+functional chains on WebGL<br />
+<code>osc(150, -0.1).rotate(1.57).out(o0)</code><br />
+<code>osc(20, 0.1, 0.8).kaleid(5).modulate(noise(3)).out()</code><br />
+audio-reactive via FFT (<code>a.fft[0]</code>); ingests external video/webcam/screen
+(<code>s0.initVideo(...)</code>) → footage fed in &amp; glitched generatively<br /><br />
+<strong>integrate</strong>: TidalCycles/Strudel → SuperDirt (SuperCollider) for samples; Strudel ↔
+Hydra; Flok = collab editor hosting Strudel + Hydra + SC; AbletonOSC. see
+[[prefuse-style-glitch-chopping-tools]]<br /><br />
+<strong>gen image</strong> (prompt) — name='mark strong': redraw {{Name}} image to match the gosling
+reference technique → white face w/ thin black outlines (not filled black), black ONLY for hair
+&amp; clothing, remove heavy black shapes on face (cheeks, around eyes, nose), pure white bg (not
+grey), strictly 2 tones (no grey/third tone, no face shading, NOT a silhouette), keep {{Name}}
+likeness &amp; same pose; high-contrast b&amp;w stencil portrait, bold solid black shapes, smooth
+flowing vector curves, clean white negative space, no gradients/grayscale, screen-print style,
+minimalist, front-facing symmetrical, head &amp; shoulders<br /><br />
+<strong>ai sound generation</strong><br />
+ElevenLabs sound effects api; Meta AudioCraft (AudioGen = environmental sounds, MusicGen = music);
+ready claude code skills wrap these: "Sound Effects Expert", "AudioCraft"<br />
+<strong>mcp</strong>: ElevenLabs own MCP server (generation, voice cloning, transcription from
+claude); anthropic MCP connectors for Ableton &amp; Splice (also Blender, Adobe, Resolume) → claude
+can agentically drive ableton; caveat: connectors early/experimental, not stable studio infra<br />
+<strong>closest to "same sound"</strong>: MusicGen w/ melody-conditioning (hum/feed a motif → builds
+arrangement around it); Stable Audio 2.5 (open weights, self-hostable; inpainting/continuation —
+feed a clip, it continues/builds out); not exact clone, "same spirit"; runs via Replicate api<br />
+<strong>royalty-free packs from PD films</strong>: GowlerMusic "Movie Dialogue Anthology" — 150+ WAV
+dialogue clips + SFX, CC (free + premium £2); SampleScience "Sounds from the Public Domain" — 240
+lo-fi samples; "Dead Language Vol 1" — cut from Prelinger<br />
+<strong>copyrighted film quotes (grey area)</strong>: movie-sounds.org — short (&lt;10s) sampled
+lines from famous films, mp3/wav; someone else's copyright → ok personal/experimental, risky
+publishing/commercial<br />
+<strong>for the vibe</strong>: Prelinger for diy digging (pull audio via yt-dlp/ffmpeg) + ready PD
+packs for instant material

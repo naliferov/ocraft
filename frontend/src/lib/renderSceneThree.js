@@ -84,7 +84,9 @@ export function createScene3d(container, node) {
     })
     const mesh = new THREE.Mesh(makeGeometry(spec), material)
     mesh.position.set(...(spec.position ?? [0, 0, 0]))
-    if (spec.rotation) mesh.rotation.set(...spec.rotation)
+    if (spec.rotation) {
+      mesh.rotation.set(...spec.rotation)
+    }
     scene.add(mesh)
     animated.push({ mesh, spin: spec.spin ?? [0, 0, 0] })
   }
@@ -120,7 +122,9 @@ export function createScene3d(container, node) {
       camera.updateProjectionMatrix()
     },
     dispose() {
-      if (frameId != null) cancelAnimationFrame(frameId)
+      if (frameId != null) {
+        cancelAnimationFrame(frameId)
+      }
       for (const entry of animated) {
         entry.mesh.geometry.dispose()
         entry.mesh.material.dispose()

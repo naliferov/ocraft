@@ -26,8 +26,11 @@ export const useNodesStore = defineStore('nodes', () => {
     const roots = []
     for (const node of byId.values()) {
       const parent = node.parentId ? byId.get(node.parentId) : null
-      if (parent) parent.children.push(node)
-      else roots.push(node)
+      if (parent) {
+        parent.children.push(node)
+      } else {
+        roots.push(node)
+      }
     }
     // Sort siblings alphabetically by name (instead of fs-readdir / id order).
     // localeCompare handles unicode (Cyrillic) + numbers; case-insensitive.
@@ -36,7 +39,9 @@ export const useNodesStore = defineStore('nodes', () => {
         numeric: true,
         sensitivity: 'base',
       })
-    for (const node of byId.values()) node.children.sort(byName)
+    for (const node of byId.values()) {
+      node.children.sort(byName)
+    }
     roots.sort(byName)
     return roots
   })
@@ -76,10 +81,14 @@ export const useNodesStore = defineStore('nodes', () => {
   // Create a node with a server-minted id. `parentId` nests it under a category;
   // omitting `type` makes a plain scene node. Pushes the returned node into
   // `nodes` so `tree` recomputes and the sidebar shows it immediately.
-  const create = async ({ type, parentId = null, name = 'new node' } = {}) => {
+  const create = async ({ type = 'category', parentId = null, name = 'new node' } = {}) => {
     const body = { name }
-    if (type) body.type = type
-    if (parentId) body.parentId = parentId
+    if (type) {
+      body.type = type
+    }
+    if (parentId) {
+      body.parentId = parentId
+    }
     const res = await fetch('/api/nodes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -103,7 +112,9 @@ export const useNodesStore = defineStore('nodes', () => {
     let body = null
     if (node?.type === 'script' || node?.type === 'html') {
       const bodyRes = await fetch(`/api/nodes/${id}/body`)
-      if (bodyRes.ok) body = await bodyRes.text()
+      if (bodyRes.ok) {
+        body = await bodyRes.text()
+      }
     }
 
     const res = await fetch(`/api/nodes/${id}`, { method: 'DELETE' })
@@ -111,15 +122,21 @@ export const useNodesStore = defineStore('nodes', () => {
       const { children = [] } = await res.json().catch(() => ({}))
       throw new Error(`Can't delete: node has ${children.length} child node(s)`)
     }
-    if (!res.ok) throw new Error('Delete failed')
+    if (!res.ok) {
+      throw new Error('Delete failed')
+    }
 
     if (node) {
       const snapshot = { ...node }
-      if (body != null) snapshot[BODY] = body
+      if (body != null) {
+        snapshot[BODY] = body
+      }
       deletedNodes.value.unshift(snapshot)
     }
     nodes.value = nodes.value.filter((candidate) => candidate.id !== id)
-    if (activeNodeId.value === id) activeNodeId.value = nodes.value[0]?.id ?? null
+    if (activeNodeId.value === id) {
+      activeNodeId.value = nodes.value[0]?.id ?? null
+    }
   }
 
   // Switch a deleted node back into the store. POST /api/nodes/:id is an upsert, so
@@ -128,7 +145,9 @@ export const useNodesStore = defineStore('nodes', () => {
   // Restores the body sidecar too (from the BODY symbol), then drops it from the pool.
   const restore = async (id) => {
     const index = deletedNodes.value.findIndex((node) => node.id === id)
-    if (index === -1) return null
+    if (index === -1) {
+      return null
+    }
     const node = deletedNodes.value[index]
     const body = node[BODY]
     await save(id, node) // symbol keys are ignored by JSON.stringify — never hit state.json
@@ -148,7 +167,9 @@ export const useNodesStore = defineStore('nodes', () => {
   // Rename in place (mutates `node.name` so the tree updates live) and persist.
   const rename = async (id, name) => {
     const node = nodes.value.find((candidate) => candidate.id === id)
-    if (!node) return
+    if (!node) {
+      return
+    }
     node.name = name
     await save(id, node)
   }
@@ -158,9 +179,13 @@ export const useNodesStore = defineStore('nodes', () => {
   // own subtree — `pathOf(parentId)` is the target's root→target id chain, so if
   // the dragged id appears in it, the target is the node itself or a descendant.
   const reparent = async (id, parentId) => {
-    if (id === parentId) return
+    if (id === parentId) {
+      return
+    }
     const node = nodes.value.find((candidate) => candidate.id === id)
-    if (!node) return
+    if (!node) {
+      return
+    }
     if (parentId && pathOf(parentId).split('/').includes(id)) {
       throw new Error("Can't move a node into its own descendant")
     }
@@ -173,7 +198,9 @@ export const useNodesStore = defineStore('nodes', () => {
   // updates instantly; the save just makes the choice survive reloads.
   const toggleCollapsed = async (id) => {
     const node = nodes.value.find((candidate) => candidate.id === id)
-    if (!node) return
+    if (!node) {
+      return
+    }
     node.collapsed = !node.collapsed
     await save(id, node)
   }

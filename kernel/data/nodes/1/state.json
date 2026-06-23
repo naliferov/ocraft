@@ -11,41 +11,43 @@
       "type": "background",
       "props": {
         "fill": "#DCE7EE"
-      },
-      "state": {},
-      "events": []
+      }
     },
     {
-      "name": "tree1",
+      "name": "tree-green",
       "type": "clipart",
       "z": 1,
       "props": {
         "src": "tree.svg",
-        "x": 110,
-        "y": 45,
+        "x": 130.93,
+        "y": 32.23,
         "width": 55,
-        "height": 63,
-        "scale": 1,
-        "rotation": 0
-      },
-      "state": {},
-      "events": []
+        "height": 63
+      }
     },
     {
-      "name": "tree2",
+      "name": "tree-green-darker",
+      "type": "clipart",
+      "z": 1,
+      "props": {
+        "src": "tree-dark.svg",
+        "x": 92.32,
+        "y": 48.12,
+        "width": 55,
+        "height": 63
+      }
+    },
+    {
+      "name": "tree-black",
       "type": "clipart",
       "z": 1,
       "props": {
         "src": "tree2.svg",
-        "x": 64.87,
-        "y": 43.47,
+        "x": 17.34,
+        "y": 31.96,
         "width": 32,
-        "height": 63,
-        "scale": 1,
-        "rotation": 0
-      },
-      "state": {},
-      "events": []
+        "height": 63
+      }
     },
     {
       "name": "car1",
@@ -53,15 +55,11 @@
       "z": 2,
       "props": {
         "src": "car.svg",
-        "x": 23.96,
-        "y": 74.36,
+        "x": 37.52,
+        "y": 77.79,
         "width": 46,
-        "height": 23,
-        "scale": 1,
-        "rotation": 0
-      },
-      "state": {},
-      "events": []
+        "height": 23
+      }
     }
   ],
   "parentId": "12"

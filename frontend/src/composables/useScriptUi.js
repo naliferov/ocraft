@@ -12,7 +12,9 @@
 // calls and any future backend runner get a ctx without `x.ui`.
 
 const applyStyle = (element, style) => {
-  for (const [key, value] of Object.entries(style)) element.style[key] = value
+  for (const [key, value] of Object.entries(style)) {
+    element.style[key] = value
+  }
 }
 
 const makeRow = () => {
@@ -39,7 +41,9 @@ const makeInput = ({ value = '', placeholder = '', type = 'text', onEnter }) => 
   })
   if (onEnter) {
     input.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') onEnter(input.value)
+      if (event.key === 'Enter') {
+        onEnter(input.value)
+      }
     })
   }
   // `.value` proxies straight to the live element so the script always reads the
@@ -68,7 +72,9 @@ const makeButton = (label, onClick) => {
     cursor: 'pointer',
     fontSize: '13px',
   })
-  if (onClick) button.addEventListener('click', (event) => onClick(event))
+  if (onClick) {
+    button.addEventListener('click', (event) => onClick(event))
+  }
   return button
 }
 
@@ -97,6 +103,7 @@ const makeLog = ({ height = '300px' } = {}) => {
     borderRadius: '4px',
     padding: '10px',
     fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    fontFeatureSettings: "'liga' 0, 'calt' 0", // no programming ligatures
     fontSize: '12.5px',
     lineHeight: '1.6',
   })
@@ -158,7 +165,9 @@ export function createScriptUi(mountElement) {
   // `x.ui` never does.
   let mounted = false
   const ensureMounted = () => {
-    if (mounted) return
+    if (mounted) {
+      return
+    }
     mountElement.replaceChildren(panel)
     mounted = true
   }
@@ -176,7 +185,7 @@ export function createScriptUi(mountElement) {
       ensureMounted()
       const row = makeRow()
       panel.append(row)
-      if (build)
+      if (build) {
         build({
           input: (opts = {}) => {
             const field = makeInput(opts)
@@ -194,6 +203,7 @@ export function createScriptUi(mountElement) {
             return txt
           },
         })
+      }
       return row
     },
     input(opts = {}) {
@@ -218,7 +228,9 @@ export function createScriptUi(mountElement) {
     },
     // Register teardown to run on re-run / unmount (e.g. () => socket.close()).
     onCleanup(fn) {
-      if (typeof fn === 'function') teardowns.push(fn)
+      if (typeof fn === 'function') {
+        teardowns.push(fn)
+      }
     },
   }
 

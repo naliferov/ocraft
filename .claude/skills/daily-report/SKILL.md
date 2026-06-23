@@ -1,12 +1,12 @@
 ---
 name: daily-report
-description: Generate a daily briefing — recent/unread Gmail, this week's Google Calendar events, the ThinkTank todo list, and a Telegram tech/JS channel digest — in one consolidated report. Run any time of day. Use when the user asks for a "daily report", "morning/evening report", "daily briefing", "what's on today/this week", or "catch me up".
+description: Generate a daily briefing — recent/unread Gmail, this week's Google Calendar events, and a Telegram tech/JS channel digest — in one consolidated report. Run any time of day. Use when the user asks for a "daily report", "morning/evening report", "daily briefing", "what's on today/this week", or "catch me up".
 ---
 
 # Daily report
 
-Pull four sources and present them as one short briefing — run it any time of day
-(morning, midday, or evening). Gather all four first (the tool calls are
+Pull three sources and present them as one short briefing — run it any time of day
+(morning, midday, or evening). Gather all three first (the tool calls are
 independent — run them together), then compose the report.
 
 ## 1. Gmail — recent / unread
@@ -31,14 +31,7 @@ first if you need the calendar id).
 - If multiple calendars, include the user's primary (and any others that clearly hold
   real events). If the week is empty, say so.
 
-## 3. ThinkTank todos
-
-Read **`/Users/varcraft/projects/ThinkTank/todo.md`** and list the open items
-(unchecked `- [ ]` lines). Render each as a plain bullet; resolve any `[[wiki-links]]`
-to just their readable text. Skip completed (`- [x]`) items. (Optionally also glance at
-`/Users/varcraft/projects/ThinkTank/job todo.md` and label those "job".)
-
-## 4. Telegram — tech / JS channels
+## 3. Telegram — tech / JS channels
 
 Use the **telegram** MCP tools (`mcp__telegram__tg_read_messages`,
 `mcp__telegram__tg_get_chat_history`). Digest these chats (handles are stable —
@@ -71,10 +64,6 @@ match the current time of day (☀️ morning, 🌤️ midday/afternoon, 🌙 ev
 
 📅 This week
   Mon 16  09:00  <event>
-  …
-
-✅ Todos
-  • Сдать медицинские анализы
   …
 
 💬 Telegram (tech/JS)

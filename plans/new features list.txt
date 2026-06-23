@@ -1,0 +1,392 @@
+ocraft — new features list (with rationale)
+===========================================
+Generated 2026-06-19. Each feature carries an argument for WHY ocraft should add it.
+Derived from feature-ideas-backlog.txt. [ext] = sharpens an existing roadmap/analysis item.
+
+
+1. NODE MODEL & PRIMITIVES
+--------------------------
+1.  Typed relations/edges beyond parentId (references, depends-on, blocks).
+    Why: parentId is a single hierarchy, but knowledge and work are many-to-many; typed edges carry
+    meaning the tree can't, and are the foundation backlinks, graph view, and dependency-aware
+    automation all build on.
+2.  Cross-cutting tags/labels (orthogonal to the tree).
+    Why: the tree forces one place per node, but ideas span projects; tags add a second axis for
+    grouping/querying without duplicating or reparenting.
+3.  Node aliases/symlinks.
+    Why: a reference often belongs in several contexts; symlinks keep one source of truth instead of
+    copy-paste drift.
+4.  Structured properties per type (typed key/value fields).
+    Why: today a node is name+type+free body; typed fields (status, due, author) make the store
+    queryable — the basis for todo/calendar/dashboards turning documents into a small database.
+5.  Multiple bodies/attachments per node.
+    Why: real units bundle artifacts (a script + its docs + tests); one-body-per-node forces awkward
+    splits and breaks the "a node is self-contained" model.
+6.  Node transclusion/embed (block include).
+    Why: knowledge reuses itself; embedding avoids duplication and keeps a single source as the KB grows.
+7.  Computed/derived nodes (content is a live script result).
+    Why: the purest form of "a node can be a program" applied to content — an always-current view, which
+    dashboards and aggregations depend on.
+8.  Type inheritance/mixins.
+    Why: many types share fields (anything dated/with-status); inheritance makes new types cheap, directly
+    serving the self-extension goal.
+9.  Persistent trash + restore.
+    Why: the undo pool is session-scoped; once the store holds your real memory, accidental deletes need a
+    durable safety net or you won't trust it.
+10. Node color/icon/emoji identity.
+    Why: at 150+ nodes the tree is a wall of text; cheap visual identity makes it navigable and feels like
+    an OS, not a file dump.
+
+2. THE `x` RUNTIME (node-as-program)
+------------------------------------
+11. x.store stdlib — CRUD/query/tree from a script. [ext keystone]
+    Why: scripts can already raw-fetch the API to make nodes; a first-class store API makes node-as-program
+    real and is the precondition for handlers-as-nodes (the keystone).
+12. x.state — persistent per-node key/value across runs.
+    Why: scripts are amnesiac between runs; persistence (counters, caches, progress) is the difference
+    between a toy and a useful program.
+13. x.emit/x.on — node-to-node event bus.
+    Why: composition is pull-only today (x.x); an event bus lets nodes react to each other, enabling
+    reactive dashboards and decoupled automation.
+14. x.schedule — a node self-registers as a scheduled task.
+    Why: closes the loop between the script runtime and the scheduler — a node automates itself instead of
+    automation being a separate CLI/config concern.
+15. x.fetch — authenticated CORS-proxied outbound HTTP via x.auth.
+    Why: scripts need outbound HTTP but hit CORS and lack auth; a proxied, auth-aware fetch makes nodes real
+    integration clients, not sandboxed toys.
+16. Named exports per node — x.x("5",{fn:"foo"}).
+    Why: one default export per node is limiting; named exports turn a node into a library of callable
+    functions — richer composition.
+17. Typed node contracts (declared input/output schema).
+    Why: x.x is a blind call today; schemas make composition safe and autocompletable, turning ad-hoc scripts
+    into a real module system.
+18. x.render — formalize returning a renderable.
+    Why: how script output becomes a view is ad-hoc; a formal render return is what lets handlers be nodes
+    (keystone) and unifies how every type draws.
+19. Multi-language WASM bodies (Rust/Zig/C; run uploaded .wasm).
+    Why: AssemblyScript is niche; polyglot WASM widens who can write performant nodes and showcases ocraft as
+    a genuine runtime.
+20. pipeline node type — visual dataflow chaining node calls.
+    Why: chaining x.x by hand is imperative; a declarative dataflow node makes multi-step automation legible —
+    a marquee demo of composition.
+21. Node imports — declare dependencies on other node ids.
+    Why: scripts that depend on other nodes should declare it so the runtime can resolve/order/validate —
+    fixing the implicit-x.x fragility.
+22. Script↔service bridge.
+    Why: a script node can't become a daemon today; bridging lets a node graduate from "run on demand" to
+    "always on" without leaving the node model.
+
+3. EDITOR UX & NAVIGATION
+-------------------------
+23. Command palette (Cmd-K). [ext]
+    Why: clicking the tree doesn't scale; a palette is the single highest-leverage move to make a 150-node OS
+    usable and keyboard-driven.
+24. Node tabs.
+    Why: real work touches several nodes at once; one-at-a-time forces constant context loss.
+25. Split-pane view.
+    Why: the whole pitch is data+code together — editing a note beside its script/preview makes that concrete
+    and demos well.
+26. Browser-like back/forward + nav history.
+    Why: /node/:id is a router with no history; browser-grade nav matches the mental model and prevents
+    getting lost.
+27. Type-to-filter the tree.
+    Why: scanning 150 nodes visually is slow; instant filter is table-stakes for navigability.
+28. Hover previews on /node/:id links.
+    Why: notes link by id; previewing without navigating keeps you in flow and rewards linking.
+29. Keyboard-first/vim tree navigation.
+    Why: an OS that needs a mouse for everything isn't an OS; power-user speed is part of the identity.
+30. Resizable/dockable panels.
+    Why: code vs scene vs note want different layouts; a fixed layout fights the multi-type nature.
+31. Recent/pinned/favorites.
+    Why: you return to a few nodes constantly; surfacing them removes repeated tree-digging.
+32. Multi-select + bulk move/delete/tag.
+    Why: reorganizing 150 nodes one-at-a-time is painful; bulk ops keep the store maintainable.
+33. Drag-drop file/image → asset node.
+    Why: capture friction kills usage; dropping a file to make a node is the fastest path in.
+34. Focus/zen mode.
+    Why: long-form writing needs distraction-free space; editor chrome competes with reading/writing.
+35. Per-node error boundary.
+    Why: loading arbitrary script/handler bodies means one bad node can white-screen the app; isolation is
+    mandatory once handlers are nodes (keystone safety).
+
+4. KNOWLEDGE BASE / MEMORY
+--------------------------
+36. Full-text search across bodies. [ext]
+    Why: 150 notes reachable only by tree/id are effectively write-only; search is the difference between a
+    memory and a graveyard.
+37. Backlinks panel. [ext]
+    Why: the migrated wikilinks already encode relationships; surfacing who-links-here turns a flat note set
+    into a connected graph for free.
+38. Graph view. [ext]
+    Why: a visual map reveals structure and orphans, and it's one of the most demoable "real second brain"
+    artifacts.
+39. [[-autocomplete to link nodes by name.
+    Why: links are the KB's value; frictionless linking (vs typing /node/:id) is what keeps the graph dense.
+40. Unlinked mentions.
+    Why: surfaces latent connections you forgot to link, enriching the graph with zero manual audit.
+41. Daily notes (auto-created dated journal). [ext]
+    Why: a journal is the on-ramp habit that makes PKM sticky; a dated node gives capture a default home.
+42. Outline / table-of-contents for long notes.
+    Why: migrated notes can be long; in-note navigation makes them usable references, not walls of text.
+43. Tag index pages.
+    Why: tags are only useful if browsable; index pages make the orthogonal axis navigable.
+44. Semantic "related notes" (local embeddings).
+    Why: explicit links miss conceptual neighbors; embeddings surface "you also wrote about this" — where
+    recall and serendipity live.
+45. Spaced-repetition flashcard node type.
+    Why: turns the KB from passive storage into active learning — a differentiated use of "notes that are
+    programs" and a strong demo.
+46. Web clipper → html node.
+    Why: most knowledge originates on the web; without low-friction capture, the KB starves.
+47. Highlights + digest.
+    Why: re-reading long notes is costly; highlight extraction makes accumulated reading reusable.
+
+5. LIFE-MANAGEMENT LAYER
+------------------------
+48. todo node type (due dates, status).
+    Why: tasks are the atom of life-management; without a first-class todo the direction can't start.
+49. Calendar view (date-nodes + gcal).
+    Why: time is the other axis of life-management; rendering dates makes the store time-aware, not just topical.
+50. Daily brain briefing (scheduled agent → "today" node). [ext]
+    Why: the payoff that activates all four pillars (memory+scheduler+MCP+AI) into one daily artifact — the
+    move that makes ocraft a thing you open every morning.
+51. Capture inbox (telegram/voice/web → inbox nodes). [ext]
+    Why: a memory you can't quickly add to won't be used; the inbox is the input loop that feeds everything else.
+52. Habit tracker node type.
+    Why: behavior change needs feedback; streak nodes make the store a personal-development tool, not just notes.
+53. Node-driven Telegram reminders.
+    Why: a reminder you don't see didn't happen; pushing via the existing telegram MCP closes the
+    scheduler→human loop.
+54. GTD/projects (next-actions, contexts).
+    Why: raw todos don't scale; a project/next-action structure is what makes a task system trustworthy enough
+    to offload your head.
+55. Weekly review (scheduled prompt).
+    Why: systems rot without review; surfacing stale/finished items keeps the store honest — pure automation value.
+56. Time tracking on nodes.
+    Why: where time goes is data you can't get elsewhere; logging it as nodes makes self-quantification native.
+57. Goals/OKRs with rollups.
+    Why: connects daily nodes to long-term intent; rollups make progress visible without manual tallying.
+58. Finance log (transactions as nodes).
+    Why: money is core life-management; transactions-as-nodes (fed by a bank/Binance MCP) extend the memory to
+    your finances.
+
+6. AI & THE ASSISTANT LOOP
+--------------------------
+59. Headless agent runner (Agent SDK from the scheduler).
+    Why: the "judgment" pillar can't depend on an interactive session; a scheduler-driven runner is the only
+    way the brain runs unattended (and safely off the localhost endpoint).
+60. Per-node AI actions (summarize/translate/extract).
+    Why: puts AI where the content is; immediate daily value and a clear showcase of the assistant integration.
+61. Chat-with-your-notes (RAG).
+    Why: 150 notes are only as useful as your recall; grounding ai-chat in the store turns the KB into a
+    queryable expert on your own knowledge.
+62. AI handler/type scaffolder.
+    Why: accelerates the keystone — describing a type and getting a handler node lowers self-extension from
+    "write Vue" to "ask."
+63. Ghost-text AI autocomplete in the editor.
+    Why: speeds writing and is a familiar, demoable AI affordance.
+64. Tree-gardener agent (auto-file/tag/link).
+    Why: a growing store entropy-decays; an agent that organizes it keeps it usable so the human doesn't have to.
+65. Voice loop (speak → transcribe → agent → node).
+    Why: the lowest-friction capture is speaking; you already have transcribe + telegram voice — wiring them to
+    an agent closes a hands-free input loop.
+66. Prompt-library nodes (callable via x.x → ai-chat).
+    Why: prompts are reusable programs; storing them as callable nodes is the node model applied to AI workflows.
+67. "Explain this node".
+    Why: lowers onboarding for script/handler nodes (yours or shared), supporting self-extension and sharing.
+68. Expand-a-stub via AI.
+    Why: removes blank-page friction — capture a one-line title, let AI draft the node — keeping capture fast.
+
+7. NEW MCP SERVERS / EXTERNAL I/O
+---------------------------------
+69. ocraft self-MCP (nodes/scheduler/services as tools). [ext]
+    Why: the headless brain can't borrow an interactive session's tools; this is what gives the assistant hands
+    on the system — and the "remember" organ every other MCP needs.
+70. Binance/crypto MCP (read-only market + portfolio).
+    Why: extends memory/automation to finance with real daily value (snapshots, alerts) at low risk if read-only.
+71. GitHub MCP (issues/PRs/repos as tools).
+    Why: ocraft develops itself (autonomous dev loop) and tracks projects; this is the hands that loop needs.
+72. Email-send MCP (guarded).
+    Why: gmail is read-only; sending closes the loop (reminders, replies, digests out) — half an I/O channel is
+    half useful.
+73. RSS/news/weather MCP.
+    Why: the daily briefing needs world-state inputs; these are the cheapest high-value feeds.
+74. Home Assistant MCP.
+    Why: extends the OS from bits to atoms — controlling the physical environment is the most striking demo of
+    ocraft-as-life-OS.
+75. Filesystem/markdown bridge MCP.
+    Why: not everything should live in ocraft; a two-way bridge keeps it interoperable and lowers lock-in fear.
+76. Notion/Linear/Todoist import MCP.
+    Why: tasks live elsewhere today; pulling them in is the migration path that makes ocraft the hub.
+77. Plaid/bank MCP.
+    Why: finance aggregation is high-value memory; an MCP is the standard, auditable way to bring it in.
+78. Generic REST/GraphQL → tools MCP (meta).
+    Why: one meta-MCP that turns any described API into tools means you stop writing per-service MCPs —
+    leverage that compounds.
+
+8. AUTOMATION: TASKS / SCHEDULER / SERVICES
+-------------------------------------------
+79. Cron-expression UI for jobs[].
+    Why: editing schedules in code is a barrier; a visual editor makes automation a user feature, not a dev one.
+80. Task DAG / dependencies.
+    Why: real workflows have order (fetch→process→notify); without dependencies you fake it with brittle sleeps
+    or single mega-tasks.
+81. Webhook trigger (inbound HTTP fires a task).
+    Why: not all automation is time-based; an inbound trigger lets external events drive ocraft — the missing
+    half of I/O.
+82. Event-driven tasks (run on node change).
+    Why: reactive automation is more powerful than polling and is what makes the store feel alive.
+83. Retry/backoff + failure alert to Telegram.
+    Why: unattended automation that fails silently is worse than none; robust retries + an alert make the
+    scheduler trustworthy.
+84. Execution history + log viewer in the editor. [ext]
+    Why: list-executions is CLI-only; surfacing runs/logs is how you trust and debug automation you can't see.
+85. Dry-run / simulate a task.
+    Why: tasks mutate real data/money; a preview-effects mode is basic safety, especially for trading/infra tasks.
+86. Shareable tasks-as-nodes.
+    Why: automations are reusable; packaging them as nodes lets you share/import them — the node model applied to
+    the runtime.
+
+9. SCENES, CREATIVE & GENERATIVE
+--------------------------------
+87. Scene timeline / keyframe sequencer.
+    Why: scenes are static-ish today; keyframes turn them into real motion pieces — far more expressive and demoable.
+88. Audio-reactive scenes (mic via Tone.js analyser).
+    Why: reactivity is the soul of generative AV; mic-driven scenes are the most shareable "wow" clips for marketing.
+89. GLSL shader node type.
+    Why: shaders are the deepest, smallest generative medium; a shader node massively expands creative range with
+    tiny bodies.
+90. Hydra/Strudel livecoding embed nodes. [ext generative-art]
+    Why: livecoding-in-a-node is the fastest first win of the generative-art direction (pure browser) and the
+    best "a note that performs" demo.
+91. Scene → mp4/gif export (ffmpeg).
+    Why: art unshared is art unseen; export turns scenes into the YouTube/X content the marketing lens calls for.
+92. Physics in scenes (matter.js / rapier).
+    Why: physics makes scenes feel alive and interactive with little authoring — high expressiveness per effort.
+93. Web MIDI node.
+    Why: bridges ocraft to hardware/DAWs (the Ableton thread) and makes it a real instrument, not just a screen.
+94. Generative-art gallery (auto thumbnails).
+    Why: a category that auto-renders thumbnails makes a body of scene work browsable and portfolio-ready.
+
+10. QUERY & PROGRAMMABILITY OF THE TREE
+---------------------------------------
+95. Node query language (Dataview-style).
+    Why: structured properties (#4) are only useful if queryable; a query language turns the store from folders
+    into a database — powering dashboards, smart folders, agendas.
+96. Saved-query nodes.
+    Why: a query you re-run is a view; storing it as a live node is the node model applied to queries (and the
+    basis for dashboards).
+97. Smart folders (category = a query result).
+    Why: manual filing doesn't scale; a query-defined category keeps itself current (e.g., "all open todos") with
+    zero maintenance.
+98. Aggregation / rollup nodes.
+    Why: goals, dashboards, and reviews all need sums/counts over children; rollups make the store quantitative.
+
+11. COLLABORATION, SHARING & PUBLISHING
+---------------------------------------
+99.  Publish a node/subtree as a public read-only page.
+     Why: the KB has external value (a digital garden); publishing is the cheapest path from private memory to
+     public presence — and a marketing surface.
+100. Export subtree → static site.
+     Why: turns your notes into a blog/garden you own; a content/marketing engine and a lock-in-free escape hatch.
+101. Embeddable node widget (iframe).
+     Why: scenes/scripts are demoable; embedding them in external pages spreads ocraft and proves the runtime works
+     anywhere.
+102. Comments / annotations as child nodes.
+     Why: even single-user, annotations let you talk back to notes over time; multi-user later needs them.
+103. Live node sharing via ws-exchange.
+     Why: proves the exchange's value with a concrete, magical demo (two instances, one live node) and seeds real
+     collaboration.
+104. Multiplayer co-editing (Yjs/CRDT).
+     Why: if ocraft ever goes multi-user/SaaS, real-time collab is table stakes; building on CRDTs early avoids a
+     painful retrofit.
+
+12. SYNC, MOBILE & CLOUD
+------------------------
+105. PWA + offline-first editor.
+     Why: a tool you can't reach offline isn't trustworthy as your memory; offline + sync is what makes it
+     always-available.
+106. Mobile quick-capture PWA.
+     Why: most capture happens on a phone; without it, the inbox loop is desk-bound and the memory misses half
+     your life.
+107. Multi-device sync (ws-exchange + hosted store).
+     Why: a personal OS that lives on one laptop is fragile and partial; sync is what makes it your environment,
+     everywhere.
+108. Hosted ocraft (multi-tenant SaaS).
+     Why: the only path from personal tool to product/revenue, and to using it without running a server yourself.
+109. End-to-end encrypted node bodies at rest.
+     Why: once your real life is in the store, privacy is non-negotiable; encryption-at-rest is the trust
+     precondition for sync/hosting (and matches where the market's going).
+110. Git-like merge / conflict resolution.
+     Why: multi-device editing creates divergence; without merge you lose data — the unglamorous prerequisite for
+     trustworthy sync.
+
+13. SECURITY, SANDBOX & PERMISSIONS
+-----------------------------------
+111. Capability-scoped x (per-node allow-list). [ext sandbox]
+     Why: loading handler/script bodies from data = executing untrusted code; capability allow-lists are what make
+     self-extension (keystone) safe instead of reckless.
+112. Per-node ACL (private vs shareable).
+     Why: sharing/publishing requires a private/public boundary; without ACLs you can't safely expose any subtree.
+113. Secret-manager node type (encrypted, injected via x.auth).
+     Why: x.auth in localStorage is fine for toys, not real API keys; encrypted injected secrets are needed before
+     nodes touch money/infra.
+114. Audit log of every node mutation.
+     Why: when an agent or shared handler can mutate the store, you need a record of who-changed-what to trust and
+     recover.
+115. Signed nodes (tamper-check shared handlers).
+     Why: importing a handler/automation runs someone's code; signatures let you verify integrity before executing
+     shared behavior.
+
+14. DEV EXPERIENCE & TOOLING
+----------------------------
+116. Node test harness (acceptance checks per node).
+     Why: the literal blocker for the autonomous dev loop (no acceptance gate today) — the difference between "AI
+     edits hopefully" and "AI ships verifiably."
+117. Node REPL / console.
+     Why: interactively poking the x API against the store collapses the write-run-debug loop for script authoring.
+118. TypeScript types for the x API. [ext TS plan]
+     Why: typed x.x/x.ui/x.auth turn script authoring from guesswork into autocompletion — the payoff the
+     x-autocomplete item points at.
+119. Step-through debugger for script nodes.
+     Why: script nodes are real programs; without a debugger, debugging is console.log archaeology, which caps how
+     complex nodes can get.
+120. Hot-reload for handler nodes. [ext keystone]
+     Why: editing a handler node and seeing it re-render live is what makes self-extension feel like a live system
+     instead of edit-rebuild.
+121. Visual node-version diff. [ext versioning]
+     Why: versioning is only useful if you can see what changed; a diff view makes rollback informed.
+122. CLI parity (every editor action scriptable).
+     Why: anything only doable in the GUI can't be automated/tested; parity keeps the whole system programmable.
+123. Onboarding / demo tree (seeded sample of every type).
+     Why: the fastest way for a new user (or your future self) to grasp what ocraft can do — and a great README/video
+     artifact.
+
+15. IMPORT / EXPORT / INTEROP
+-----------------------------
+124. Whole-store Markdown export.
+     Why: the store holds your real memory now; a plain-text export is the insurance and anti-lock-in guarantee that
+     makes trusting it rational.
+125. Scheduled git-snapshot backup. [ext]
+     Why: one rm and your second brain is gone; an automated versioned snapshot is the cheapest catastrophic-loss
+     insurance for the thing everything depends on.
+126. Import from Notion / Roam / Logseq.
+     Why: people have years of notes elsewhere; importers are the adoption path that makes ocraft a real destination,
+     not a fresh-start-only toy.
+127. iCal export / category RSS feed.
+     Why: lets other tools consume ocraft data (calendar apps, feed readers) — interop that extends the store's reach
+     without building clients.
+
+16. IN-BROWSER RUNTIME (WEBCONTAINER-LITE)
+------------------------------------------
+128. WebContainer-lite — a sandboxed in-browser node runtime for script nodes. [ext sandbox + HTTP-imports]
+     Why: ocraft already runs script nodes on the host V8 via blob-import — the same foundation StackBlitz
+     WebContainers stand on (they reuse the browser's JS engine and reimplement the node APIs; they do NOT
+     compile Node to WASM). Combining three pieces already on this list — a Worker/iframe sandbox (#35/#111),
+     URL-imported npm via esm.sh (#15 / HTTP imports), and a ServiceWorker that serves a node's HTTP output at
+     a virtual path — gives script nodes a virtual fs (backed by the node store), npm deps, isolation, and an
+     in-browser "server" node you can visit: a real subset of WebContainers, scoped to ocraft, with no backend
+     (and it doubles as the sandboxed/headless runner the keystone + scheduler both need). Don't clone the full
+     thing (~7-year moat) — embed an existing runtime (WebContainer API / Nodebox / WebVM) if true parity is
+     ever needed. Caveats: SharedArrayBuffer needs COOP/COEP cross-origin isolation; JS/WASM only (no native
+     addons); networking virtual/proxied. Detail: webcontainer-lite-plan.txt.

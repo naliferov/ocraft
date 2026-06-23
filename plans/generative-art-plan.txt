@@ -1,0 +1,333 @@
+===============================================================================
+ GENERATIVE ART — plan
+ (roadmap: "Generative art" — the multi-part item: Audio / Video / Creative MCP)
+ (written 2026-06-19; for later review — decisions marked "CONFIRM" are yours)
+===============================================================================
+
+## What & why
+
+The Roadmap frames this as a *posture*, not a feature: treat Claude as a
+**performer with an instrument**, not a coder. Pick a symbolic medium (pattern
+code, a shader, MIDI), give it a **render-and-return tool** so the model
+actually perceives its output, then iterate tight in plain language — "darker,
+slower, more space." Two routes exist for every medium:
+
+  ROUTE A — embed in a node: a `script` node hosts the language/engine and
+            plays/renders INLINE in the browser (the `x.ui` surface already
+            mounts arbitrary DOM, so a script node can host a canvas/iframe).
+  ROUTE B — drive an external pro tool over OSC/MIDI (SuperCollider, Ableton,
+            Jitter), where Claude generates the symbolic score and you mix.
+
+Why ocraft is the right host: a node is *data + behavior in one tree*. A
+generative-art piece is exactly that — a bit of pattern/shader/score (data) that
+also runs (behavior). These become the most **demoable** things in the repo:
+every output is a recordable clip. The thesis ("symbolic medium + render-return
+tool + creative constraints + tight iteration") is the through-line tying all
+three tracks below to ocraft's existing closed loop (a script node already
+dynamic-imports its body and can mount UI; an MCP server already returns values
+Claude reads).
+
+The meta-recipe, restated so each track inherits it:
+  symbolic medium  +  render-and-return tool  +  creative constraints
+  (scales, Euclidean rhythms, Markov chains, L-systems, feedback, decade
+  aesthetics)  +  tight iteration.
+
+THE FASTEST FIRST WIN (whole-item): a **Strudel or Hydra script-node embed**.
+Both are pure-browser, output-only, zero backend, zero native deps — they drop
+straight into a `script` node via `x.ui` + a mounted canvas/iframe. Hydra is the
+single best opening demo (instant moving visuals, trivially recordable). Ship
+ONE of these before touching OSC, native synths, or MCP round-trips. Everything
+needing a local binary (SuperCollider, Sonic Pi, FFmpeg, Ableton, Jitter) is a
+later phase precisely because it breaks the "pure browser" property.
+
+
+## Fit with the node model / architecture
+
+The embed route maps cleanly onto what exists today:
+
+  - A `script` node is `export default async (x) => {…}`, run via blob-import in
+    the browser (`useNodeScripts.js`). Its `x.ui` (`useScriptUi.js`) mounts real
+    DOM above the editor — inputs, buttons, a live log. That host element is
+    enough to also mount a `<canvas>` or an `<iframe>` (Hydra/Strudel run in an
+    iframe or against a canvas the script creates).
+  - So the cheapest embed is NOT a new node TYPE — it's a `script` node whose
+    body loads an engine. No NodeItem.vue change, no handler registration. This
+    sidesteps the "behavior plane is closed" problem (Roadmap keystone) entirely:
+    we ride the one dynamic-import path that already works (bodies, not views).
+  - LATER, once a medium earns it, promote it to a real node type. The Roadmap
+    explicitly anticipates this: "Could become creative `stream`/`chat` node
+    types." A `livecode` (or per-engine `hydra` / `strudel`) type would get a
+    proper editor + preview pane instead of riding `x.ui`. This is gated behind
+    the self-extending-handlers work (`plans/self-extending-handlers-plan.txt`)
+    OR a one-time hardcoded type — CONFIRM which when we get there.
+  - The MCP route reuses the `mcp-servers/*` pattern verbatim: a stdio server
+    registered in `.mcp.json`, helpers in `<tool>-api.js`, thin tools in
+    `server.js` (mirror `digitalocean-mcp`). The novelty is only that these
+    tools RETURN PERCEPTION (a screenshot, a PNG, an audio note) so Claude can
+    self-correct — the same trick the claude-in-chrome MCP already gives the
+    editor ("the eyes already exist," per the dev-loop Roadmap item).
+
+Constraint helpers (scales, Euclidean E(k,n), Markov, L-systems) are pure
+functions with no I/O — they belong in a shared `script` node (e.g. a
+`genlib` node) that other script nodes call via `x.x(id)`. That is literally
+the "programs built from programs" composition ocraft already ships. Build them
+ONCE; every audio/visual track imports them.
+
+NAMING/CONVENTIONS reminder for all code here: plain `.js` ESM, develop on
+`main`, no single-letter vars (except i/j/k loop counters), no boolean flag
+params (a `livecode` engine selector is a named string `'hydra'|'strudel'`, not
+a boolean). The OSC/MIDI helpers are descriptive-named functions, not
+`send(…, true)`.
+
+
+===============================================================================
+ TRACK 1 — AUDIO
+===============================================================================
+
+Embed candidates (browser, output-only — "you're the ear"):
+  - STRUDEL — TidalCycles-style pattern code, runs fully in-browser (Web Audio +
+    its own scheduler). Output-only: Claude writes the pattern, you listen and
+    steer. This is the audio analog of Hydra and the audio fastest-win.
+  - SUPERCOLLIDER — real synthesis, but the engine (`scsynth`) is a NATIVE
+    binary driven by `sclang`/OSC. Not browser-embeddable → this is ROUTE B
+    (drive external), gated behind the `play_osc` MCP tool (Track 3).
+  - SONIC PI — friendly Ruby-ish live-coding env, also driven over OSC. ROUTE B,
+    same gate as SuperCollider.
+
+Drive-a-DAW target:
+  - ABLETON LIVE toward **minimal techno with glitch artifacts**. Claude
+    generates MIDI / clip data / automation; you mix and arrange. Reached via
+    the `send_midi` MCP tool (Track 3) into a virtual MIDI port Live listens on.
+
+Generative MIDI techniques (the "creative constraints" for this track — these
+are the `genlib` functions):
+  - SCALE CONSTRAINTS — quantize any pitch stream to a scale/mode so nothing is
+    "wrong"; the single highest-leverage constraint.
+  - EUCLIDEAN RHYTHMS — E(5,8), E(3,8) etc.: spread k hits as evenly as possible
+    over n steps. One small function; instantly musical, perfect for techno.
+  - MARKOV CHAINS over scale degrees — a transition table biases the melodic
+    walk; "more wandering / more resolved" becomes a temperature knob.
+  - L-SYSTEMS → pitch — rewrite rules generate a self-similar symbol string,
+    mapped to scale degrees/durations for evolving motifs.
+
+Phased mini-plan (audio):
+  A1. Build `genlib` (a `script` node): scale-quantize, `euclid(k, n)`,
+      markovStep, lSystem. Pure, no I/O, returns arrays. Other nodes `x.x` it.
+      (This is shared with Track 2's visual sequencing too.)
+  A2. STRUDEL EMBED — a `script` node that mounts a Strudel REPL/canvas via
+      `x.ui` and plays a pattern. First win: a fixed pattern that plays; then
+      wire `genlib` output (a Euclidean techno pattern) into it. Recordable
+      audio clip = first marketing artifact.
+  A3. (later, native) `play_osc` MCP tool → SuperCollider/Sonic Pi (see Track 3).
+  A4. (later) `send_midi` MCP tool → a virtual MIDI port → Ableton Live; iterate
+      toward the minimal-techno-with-glitch target.
+
+Hooks into the existing Tone.js step sequencer: `scene2d` nodes ALREADY carry a
+BPM/bars/steps timeline (`useTimeline.js`, the `tracks[].events` step grid). An
+audio script node could either (a) stay self-contained (Strudel's own clock) or
+(b) LATER share the scene timeline so audio + visuals lock to one transport.
+CONFIRM whether audio-visual sync is in scope early or deferred — (b) is the
+more impressive demo but couples two subsystems.
+
+
+===============================================================================
+ TRACK 2 — VIDEO / VISUALS
+===============================================================================
+
+Embed candidates (browser):
+  - HYDRA — browser livecoding, '70s analog-feedback looks. Pure JS/WebGL,
+    output-only, trivially embeddable in a script node's canvas/iframe. THE
+    single best opening demo for the whole item: instant motion, one-liner
+    patches, gorgeous, recordable in seconds.
+  - GLSL SHADERS — author fragment shaders (plasma, FBM domain warp, an LFO
+    pulse driving a uniform). Runs against a WebGL canvas the script creates.
+    Slightly more setup than Hydra (compile/link, uniform plumbing) but maximal
+    control and the natural target for the `render_shader` MCP tool.
+  - FFMPEG FEEDBACK / DATAMOSH — feedback pipelines, datamosh artifacts. Needs
+    the `ffmpeg` BINARY → NOT browser; this is a backend/MCP job (a task or a
+    render tool), a later phase.
+  - REACTION-DIFFUSION / CELLULAR AUTOMATA / FLOW FIELDS — Gray-Scott RD, Game-of
+    -Life-class CA, Perlin/curl flow fields. Pure compute; run on a canvas (2D
+    or a shader). Great fit for p5 too — could even land as `scene2d` effects
+    rather than a new engine (see "fit" below). Strong, self-contained demos.
+
+Drive-external target:
+  - JITTER — the video side of Max/MSP — over OSC. ROUTE B; Claude sends OSC
+    messages that drive a Jitter patch. Gated behind a `play_osc`-style tool
+    pointed at Max instead of SuperCollider (Track 3). Heaviest setup; last.
+
+Fit nuance worth calling out: reaction-diffusion / CA / flow fields could be
+implemented two ways —
+  (i) as a livecode embed (a script node hosting a canvas), OR
+  (ii) as new `scene2d` EFFECTS, slotting into the existing
+       `node.effects[]` pipeline in `renderSceneP5.js` right next to `grain`
+       (the renderer already loops effects and mutates pixels — RD/CA is the
+       same shape of operation).
+Option (ii) is a smaller, more "ocraft-native" first step for these specific
+techniques and reuses the scene editor. Hydra/GLSL, by contrast, want their own
+engine and so lean (i)/new-type. CONFIRM per-technique.
+
+Phased mini-plan (visuals):
+  V1. HYDRA EMBED — a `script` node mounts Hydra and runs a patch. Smallest
+      possible diff to a moving, recordable demo. SHIP THIS FIRST (it is the
+      whole-item fastest win, tied with Strudel; pick Hydra if you want a
+      visual demo, Strudel if audio).
+  V2. GLSL SHADER EMBED — a `script` node with a WebGL canvas + a fragment
+      shader (start: plasma / FBM domain warp / LFO pulse). Sets up the
+      `render_shader` MCP tool's render target.
+  V3. RD / CA / FLOW-FIELD as a `scene2d` effect (option ii) — one new entry in
+      the `effects` switch in `renderSceneP5.js`, an `enabled`/`props` block in
+      `state.json`, parameter UI later. Reuses everything; no new type.
+  V4. (later, native) FFmpeg feedback/datamosh as a backend task or render tool.
+  V5. (later, external) Jitter over OSC.
+
+
+===============================================================================
+ TRACK 3 — CREATIVE MCP TOOLS (give Claude eyes/ears via the return value)
+===============================================================================
+
+The point of these tools is NOT to act — it's to PERCEIVE. Each returns
+something Claude can read back, closing the performer-with-an-instrument loop:
+
+  - play_osc      → SuperCollider / Sonic Pi (and Jitter): send an OSC bundle to
+                    a running engine; return ack / a status read. The "ears" for
+                    the synth route. (For Jitter, same tool, different OSC target.)
+  - eval_hydra    → evaluate a Hydra patch in a headless/visible browser and
+                    SCREENSHOT it back, so Claude self-corrects ("more feedback").
+  - render_shader → compile+run a GLSL shader, return a PNG for closed-loop
+                    critique. The shader analog of eval_hydra.
+  - send_midi     → emit MIDI (notes/CC/clips) to a virtual port → Ableton /
+                    hardware. The bridge for the DAW route.
+  - dmx_set       → set DMX channels for stage lighting (Art-Net/OLA), for the
+                    physical-output flavor.
+  - plot(expr)    → render generative geometry from a symbolic expression and
+                    return the image (the geometry analog of render_shader).
+
+All mirror the existing MCP house style (`digitalocean-mcp`): stdio server,
+`@modelcontextprotocol/sdk` + `zod` + `dotenv`, helpers in `<x>-api.js`, thin
+tools in `server.js`, registered in `.mcp.json`. The screenshot/PNG-returning
+tools (`eval_hydra`, `render_shader`, `plot`) can reuse a headless browser
+(Playwright) the same way the claude-in-chrome MCP gives the editor eyes.
+
+Phased mini-plan (MCP):
+  M1. render_shader (or plot) FIRST among MCP tools — it's the simplest pure
+      render-and-return (no native audio engine, no MIDI port, no hardware):
+      take source → produce PNG → return path/inline. Proves the closed loop
+      end-to-end with the least moving parts.
+  M2. eval_hydra — screenshot a Hydra patch back (pairs with the V1 embed).
+  M3. send_midi → virtual MIDI port → Ableton (pairs with A4).
+  M4. play_osc → SuperCollider/Sonic Pi/Jitter (pairs with A3 / V5).
+  M5. dmx_set — only if a real lighting rig is in play; otherwise park it.
+
+Honest note: M1/M2 are pure software and high-value. M3 (MIDI port), M4 (native
+synth + OSC), M5 (DMX hardware) each add an external dependency and only pay off
+once you're actually running that tool — sequence them to your real setup, not
+upfront.
+
+
+===============================================================================
+ KEY FILES / COMPONENTS
+===============================================================================
+  Embed route (reused as-is, no change needed for the first wins):
+    - frontend/src/composables/useScriptUi.js — `x.ui`; mounts DOM. The script
+      adds a <canvas>/<iframe> here for Hydra/Strudel/shaders.
+    - frontend/src/composables/useNodeScripts.js — blob-import of a script body;
+      the engine library is imported inside the script (CDN/bundled).
+    - frontend/src/components/NodeItem/nodeTypes/Script.vue — the script editor +
+      run host (the panel `x.ui` mounts into).
+  Shared constraints:
+    - a new `genlib` script node (scale/euclid/markov/lSystem) under `kernel/
+      data/nodes/<id>/script.js`; called via `x.x(id)`.
+  Visual-effect route (option ii for RD/CA/flow fields):
+    - frontend/src/lib/renderSceneP5.js — add an effect branch next to `grain`
+      in the `node.effects` loop; mirror the `applyGrain(sketch, props)` shape.
+  Promotion to a node type (later):
+    - frontend/src/components/NodeItem/NodeItem.vue (NODE_TYPES, ~line 30) — a
+      `livecode`/`hydra`/`strudel` type + component, OR via the self-extending
+      handlers work.
+  MCP tools:
+    - mcp-servers/<creative>-mcp/ {server.js, <x>-api.js, package.json,
+      .env.example} mirroring mcp-servers/digitalocean-mcp/; register in
+      .mcp.json. Screenshot/PNG tools share a Playwright helper.
+
+
+## Open questions / risks
+
+  - SECURITY: an embed runs arbitrary engine code in the browser with no sandbox
+    (same caveat the Roadmap flags for script nodes generally). Hydra/Strudel
+    from a trusted CDN is fine for single-user local; pairs with the sandbox
+    Roadmap item before any multi-user/hosted use.
+  - ENGINE DELIVERY: bundle each engine into the frontend, or import from CDN
+    inside the script body? CDN is the smallest first step (zero build change)
+    but adds a network dep + a supply-chain trust call. CONFIRM.
+  - RECORDING: capturing a clip from a canvas (MediaRecorder/`captureStream`) vs.
+    an external screen recorder. For marketing artifacts an in-app "record"
+    affordance is itself demoable — but out of scope for the first embed.
+  - NATIVE-DEP CREEP: SuperCollider, Sonic Pi, FFmpeg, Ableton, Jitter, DMX each
+    add a heavy external dependency. Keep them strictly ROUTE B / later phases;
+    do not let them block the pure-browser wins.
+  - AUDIO-VISUAL SYNC (Track 1 hook): sharing the `scene2d` Tone.js transport
+    with an audio engine is the killer demo but couples two subsystems — decide
+    early-vs-deferred (CONFIRM).
+  - HEADLESS RENDER ENV for render_shader/eval_hydra: a headless WebGL/browser
+    can be finicky (GPU vs software rasterizer); validate it produces a correct
+    PNG before building tools on top.
+  - TYPE PROMOTION is gated on either the self-extending-handlers keystone or a
+    one-off hardcoded type — don't block embeds on it.
+
+
+## Monetization (who'd pay, why, cheapest charge)
+
+  - ASSET / PRESET PACKS — the realistic near-term angle. Curated, parameterized
+    packs: Hydra patch sets, GLSL shader collections, Euclidean-techno pattern
+    libraries, scene presets. Cheapest charge: a paid pack = a small bundle of
+    nodes (Gumroad/itch.io zip, or a paid template pack as the Roadmap's
+    monetization lens suggests). Who pays: livecoders, VJs, generative-art
+    hobbyists. Low effort to package once the engines exist.
+  - GENERATIVE-ART COMMISSIONS / CONTENT — the OUTPUT (loops, audio, visuals) is
+    sellable as stock/NFT-ish drops or as a paid commission service; ocraft is
+    the studio, not the product. Indirect but real.
+  - HOSTED "studio" — a SaaS where others run these embeds would require the
+    sandbox + multi-user auth first (big lift, far off). Honest: no near-term
+    angle for hosting; the pack/content angles are the viable ones now.
+  - The MCP tools themselves: NO direct sell — they're personal capability, not
+    a product. Say so plainly.
+
+
+## Marketing (demo artifact, channel, hook, target)
+
+  These are THE most demoable features in the whole repo — every output is a
+  recordable clip.
+  - ARTIFACT: a short screen-recording of "type a sentence → Hydra/Strudel
+    output morphs" (the performer-with-an-instrument loop on film). For the MCP
+    tools: a clip of Claude critiquing its own render ("too busy") and the next
+    frame fixing it — the render-and-return loop made visible.
+  - CHANNEL: YouTube (longer "watch Claude VJ" / build videos — fits
+    `plans/youtube-content-plan.txt`) + X/Twitter and Reddit (r/generative,
+    r/livecoding) for the short loops. HN for the "AI as a performer with an
+    instrument" thesis post.
+  - HOOK: "I gave Claude an instrument and a pair of eyes." / "Claude live-codes
+    visuals and watches its own output." The closed loop is the story.
+  - TARGET: livecoders, VJs, creative-coding / generative-art folks, and the
+    "AI as creative collaborator" audience.
+
+
+## Effort (S/M/L + breakdown)
+
+  Whole item: L — but it decomposes into independently shippable S pieces; do
+  NOT treat it as one block.
+    - genlib (constraints) ......................... S
+    - Hydra OR Strudel embed (the fastest win) ..... S   ← ship first
+    - the other embed ............................. S
+    - GLSL shader embed ........................... S–M (uniform plumbing)
+    - RD/CA/flow-field as a scene2d effect ......... S   (reuses the renderer)
+    - render_shader / plot MCP (first MCP) ......... M   (headless render env)
+    - eval_hydra MCP .............................. M
+    - send_midi MCP → Ableton ..................... M   (virtual MIDI port)
+    - play_osc MCP → SC/Sonic Pi/Jitter ............ M–L (native engines + OSC)
+    - dmx_set MCP ................................. M   (only with real hardware)
+    - promote an embed to a real node type ......... M   (gated on handlers work)
+  Recommended order: genlib → Hydra embed → render_shader MCP → Strudel embed →
+  RD/CA scene effect → (then native/MIDI/OSC tools as your setup warrants).
+  Stop after the first embed if you only want the marketing artifact; the rest
+  is depth you add as real use demands.
