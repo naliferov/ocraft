@@ -14,7 +14,7 @@ export default [
     ignores: [
       '**/node_modules/**',
       '**/dist/**',
-      'kernel/data/**',
+      'data/**',
       'runtime/executions/**',
       'runtime/state/**',
       'runtime/transport/ws-exchange/**',

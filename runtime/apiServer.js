@@ -6,16 +6,14 @@ import { fileURLToPath } from 'node:url'
 import * as runs from './runs.js'
 import * as aiRunner from './runners/ai.js'
 
-// Register the AI runner with the generic run controller (both kernel-side — the
-// kernel still depends on nothing in runtime/). A "run" is an on-demand, tracked
-// job; AI is the first kind. See kernel/runs.js.
+// Register the AI runner with the generic run controller. A "run" is an on-demand,
+// tracked job processed here on the server; AI is the first kind. See ./runs.js.
 runs.registerRunner('ai', aiRunner)
 
-// Inlined (was lib/path.js) so the kernel depends on nothing in runtime/.
-const currentDir = path.dirname(fileURLToPath(import.meta.url))
-const ROOT_DIR = path.join(currentDir, '..') // repo root — the cwd the ai-chat agent works in
-const NODES_DIR = path.join(currentDir, 'data/nodes')
-const ASSETS_DIR = path.join(currentDir, 'data/assets')
+const currentDir = path.dirname(fileURLToPath(import.meta.url)) // runtime/
+const ROOT_DIR = path.join(currentDir, '..') // repo root — the cwd the AI runner works in
+const NODES_DIR = path.join(currentDir, '..', 'data/nodes') // node store lives at <root>/data
+const ASSETS_DIR = path.join(currentDir, '..', 'data/assets')
 
 // Render prior chat turns as plain context so each ai-chat request carries the
 // conversation (the endpoint is stateless; the node stores the history).
@@ -340,7 +338,7 @@ const routes = {
       .end(JSON.stringify({ text: text.trim(), toolUses, result }))
   },
 
-  // --- Generic RUNS controller — on-demand, tracked jobs (see kernel/runs.js) ---
+  // --- Generic RUNS controller — on-demand, tracked jobs (see ./runs.js) ---
   // A "run" is API-started and observable; AI is the first kind. Distinct from
   // runtime/tasks (scheduled/finite) and services (permanent). ⚠️ The 'ai' runner
   // runs Claude with bypassPermissions — same localhost-only caveat as ai-chat.

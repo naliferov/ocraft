@@ -1,4 +1,4 @@
-// Generic on-demand RUN controller (kernel-side; depends on nothing in runtime/).
+// Generic on-demand RUN controller — runs on the server, in the apiServer process.
 //
 // A "run" is an API-initiated, tracked, observable job — started via POST /api/runs,
 // watched via GET /api/runs[/:id][/stream], stopped via .../cancel, continued via
@@ -7,7 +7,7 @@
 //   - services       (permanent daemons under serviceManager)
 // Only the lifecycle (start → running → done|error|cancelled, list/status/stream/
 // cancel) is generic here; what actually runs is supplied by a pluggable RUNNER
-// registered per `kind` (see kernel/runners/ai.js). Input is opaque to the
+// registered per `kind` (see ./runners/ai.js). Input is opaque to the
 // controller — it just hands it to the runner.
 //
 // Runs live in-memory in the api-server process: a restart loses live runs (a

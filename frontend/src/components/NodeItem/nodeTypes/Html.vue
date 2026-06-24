@@ -91,7 +91,7 @@ const runMinimalTxt = async () => {
     const id = props.node.id
     const message =
       `Use the "minimal-txt" skill to losslessly compress ocraft html node ${id}. ` +
-      `Its body is the file kernel/data/nodes/${id}/content.html — read it, apply the skill's rules ` +
+      `Its body is the file data/nodes/${id}/content.html — read it, apply the skill's rules ` +
       `(aggressive lowercase compression, keep every fact, flat <br> layout, no headings/lists), and ` +
       `overwrite that file in place. Change no other file. Report briefly what changed.`
     const res = await fetch('/api/runs', {

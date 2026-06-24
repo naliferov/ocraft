@@ -1,0 +1,368 @@
+ocraft as a product — PRODUCTION-READINESS plan (the engineering bridge)
+=======================================================================
+(written 2026-06-23; grounded in the code, not vibes — file:line refs inline)
+
+GOAL (as stated): turn ocraft into a PRODUCTION-READY product.
+
+This is the engineering/productization companion to
+plans/product-monetization-gtm-plan.txt. That plan answers "how does ocraft EARN
+and REACH people" (payout rails, audience funnel, channels, what to sell). This
+plan answers the thing that plan explicitly DEFERS: "what engineering work turns
+ocraft from a personal local-first tool into a real shippable product." The two
+are complementary; where this plan touches money/marketing it CROSS-REFERENCES the
+GTM plan instead of repeating it (per the README "Monetization & marketing lens",
+which still applies — see section 6).
+
+Verification tags: [C] = confirmed in this repo's code (ref given); [R] = stated in
+README roadmap; [E] = estimate / judgement.
+
+
+0. TL;DR — THE ONE-PAGE READ
+----------------------------
+
+  - "Production ready" forks on PRODUCT SHAPE, and the fork changes ~80% of the
+    work. Decide it first (section 1):
+      PATH A — local-first distributable (the Obsidian/Excalidraw model the GTM
+               plan endorses): a thing users download and run on THEIR machine.
+               No auth, no multi-tenant, no SaaS ops. LOW effort. ON strategy.
+      PATH B — hosted multi-tenant SaaS: adds auth, isolation, billing, on-call.
+               HIGH effort, multi-year ops. The GTM plan PARKS this. Document it,
+               don't build it yet.
+    Default: PATH A. Everything below is sequenced for A, with B's extra
+    requirements fenced off in section 5 so the choice stays informed.
+
+  - The single most dangerous fact about ocraft today: the node API server is NOT
+    actually localhost-bound. kernel/api.js:468 calls `server.listen(PORT)` with NO
+    host argument, so Node binds ALL interfaces (0.0.0.0 / ::). [C] The
+    "localhost / single-user only" guarantee in the README and in the code's own
+    comments (api.js:288-293) is a DOC CLAIM, not an enforced bind. And two
+    endpoints run the Claude Agent SDK with `permissionMode: 'bypassPermissions'`,
+    cwd = repo root, maxTurns 30 (api.js:312, api.js:346) [C] — i.e. arbitrary file
+    edits + command execution. The ONLY thing standing between that and remote code
+    execution is the host firewall/NAT. This is item #1 and it's a one-line fix to
+    de-risk (bind 127.0.0.1) plus a real fix to do properly (section 4.1).
+
+  - Three things make "production ready" TRUE rather than aspirational, and all
+    three are already on the roadmap as the hard parts:
+      1. A real TEST/behaviour gate. Today: ZERO tests, no `test` script, gates are
+         only lint + build + screenshots [C]. You cannot ship releases you can't
+         verify. (plans/node-test-harness-plan.txt)
+      2. The KEYSTONE — handlers-as-nodes. Until it ships, the product's headline
+         claim ("create any node type") is FALSE [R]; that's a product-readiness
+         gap, not just a missing feature. (plans/self-extending-handlers-plan.txt)
+      3. A SANDBOX. Scripts run unsandboxed in the browser [R]; the keystone makes
+         this strictly worse (it executes code loaded from DATA). Mandatory before
+         any exposure, and a hard prerequisite for PATH B.
+         (plans/sandboxed-execution-plan.txt)
+
+  - Productization is the cheap, high-leverage middle: turn "git clone + run a dev
+    toolchain" into "install it and it runs." That single step is what makes the
+    GTM plan's Phase-2 "genuinely runnable Show HN" actually land.
+
+  - Sequence: Tier 0 (make it trustworthy: tests, data durability, the keystone,
+    releases) -> Tier 1 (security hardening: the bind + bypass endpoints + auth +
+    sandbox) -> Tier 2 (packaging: one-command install, onboarding, docs) ->
+    Tier 3 only-if-hosted (PARKED). Tiers 0/1 interleave; 1.1 (the bind) is do-now.
+
+
+1. THE FORK — DECIDE PRODUCT SHAPE FIRST
+----------------------------------------
+
+ocraft today is single-user, file-backed, local-first, MIT, no auth, no sandbox,
+no tests, no multi-tenancy. [C/R] That is a FEATURE for PATH A and a wall for
+PATH B. The GTM plan already made the business call (bootstrap, local-first,
+sell a thin paid layer, park hosted SaaS). This plan inherits it:
+
+  PATH A (DEFAULT) — "a local node OS you download and run."
+    Production-ready means: installs without a dev toolchain, doesn't lose/corrupt
+    data, has versioned releases, the keystone is shipped so it's genuinely
+    extensible, basic safety so a bad script can't trash the host, honest docs.
+    Does NOT need: auth, multi-tenancy, billing, server ops. The bypass-agent
+    endpoints stay but get fenced (section 4.1). This is reachable solo.
+
+  PATH B (PARKED, documented) — "ocraft hosted for you."
+    Adds, on TOP of all of A: real authn/authz, per-tenant isolation, the sandbox
+    as a HARD gate (you're now running strangers' code), resource metering,
+    billing, backups/DR, observability, on-call. The GTM plan parks this because
+    MIT is the most clonable license and hosting is multi-year ops. Don't build it;
+    section 5 lists what it would take so the decision stays informed.
+
+  DECISION: build for A. Treat every A item as also being a B prerequisite (it is),
+  so nothing done now is wasted if B is ever chosen.
+
+
+2. WHERE IT HONESTLY STANDS (the production-readiness gap, grounded)
+-------------------------------------------------------------------
+
+What's solid (don't re-do): framework-free Node ESM core; a clean node store +
+HTTP API as the single source of truth; a working Vue editor; tasks/scheduler +
+service supervisor; lint + Prettier + a CI workflow file exists. [C]
+
+What blocks "production ready", with evidence:
+
+  SECURITY
+    - API binds all interfaces, not localhost. api.js:468 `server.listen(PORT)`,
+      no host arg -> 0.0.0.0/::. [C]
+    - Two bypassPermissions agent endpoints (api.js:312, :346): Claude Agent SDK,
+      cwd=repo root, can edit files + run commands. Protected only by (the
+      unenforced) non-exposure. [C]
+    - No auth, no authz, no CORS policy, no rate limiting, no input validation
+      layer anywhere in api.js. Every route is open. [C]
+    - Node/entry scripts run unsandboxed (browser today; full Node access for entry
+      scripts). [R] The keystone will load handler code FROM node bodies — arbitrary
+      code from data — so the sandbox is coupled to the keystone, not optional.
+
+  CORRECTNESS / TRUST
+    - ZERO automated tests. No test files, no `test` npm script; the only gates are
+      `eslint`, `prettier --check`, `npm run build`, and manual screenshots. [C]
+      An AI-or-human change is "edits hopefully," not "ships verifiably." [R]
+    - No crash-restart / health. `autoRestart` is declared on service configs but
+      not acted on. [R] A crashed `api` or `scheduler` stays down.
+
+  DATA DURABILITY
+    - Node store is plain files under kernel/data/nodes/<id>/. No documented atomic
+      write / fsync, no backup, no schema validation on write, no migration path if
+      state.json shape changes. Version-on-save is wanted but not built
+      (plans/node-versioning-plan.txt). [R] A half-written save or a shape change
+      can corrupt the tree.
+
+  PRODUCT COMPLETENESS
+    - The keystone (handlers-as-nodes) is unshipped, so "create any node type" is
+      false and unknown types silently fall back to a Scene renderer. [R]
+    - Script editor is a raw <textarea>; "a code editor for scripts" is aspirational
+      (plans/codemirror-editor-plan.txt). [R]
+    - Deploy is BROKEN — the droplet behind DEPLOY_HOST was destroyed, so every push
+      fails at the SSH step (plans/deploy-target-plan.txt). [R]
+
+  PACKAGING
+    - Ships as a git repo you clone, then run a two-part dev toolchain (root npm +
+      frontend npm + Vite). [C, README Quick start] No installable artifact, no
+      one-command run, no onboarding/empty-state.
+
+
+3. TIER 0 — MAKE IT TRUSTWORTHY  (the non-negotiable base, both paths)
+---------------------------------------------------------------------
+
+These are the items without which "release" has no meaning. Sequenced by leverage.
+
+  3.1  A REAL TEST / BEHAVIOUR GATE  [unblocks everything else]
+       The literal blocker named in the README for the autonomous dev loop, and the
+       same blocker for trustworthy releases. Build the node test harness
+       (plans/node-test-harness-plan.txt): a `test` node type (or a tests body
+       beside a script) whose default export gets an x.expect/x.assert surface,
+       calls x.x("<target-id>"), and passes/fails; a harness panel runs all checks
+       and renders green/red. Add a `test` npm script + a headless runner so CI and
+       the dev loop can gate on it. Until this exists, every other Tier item ships
+       blind.
+       PR-able: [ ] `test` node type + assertion surface  [ ] harness panel
+                [ ] headless `node bin/cli.js run test` over a node's checks
+                [ ] wire into ci.yml as a required gate
+
+  3.2  THE KEYSTONE — handlers-as-nodes  [makes the core CLAIM true]
+       plans/self-extending-handlers-plan.txt + README roadmap. Minimum for
+       product-readiness, in the README's own leverage order: (1) kill the silent
+       Scene fallback -> explicit "no handler for type X — create one?" card;
+       (2) move the type->renderer map into the store and load handlers at runtime
+       via the existing blob-import mechanism (defineAsyncComponent, no in-browser
+       SFC compile); (3) first-class cycle-guarded x.create/x.save/x.tree;
+       (4) make NODE_BODY data-driven. MUST land with 3.4 (sandbox) — see 4.4.
+       PR-able: [ ] (1) explicit no-handler card  [ ] (2) runtime handler load
+                [ ] (3) x graph-mutation surface  [ ] (4) data-driven NODE_BODY
+
+  3.3  DATA DURABILITY  [a product that loses data isn't a product]
+       [ ] Atomic node writes (write-temp + rename, fsync the dir) so a crash mid-
+           save can't corrupt state.json / the body sidecar.
+       [ ] Validate node shape on write (name/type/parentId) and reject malformed
+           writes with a clear error instead of persisting them.
+       [ ] Version-on-save (plans/node-versioning-plan.txt): keep history, allow
+           diff/rollback — also the safety net for the AI dev loop and the keystone
+           (a bad handler edit is recoverable).
+       [ ] A `backup` task (the node store is just files — tar+timestamp, or the
+           git-backed-nodes idea) and a documented restore.
+       [ ] A migration story for state.json shape changes (a versioned schema field
+           + a one-shot migrate task).
+
+  3.4  CRASH-RESTART + BASIC OBSERVABILITY  [stays up unattended]
+       [ ] Honour `autoRestart` in serviceManager (it's declared, not acted on) [R]
+           with backoff + a crash-loop cap.
+       [ ] Health endpoint (GET /api/health) + a `service status` that reflects real
+           liveness, not just "a pid exists."
+       [ ] Structured error logging on the API (every 5xx logged with route +
+           cause); today errors are easy to lose. Pairs with the
+           process-management UI (plans/process-management-plan.txt).
+
+  3.5  RELEASES & VERSIONING  [you can't ship what you can't name]
+       [ ] Adopt semver + a CHANGELOG; tag releases.
+       [ ] A reproducible build (lockfiles committed, Node version pinned via
+           .nvmrc / "engines"). Note the README roadmap flags a node-path mismatch
+           between ci.yml's hardcoded nvm path and do-droplet-up's NodeSource
+           install — align that as part of this. [R]
+       [ ] Decide the distributable artifact here (feeds Tier 2): tagged source +
+           `npx`, a Docker image, or a Tauri/Electron bundle.
+
+
+4. TIER 1 — SECURITY HARDENING  (mandatory before ANY exposure)
+---------------------------------------------------------------
+
+Even PATH A touches the network the instant someone runs a hosted demo, a teammate
+hits the port, or the dev binds it for mobile control. Order = severity.
+
+  4.1  CLOSE THE RCE SURFACE  [DO NOW — highest severity, partly one line]
+       [ ] Immediately: bind the server to 127.0.0.1 (api.js:468 ->
+           `server.listen(PORT, '127.0.0.1', …)`) so the README's "localhost-only"
+           is ENFORCED, not just documented. One-line, do today. [C]
+       [ ] Gate the bypassPermissions agent endpoints (api.js:294, :346): require an
+           explicit opt-in env (e.g. OCRAFT_ENABLE_AGENT=1) so they're OFF by
+           default; never reachable on a bound-to-network instance. The agent is a
+           DEV affordance, not a product endpoint.
+       [ ] Make exposure a deliberate, documented act (a separate "expose" mode with
+           its own warnings), not the default behaviour of `service start api`.
+
+  4.2  AUTHN / AUTHZ  [the moment it's more than one machine]
+       [ ] A minimal auth gate on /api/* (even a single shared token via env for
+           PATH A "expose to my own phone"; real per-user auth is PATH B).
+       [ ] A deny-by-default CORS policy (today: none). [C]
+       [ ] Basic input validation + body-size limits + rate limiting on write routes.
+
+  4.3  SECRETS HYGIENE  [partly in place — verify, don't assume]
+       README already states .env / Telegram session / the Google service-account
+       key are git-ignored. [R] Confirm: [ ] no secret has ever been committed
+       (scan history)  [ ] .env.example files are placeholder-only  [ ] secrets are
+       loaded from env, never logged (audit the structured logging added in 3.4).
+
+  4.4  SANDBOXED EXECUTION  [coupled to the keystone]
+       plans/sandboxed-execution-plan.txt + plans/webcontainer-lite-plan.txt. Run
+       node/handler code in a capability-scoped Worker/iframe (frontend) and an
+       isolated, resource-capped environment for any headless/entry execution. This
+       is NOT optional once the keystone loads handler code from node bodies (3.2):
+       that's executing arbitrary code from data. The DO droplet is the natural home
+       for isolated headless workers. [R]
+       PR-able: [ ] Worker/iframe sandbox for script-node run  [ ] capability-scoped
+                x context (no raw fetch/host access by default)  [ ] resource caps
+                (CPU/mem/time) on headless runs
+
+
+5. TIER 3 — ONLY-IF-HOSTED (PATH B)  — PARKED, documented for completeness
+--------------------------------------------------------------------------
+
+Build NONE of this now. It exists here so "should we host it?" is an informed
+choice, not a surprise. PATH B = everything in Tiers 0-1, PLUS:
+
+  - Multi-tenancy: the node store is one shared tree today; hosting needs per-tenant
+    isolation of data AND execution (the sandbox becomes load-bearing, not nice-to-
+    have). The keystone + sandbox are the named multi-tenant prerequisites. [R/GTM]
+  - Real authn/authz (accounts, sessions, per-node ownership/ACLs).
+  - Billing + metering (storage + bandwidth + compute lines — the binary-node item
+    notes storage/bandwidth metering only becomes real here). [R]
+  - Ops: backups/DR, monitoring/alerting, on-call, a status page.
+  - Licensing: gate any paid hosted modules under AGPL/source-available, NOT MIT —
+    MIT is the most clonable license and a hosted ocraft is the easiest thing for
+    someone else to also host (the GTM plan's Plausible cautionary note). [GTM]
+
+  Trigger to UN-park (from the GTM plan): real pull AND keystone + sandbox already
+  shipped. Not before.
+
+
+6. MONETIZATION & MARKETING LENS  (per the README; lean, cross-referenced)
+--------------------------------------------------------------------------
+
+The money/channels detail lives in plans/product-monetization-gtm-plan.txt — not
+repeated here. What's specific to PRODUCTION-READINESS:
+
+  MONETIZATION — production-readiness mostly ENABLES revenue rather than being sold:
+    - Hardening itself is unsellable (nobody pays for "now it has tests"). Honest:
+      no standalone angle. Don't charge for it.
+    - But it's the GATE on every paid item the GTM plan names:
+        * The keystone + sandbox are the multi-tenant prerequisite -> the (parked)
+          hosted-pro tier can't exist without them.
+        * A versioned, installable release + onboarding is what makes the digital
+          PACKS (scene/template/sprite "starter kits") installable as a product and
+          what makes Show HN convert to email subs. Packaging is the funnel's plumbing.
+        * The Obsidian-style ~$50/yr COMMERCIAL LICENSE only has teeth once there's a
+          real versioned product to license, not a clone-the-repo state.
+    - The one place readiness work is directly demoable AS a product story: the
+      autonomous dev loop (gated on the 3.1 test harness) — "an OS that tests and
+      extends itself" is a sponsorware-grade narrative (GTM section 5).
+
+  MARKETING — readiness milestones ARE build-in-public content (the GTM funnel runs
+  on demo clips; these are clips):
+    - "I made my node OS extensible from inside itself" (keystone landing) — the
+      single strongest demo: create a NEW node type live, no rebuild. ~30s clip.
+    - "Drag a file -> it's a node -> a scene pulls it in by id" (binary node, built
+      on the data-driven NODE_BODY from 3.2). ~20s clip.
+    - "It writes and tests its own features" (dev loop on the test harness).
+    - Before/after: textarea -> CodeMirror with x-API autocomplete (3.x polish).
+    - The packaging milestone (one-command run) is the prerequisite for the Show HN
+      itself — "a local-first node OS you can run and inspect" only lands if it
+      actually runs in one command (GTM Phase 2).
+    Channel/hook/sequence: see the GTM plan (X clips -> Show HN -> packs). This plan
+    just supplies the artifacts.
+
+
+7. SEQUENCED PHASES  (PR-able; interleaves with the GTM plan's audience phase)
+-----------------------------------------------------------------------------
+
+  PHASE P0 — DE-RISK NOW (days, do before anything else)
+    [ ] 4.1: bind 127.0.0.1 (one line) + put the bypass endpoints behind an env flag.
+    [ ] Decide PATH (default A) and write it down.
+
+  PHASE P1 — TRUSTWORTHY (the base; parallels GTM Phase-1 audience work)
+    [ ] 3.1 test harness + `test` script + CI gate  [ ] 3.3 atomic writes + validate
+    [ ] 3.4 autoRestart + /api/health  [ ] 3.5 semver + CHANGELOG + pinned Node
+    Gate: a change can be VERIFIED green/red, and a crash recovers.
+
+  PHASE P2 — THE CLAIM + SAFETY (the two coupled hard parts)
+    [ ] 3.2 keystone (no-handler card -> runtime handler load -> x.create -> data-
+        driven NODE_BODY)  [ ] 4.4 sandbox, shipped WITH the keystone, not after.
+    Gate: you can create a genuinely new node type from inside the app, and handler
+    code from a node body can't touch the host.
+
+  PHASE P3 — PACKAGING (turn the repo into a product; aligns GTM Phase-2 launch)
+    [ ] One-command run / installer (npx | Docker | Tauri — chosen in 3.5).
+    [ ] Onboarding: empty-state + a sample project tree (also the free "starter
+        pack" lead magnet from the GTM plan).
+    [ ] Docs site / quick-start that doesn't assume a dev toolchain.
+    [ ] 4.2 minimal auth + CORS (only if "expose to my own device" is wanted).
+    [ ] Fix or formally retire the broken deploy (plans/deploy-target-plan.txt):
+        reserved IP for a stable DEPLOY_HOST, align the node-path mismatch, start
+        the scheduler + write a persistent .env — OR drop the persistent box now
+        that the WS exchange moved to Deno Deploy. Decide, don't leave it broken.
+    Gate: a stranger can install and run ocraft in one command from a tagged release.
+
+  PHASE P4 — POLISH + CONTENT (ongoing, feeds the funnel)
+    [ ] CodeMirror editor + x-API autocomplete (plans/codemirror-editor-plan.txt).
+    [ ] Process-management UI + live RAM/CPU (plans/process-management-plan.txt).
+    [ ] Each milestone -> one Screen-Studio clip (GTM Phase-1 cadence).
+
+  PHASE P5 — ONLY IF HOSTED (PARKED — section 5)
+    Re-open only on proven pull AND P2 shipped.
+
+
+8. RISKS & HONEST CAVEATS
+-------------------------
+  - The bind+bypass RCE (4.1) is the one item that's genuinely urgent regardless of
+    plan; everything else can be sequenced, that can't. Treat as do-now. [C]
+  - The keystone and the sandbox are COUPLED — shipping the keystone without the
+    sandbox actively increases attack surface (code from data, unsandboxed). Don't
+    ship 3.2 without 4.4. [R]
+  - Scope creep into PATH B is the main failure mode: auth/multi-tenant/billing feel
+    like "real product" work but the GTM plan already judged they're the wrong bet for
+    a solo MIT tool. Stay on PATH A unless the un-park trigger fires.
+  - The test gate (3.1) is upstream of trustworthy AI-assisted development — until it
+    exists, the autonomous-dev-loop PRs still need full human review. [R]
+  - "Production ready" is not one thing: a local-first PATH-A product can be
+    genuinely done and shippable at the end of P3 with NONE of the SaaS machinery.
+    Don't let PATH B's checklist make PATH A feel unfinished.
+
+RELATED PLANS (this plan is the index that ties them to "ship-ability"):
+  product-monetization-gtm-plan.txt  — the money/channels companion (read together)
+  node-test-harness-plan.txt         — 3.1
+  self-extending-handlers-plan.txt   — 3.2 (the keystone)
+  sandboxed-execution-plan.txt /
+    webcontainer-lite-plan.txt        — 4.4
+  node-versioning-plan.txt           — 3.3
+  process-management-plan.txt        — 3.4 / P4
+  deploy-target-plan.txt /
+    deno-deploy-mcp-plan.txt          — P3 deploy decision
+  codemirror-editor-plan.txt         — P4
+  autonomous-dev-loop-plan.txt       — gated on 3.1
