@@ -1,4 +1,4 @@
-// AI runner for the generic run controller (runtime/runs.js): wraps the Claude
+// AI runner for the generic run controller (runtime/runManager.js): wraps the Claude
 // Agent SDK's query() into a tracked run. Starts a Claude Code session, streams its
 // events through the run hooks, and exposes cancel() via an AbortController.
 //

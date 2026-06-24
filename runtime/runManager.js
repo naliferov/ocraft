@@ -1,29 +1,32 @@
-// Generic on-demand RUN controller — runs on the server, in the apiServer process.
+// Universal RUN manager — one interface over everything that runs on the server.
 //
-// A "run" is an API-initiated, tracked, observable job — started via POST /api/runs,
-// watched via GET /api/runs[/:id][/stream], stopped via .../cancel, continued via
-// .../resume. It is deliberately a THIRD process kind, distinct from:
-//   - runtime/tasks  (scheduled / finite, hard-timeout, fired by the scheduler)
-//   - services       (permanent daemons under serviceManager)
-// Only the lifecycle (start → running → done|error|cancelled, list/status/stream/
-// cancel) is generic here; what actually runs is supplied by a pluggable RUNNER
-// registered per `kind` (see ./runners/ai.js). Input is opaque to the
-// controller — it just hands it to the runner.
+// "Run" is the generalized unit of execution. Each KIND is an adapter registered
+// via registerRunner(kind, adapter). Two adapter shapes:
 //
-// Runs live in-memory in the api-server process: a restart loses live runs (a
-// runner's underlying session may persist on disk and be resumable, but the
-// in-process loop is gone). Durable cross-restart runs would need a separate
-// worker — see the Roadmap.
+//   • OWNED (ephemeral) — adapter.start(input, hooks) -> handle{ cancel() }. The
+//     manager owns the record, streams events via hooks, and cancels it. The work
+//     may still be an OS process (the 'ai' kind's Agent SDK spawns the claude CLI;
+//     cancel() -> the SDK SIGKILLs it). Lives in-memory; lost on restart. e.g. 'ai'.
+//
+//   • SOURCE (external) — adapter.list() / get(id) [ / stop(id) ]. The thing is
+//     started & persisted elsewhere; the manager only AGGREGATES its live state into
+//     the unified view. e.g. 'service' (serviceManager daemons, durable) and 'task'
+//     (taskExecutor executions). Started via CLI/scheduler, observed here.
+//
+// So GET /api/runs is ONE list across services + AI runs + task executions, with a
+// uniform record + status/stream/cancel. (Folding the engines together fully is a
+// later phase — see plans/unified-run-interface-plan.txt.)
 
 import crypto from 'node:crypto'
 
 const RUNS = new Map() // runId -> record
 const RECENT_CAP = 100 // keep memory bounded: drop oldest FINISHED runs past this
 
-// kind -> runner. A runner is { start(input, hooks) -> handle }, where handle may
-// expose cancel(). hooks: { onSession, onText, onTool, onLog, onResult, onDone, onError }.
+// kind -> adapter. OWNED adapter: { start(input, hooks) -> handle{cancel()} } (hooks:
+// onSession/onText/onTool/onLog/onResult/onDone/onError). SOURCE adapter:
+// { list() -> [record], get(id) -> record|null, stop?(id) -> bool }.
 const runners = new Map()
-export const registerRunner = (kind, runner) => runners.set(kind, runner)
+export const registerRunner = (kind, adapter) => runners.set(kind, adapter)
 
 // Trimmed view for the list endpoint — full text/log would bloat it.
 const summary = (run) => ({
@@ -74,6 +77,9 @@ export const start = (kind, input = {}) => {
   const runner = runners.get(kind)
   if (!runner) {
     throw new Error(`unknown run kind "${kind}"`)
+  }
+  if (typeof runner.start !== 'function') {
+    throw new Error(`run kind "${kind}" is observe-only — it's started elsewhere (CLI / scheduler)`)
   }
 
   const id = crypto.randomUUID()
@@ -143,32 +149,75 @@ export const start = (kind, input = {}) => {
   return summary(run)
 }
 
-export const list = (kind) => {
-  const all = [...RUNS.values()]
-  const picked = kind ? all.filter((run) => run.kind === kind) : all
-  return picked.map(summary).sort((left, right) => right.startedAt.localeCompare(left.startedAt))
-}
-
-export const get = (id) => {
-  const run = RUNS.get(id)
-  return run ? full(run) : null
-}
-
-export const cancel = (id) => {
-  const run = RUNS.get(id)
-  if (!run) {
-    return false
-  }
-  if (run.status === 'running') {
-    try {
-      run.handle?.cancel?.()
-    } catch {
-      // runner cancel is best-effort
+// Unified list: in-memory OWNED runs + every SOURCE adapter's live records. async,
+// since sources read disk (executions, service state). A flaky source is skipped.
+export const list = async (kind) => {
+  const owned = [...RUNS.values()].filter((run) => !kind || run.kind === kind).map(summary)
+  const external = []
+  for (const [sourceKind, adapter] of runners) {
+    if ((kind && sourceKind !== kind) || typeof adapter.list !== 'function') {
+      continue
     }
-    append(run, 'cancel requested')
-    finish(run, 'cancelled')
+    try {
+      external.push(...(await adapter.list()))
+    } catch {
+      // a flaky source shouldn't break the whole list
+    }
   }
-  return true
+  return [...owned, ...external].sort((left, right) =>
+    (right.startedAt || '').localeCompare(left.startedAt || ''),
+  )
+}
+
+export const get = async (id) => {
+  const run = RUNS.get(id)
+  if (run) {
+    return full(run)
+  }
+  for (const adapter of runners.values()) {
+    if (typeof adapter.get !== 'function') {
+      continue
+    }
+    try {
+      const record = await adapter.get(id)
+      if (record) {
+        return record
+      }
+    } catch {
+      // ignore a source that can't resolve this id
+    }
+  }
+  return null
+}
+
+export const cancel = async (id) => {
+  const run = RUNS.get(id)
+  if (run) {
+    if (run.status === 'running') {
+      try {
+        run.handle?.cancel?.()
+      } catch {
+        // runner cancel is best-effort
+      }
+      append(run, 'cancel requested')
+      finish(run, 'cancelled')
+    }
+    return true
+  }
+  // a SOURCE kind that supports stop (none in v1 — service/task stay CLI-controlled)
+  for (const adapter of runners.values()) {
+    if (typeof adapter.stop !== 'function') {
+      continue
+    }
+    try {
+      if (await adapter.stop(id)) {
+        return true
+      }
+    } catch {
+      // best-effort
+    }
+  }
+  return false
 }
 
 // Resume = start a NEW run that continues a prior one (runner-specific: the AI

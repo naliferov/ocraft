@@ -89,11 +89,13 @@ export default async (x) => {
 
       const meta = document.createElement('span')
       Object.assign(meta.style, { color: '#888', flexShrink: '0' })
-      meta.textContent = `${r.status} · ${age(r.startedAt, r.finishedAt)}${r.cost != null ? ` · $${r.cost.toFixed(3)}` : ''}`
+      meta.textContent = `${r.kind} · ${r.status} · ${age(r.startedAt, r.finishedAt)}${r.cost != null ? ` · $${r.cost.toFixed(3)}` : ''}`
 
       row.append(dot, label, meta)
 
-      if (r.status === 'running') {
+      // Only 'ai' runs are cancellable here; services/tasks are observe-only (started
+      // + stopped via the CLI/scheduler), so no cancel button for those rows.
+      if (r.status === 'running' && r.kind === 'ai') {
         const cancel = document.createElement('button')
         cancel.textContent = 'cancel'
         Object.assign(cancel.style, {

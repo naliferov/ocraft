@@ -1,0 +1,137 @@
+===============================================================================
+ UNIFIED RUN INTERFACE — one "thing that runs" contract for task / run / service
+ (relates to: process-management-plan.txt, the "see running processes" goal that
+  motivated runManager.js; new features list #84 execution-history UI)
+ v1 IMPLEMENTED 2026-06-23 — phases below are the remaining work
+===============================================================================
+
+## What & why
+
+ocraft accumulated THREE lifecycle managers, grown at different times:
+
+  - taskExecutor.js   — TASKS:    finite, in-process fn(ctx), hard 15-min timeout,
+                                   fired by the scheduler / CLI, recorded on disk
+                                   (runtime/executions/).
+  - serviceManager.js — SERVICES: permanent OS daemons, spawn(detached) + pid in
+                                   state files + process-group kill, run by the CLI.
+  - runManager.js           — RUNS:      on-demand, observable, cancellable jobs started
+                                   over HTTP (POST /api/runs); the 'ai' kind.
+
+They look like three things. They are one thing wearing three coats. The decisive
+realisation (from the design review): a "run" is ALSO a spawn — the Agent SDK that
+the 'ai' runner calls itself does child_process.spawn() of the claude CLI and
+SIGKILLs it on AbortController.abort(). So "run vs service" is NOT "in-process vs
+subprocess" (both spawn). All three are: **start something → observe it → stop it.**
+
+The differences are two policy axes, not a difference in kind:
+  - LIFETIME:     finite (task, run)   vs  permanent (service)
+  - PERSISTENCE:  ephemeral/in-memory (run)  vs  durable/on-disk (service: pid+state;
+                  task: execution records)
+…and a spawner detail (in-process fn / SDK / child_process) + an initiator
+(scheduler / HTTP / CLI).
+
+So they deserve ONE interface.
+
+## The universal interface (what was built)
+
+A "run" is the generalised unit of execution. Each KIND registers an ADAPTER with
+the manager (runManager.js). Two adapter shapes:
+
+  • OWNED (ephemeral)
+      start(input, hooks) -> handle{ cancel() }
+      hooks: onSession/onText/onTool/onLog/onResult/onDone/onError
+      The manager owns the in-memory record, streams events, and cancels it.
+      e.g. 'ai' (runtime/runners/ai.js).
+
+  • SOURCE (external)
+      list() -> [record]   get(id) -> record|null   [ stop?(id) -> bool ]
+      The thing is started + persisted elsewhere; the manager only AGGREGATES its
+      live state. e.g. 'service' (runtime/runners/service.js → serviceManager) and
+      'task' (runtime/runners/task.js → runtime/executions/).
+
+UNIFORM RECORD (every kind):
+  { id, kind, label, status, startedAt, finishedAt, log[], result?, error?, meta }
+  status ∈ running | done | error | cancelled | stopped
+
+MANAGER VERBS (one set, all kinds):
+  start(kind,input) · list({kind?}) · get(id) · subscribe(id) (SSE) · cancel(id)
+
+API (unchanged surface, now universal):
+  POST /api/runs {kind,input}     — start an OWNED run (ai). SOURCE kinds → 400.
+  GET  /api/runs[?kind=]          — ONE list: services + AI runs + task executions
+  GET  /api/runs/:id              — uniform record (owned or from a source)
+  GET  /api/runs/:id/stream       — SSE (owned kinds)
+  POST /api/runs/:id/cancel       — owned: cancel; source-with-stop: delegate
+
+KIND MAP:
+  ai      | OWNED   | start=SDK query() | cancel=abort()→SIGKILL | ephemeral
+  service | SOURCE  | serviceManager.listServices/getService    | durable, read-only
+  task    | SOURCE  | runtime/executions/*.json (recent 25)      | durable, read-only
+
+The editor's api-runs-monitor node (GET /api/runs) now shows ALL of it in one table
+— the "see running processes" surface, for free.
+
+## Why THIS approach (vs the alternatives) — pros & cons
+
+OPTION A — façade + delegating/aggregating adapters  ← CHOSEN (v1)
+  The three engines stay; runManager.js becomes the universal manager; service/task are
+  read-only SOURCE adapters that read serviceManager / executions.
+  + Zero risk to boot/supervision: serviceManager, taskExecutor, scheduler, and the
+    CLI are UNTOUCHED — services keep their battle-tested spawn/kill/pid logic.
+  + Real unification where it counts: one record, one /api/runs, one UI, one mental
+    model ("everything is a run; kind says how").
+  + Incremental + reversible; new kinds (browser-sandbox script, shell) just register.
+  + Respects the earlier "don't start runtime/tasks over HTTP" call (task is read-only).
+  − Two persistence models still exist under the hood (in-memory vs disk); the manager
+    bridges them but doesn't collapse them.
+  − start() has an `if owned` branch (owned vs source) — a small leak in the abstraction.
+  − GET /api/runs does disk IO each call (reads ≤25 execution files + service state);
+    fine for a single-user local tool, mildly wasteful on a 1.5s poll.
+
+OPTION B — full rewrite: one engine replaces all three
+  + Maximal elegance, zero duplication, one true persistence model.
+  − HIGH RISK: serviceManager keeps the api/frontend/scheduler alive — a bug = the
+    whole system down. Touches the scheduler + CLI. Big change for a solo tool.
+  − The durable-detached (survive-restart, pid-on-disk) vs ephemeral-attached
+    (in-memory, streamed) split is genuine; one engine must handle both anyway, so
+    much of the "duplication" is irreducible.
+  Verdict: not now. Revisit once the façade has proven the interface in use.
+
+OPTION C — read-only aggregator only (a unified list view, no unified control)
+  + Even safer; the "see running processes" view works.
+  − Doesn't unify control at all (start/stop still go three different places). Weaker
+    than A for little extra safety.
+
+## The one genuine seam (respect it)
+
+DURABLE vs EPHEMERAL is a real divide, captured as the OWNED/SOURCE adapter split:
+a service MUST survive the api server restarting (tracked by pid on disk); an ai run
+CAN'T (it lives in the api process and streams to its requester). That's a policy,
+not a different concept — but it's why service/task are SOURCEs, not OWNED.
+
+## Phases / remaining work
+
+  Phase 1 (DONE): universal manager + ai(owned) + service/task(read-only sources);
+    unified GET /api/runs; observe-only guard; engines + CLI untouched.
+  Phase 2: HTTP control for services — make the service adapter's start/stop delegate
+    to serviceManager, with a SELF-STOP GUARD (the api service must refuse to stop
+    itself mid-request; do it via a detached re-exec or just deny stopping 'api').
+  Phase 3: live task-log streaming — give taskExecutor an optional onLog(line) so a
+    'task' run can stream like 'ai' (today task logs are buffered, surfaced on finish).
+  Phase 4: SSE for source kinds (tail a service log / poll executions) so the monitor
+    can stream a service too, not just poll.
+  Phase 5 (optional): cache the source reads behind a short TTL to cut the per-poll IO.
+  Phase 6 (maybe): collapse taskExecutor INTO an owned 'task' runner (runs ≈ task minus
+    the hard timeout); serviceManager stays separate (the OS-daemon odd-one-out).
+
+## Honest non-goals / caveats
+
+  - Not merging serviceManager into runManager.js — the OS-daemon supervision (detached,
+    pid, process-group SIGTERM→SIGKILL, survive-restart) is genuinely different and
+    works; wrapping it as a SOURCE is the right amount of unification.
+  - The api-runs-monitor node shows a "cancel" affordance per running row; only 'ai'
+    runs are cancellable in v1, so the monitor should gate cancel on kind === 'ai'
+    (otherwise a service row's cancel 404s). Small UI follow-up.
+  - "run" as the universal noun is a slight stretch for a permanent service (a daemon
+    isn't really "a run"). Kept because runManager.js + /api/runs already exist; "proc" or
+    "unit" were considered. Naming only — the interface is what matters.

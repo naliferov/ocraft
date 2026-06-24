@@ -3,12 +3,18 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import zlib from 'node:zlib'
 import { fileURLToPath } from 'node:url'
-import * as runs from './runs.js'
+import * as runManager from './runManager.js'
 import * as aiRunner from './runners/ai.js'
+import * as taskSource from './runners/task.js'
+import * as serviceSource from './runners/service.js'
 
-// Register the AI runner with the generic run controller. A "run" is an on-demand,
-// tracked job processed here on the server; AI is the first kind. See ./runs.js.
-runs.registerRunner('ai', aiRunner)
+// Register the run KINDS with the universal run manager (./runManager.js): 'ai' is an
+// owned/ephemeral runner (started + streamed + cancelled here); 'task' and 'service'
+// are read-only SOURCES surfacing taskExecutor executions and serviceManager daemons
+// in the one unified GET /api/runs view (they're started via the CLI / scheduler).
+runManager.registerRunner('ai', aiRunner)
+runManager.registerRunner('task', taskSource)
+runManager.registerRunner('service', serviceSource)
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url)) // runtime/
 const ROOT_DIR = path.join(currentDir, '..') // repo root — the cwd the AI runner works in
@@ -338,17 +344,18 @@ const routes = {
       .end(JSON.stringify({ text: text.trim(), toolUses, result }))
   },
 
-  // --- Generic RUNS controller — on-demand, tracked jobs (see ./runs.js) ---
-  // A "run" is API-started and observable; AI is the first kind. Distinct from
-  // runtime/tasks (scheduled/finite) and services (permanent). ⚠️ The 'ai' runner
-  // runs Claude with bypassPermissions — same localhost-only caveat as ai-chat.
+  // --- Universal RUN manager — one view over everything that runs (see ./runManager.js) ---
+  // GET /api/runs lists AI runs (owned/ephemeral) + service daemons + task executions
+  // as one uniform record set. POST starts on-demand 'ai' runs (task/service are
+  // observe-only here). ⚠️ The 'ai' runner runs Claude with bypassPermissions —
+  // same localhost-only caveat as ai-chat.
   'POST /api/runs': async (req, res) => {
     try {
       const { kind, input = {} } = await readBody(req)
       if (!kind) {
         throw new Error('kind (string) required')
       }
-      const run = runs.start(kind, input)
+      const run = runManager.start(kind, input)
       res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(run))
     } catch (error) {
       res
@@ -359,11 +366,13 @@ const routes = {
 
   'GET /api/runs': async (req, res) => {
     const kind = new URL(req.url, 'http://localhost').searchParams.get('kind') || undefined
-    res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(runs.list(kind)))
+    res
+      .writeHead(200, { 'Content-Type': 'application/json' })
+      .end(JSON.stringify(await runManager.list(kind)))
   },
 
   'GET /api/runs/:id': async (req, res, { id }) => {
-    const run = runs.get(id)
+    const run = await runManager.get(id)
     if (!run) {
       res
         .writeHead(404, { 'Content-Type': 'application/json' })
@@ -383,7 +392,7 @@ const routes = {
       Connection: 'keep-alive',
     })
     const send = (event) => res.write(`data: ${JSON.stringify(event)}\n\n`)
-    const unsubscribe = runs.subscribe(id, send)
+    const unsubscribe = runManager.subscribe(id, send)
     if (!unsubscribe) {
       send({ type: 'error', error: 'not found' })
       res.end()
@@ -397,7 +406,7 @@ const routes = {
   },
 
   'POST /api/runs/:id/cancel': async (req, res, { id }) => {
-    const ok = runs.cancel(id)
+    const ok = await runManager.cancel(id)
     res
       .writeHead(ok ? 200 : 404, { 'Content-Type': 'application/json' })
       .end(JSON.stringify({ cancelled: ok }))
@@ -411,7 +420,7 @@ const routes = {
       } catch {
         // empty body is fine — resume with no new input
       }
-      const run = runs.resume(id, input)
+      const run = runManager.resume(id, input)
       res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(run))
     } catch (error) {
       res
