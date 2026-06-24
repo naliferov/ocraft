@@ -28,7 +28,7 @@ jobs:
         run: |
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > /tmp/deploy_key
           chmod 600 /tmp/deploy_key
-          ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no ${{ vars.DEPLOY_HOST }} \
+          ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no root@165.232.75.109 \
             "cd /root/ocraft && \
              echo 'TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN' > .env && \
              git pull && \
