@@ -25,12 +25,15 @@ jobs:
       - name: Deploy
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          API_TOKEN: ${{ secrets.API_TOKEN }}
         run: |
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > /tmp/deploy_key
           chmod 600 /tmp/deploy_key
           ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no root@165.232.75.109 \
             "cd /root/ocraft && \
-             echo 'TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN' > .env && \
+             printf 'TELEGRAM_BOT_TOKEN=%s\nAPI_TOKEN=%s\n' '$TELEGRAM_BOT_TOKEN' '$API_TOKEN' > .env && \
              git pull && \
              npm install && \
+             npm --prefix frontend install && \
+             npm --prefix frontend run build && \
              node bin/cli.js run deploy"

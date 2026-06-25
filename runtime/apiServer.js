@@ -1,7 +1,9 @@
+import 'dotenv/config' // load <repo>/.env (API_TOKEN, PORT) — the service runs with cwd = repo root
 import http from 'node:http'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import zlib from 'node:zlib'
+import crypto from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import * as runManager from './runManager.js'
 import * as aiRunner from './runners/ai.js'
@@ -20,6 +22,95 @@ const currentDir = path.dirname(fileURLToPath(import.meta.url)) // runtime/
 const ROOT_DIR = path.join(currentDir, '..') // repo root — the cwd the AI runner works in
 const NODES_DIR = path.join(currentDir, '..', 'data/nodes') // node store lives at <root>/data
 const ASSETS_DIR = path.join(currentDir, '..', 'data/assets')
+const DIST_DIR = path.join(currentDir, '..', 'frontend/dist') // built Vue SPA — served in prod after `npm run build`
+
+// --- Auth ------------------------------------------------------------------
+// Every request needs the secret API_TOKEN (.env). The browser sends it as an HttpOnly
+// SESSION COOKIE — set by POST /api/login, invisible to JS, so an XSS can't steal it and
+// the browser auto-attaches it on each request. A bearer header is also accepted (for
+// non-browser callers). Unset API_TOKEN = open + a loud warning, so a fresh checkout
+// doesn't silently break.
+const API_TOKEN = process.env.API_TOKEN || ''
+const SESSION_COOKIE = 'ocraft_session'
+const COOKIE_SECURE = process.env.COOKIE_SECURE === 'true' // set in prod (HTTPS); off for http://localhost dev
+if (!API_TOKEN) {
+  console.warn(
+    '⚠️  API_TOKEN is not set — the API server is UNAUTHENTICATED. Add API_TOKEN to .env to lock it.',
+  )
+}
+
+// Constant-time token compare (length guard first, so timingSafeEqual gets equal-length
+// buffers) — the token can't be recovered byte-by-byte from response timing.
+const tokenMatches = (candidate) => {
+  if (!candidate) {
+    return false
+  }
+  const expected = Buffer.from(API_TOKEN)
+  const given = Buffer.from(candidate)
+  return given.length === expected.length && crypto.timingSafeEqual(given, expected)
+}
+
+const readCookie = (req, name) => {
+  for (const part of (req.headers.cookie || '').split(';')) {
+    const [key, ...rest] = part.trim().split('=')
+    if (key === name) {
+      return decodeURIComponent(rest.join('='))
+    }
+  }
+  return ''
+}
+
+const isAuthorized = (req) => {
+  if (!API_TOKEN) {
+    return true
+  }
+  const header = req.headers.authorization || ''
+  const bearer = header.startsWith('Bearer ') ? header.slice(7) : ''
+  return tokenMatches(bearer) || tokenMatches(readCookie(req, SESSION_COOKIE))
+}
+
+// HttpOnly + SameSite=Strict (not sent cross-site → CSRF defense) + Secure in prod.
+const sessionCookie = (token) =>
+  [
+    `${SESSION_COOKIE}=${encodeURIComponent(token)}`,
+    'HttpOnly',
+    'SameSite=Strict',
+    'Path=/',
+    'Max-Age=31536000',
+    ...(COOKIE_SECURE ? ['Secure'] : []),
+  ].join('; ')
+
+const clearedCookie = () => `${SESSION_COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`
+
+// POST /api/login { token } → validate and set the session cookie. POST /api/logout →
+// clear it. Both are reachable WITHOUT an existing session (that's how you get one).
+const handleLogin = async (req, res) => {
+  let token = ''
+  try {
+    ;({ token } = await readBody(req))
+  } catch {
+    // missing/invalid body → token stays '' → fails the check below (unless open)
+  }
+  if (API_TOKEN && !tokenMatches(token)) {
+    res
+      .writeHead(401, { 'Content-Type': 'application/json' })
+      .end(JSON.stringify({ error: 'invalid token' }))
+    return
+  }
+  res
+    .writeHead(200, { 'Content-Type': 'application/json', 'Set-Cookie': sessionCookie(token) })
+    .end(JSON.stringify({ ok: true }))
+}
+
+const handleLogout = (res) => {
+  res
+    .writeHead(200, { 'Content-Type': 'application/json', 'Set-Cookie': clearedCookie() })
+    .end(JSON.stringify({ ok: true }))
+}
+
+// Node ids are numeric folder names; reject anything else so a `:id` can't smuggle a
+// `..` into a filesystem path. (The /api/assets route has its own traversal guard.)
+const isNodeId = (id) => /^[0-9]+$/.test(id)
 
 // Render prior chat turns as plain context so each ai-chat request carries the
 // conversation (the endpoint is stateless; the node stores the history).
@@ -101,6 +192,70 @@ const serveAsset = async (res, relPath) => {
   } catch {
     res.writeHead(404).end('Not found')
   }
+}
+
+// --- Frontend (built Vue SPA) -------------------------------------------------
+// In production this same process also serves frontend/dist (built by `npm run
+// build`), so the editor and the API share one origin — the SameSite=Strict session
+// cookie requires it. Served WITHOUT auth: the bundle holds no secrets (the token
+// isn't baked into the build) and the login page must load before a session exists.
+// In dev this is unused — Vite serves the SPA and proxies /api here.
+const STATIC_CONTENT_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.map': 'application/json',
+}
+
+// Serve index.html — the SPA entry. no-cache so a redeploy (which renames the hashed
+// asset files index.html points at) is picked up at once; a missing file means the
+// frontend simply wasn't built.
+const serveIndexHtml = async (res) => {
+  try {
+    const html = await fs.readFile(path.join(DIST_DIR, 'index.html'))
+    res
+      .writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' })
+      .end(html)
+  } catch {
+    res.writeHead(404).end('Frontend not built — run `npm run build` in frontend/')
+  }
+}
+
+// Serve a built-SPA file under DIST_DIR, falling back to index.html so vue-router's
+// history-mode routes (/node/:id) resolve on direct load / refresh. A path WITH a file
+// extension that isn't found is a real 404 — only extension-less paths (client routes)
+// fall back to index.html. Path-guarded against ../ traversal out of DIST_DIR.
+const serveStatic = async (res, urlPath) => {
+  const relPath = urlPath === '/' ? 'index.html' : decodeURIComponent(urlPath).slice(1)
+  const full = path.resolve(DIST_DIR, relPath)
+  if (full === DIST_DIR || full.startsWith(DIST_DIR + path.sep)) {
+    try {
+      const data = await fs.readFile(full)
+      const type =
+        STATIC_CONTENT_TYPES[path.extname(full).toLowerCase()] ?? 'application/octet-stream'
+      // Vite content-hashes everything under /assets/ — cache those forever.
+      const cacheControl = urlPath.startsWith('/assets/')
+        ? 'public, max-age=31536000, immutable'
+        : 'no-cache'
+      res.writeHead(200, { 'Content-Type': type, 'Cache-Control': cacheControl }).end(data)
+      return
+    } catch {
+      // not a real file — fall through to the SPA fallback
+    }
+  }
+  if (path.extname(urlPath)) {
+    res.writeHead(404).end('Not found')
+    return
+  }
+  await serveIndexHtml(res)
 }
 
 // Send a text/JSON body, gzipped when the client accepts it. The text-heavy reads
@@ -344,6 +499,51 @@ const routes = {
       .end(JSON.stringify({ text: text.trim(), toolUses, result }))
   },
 
+  // --- Telegram (user account, MTProto) — backs the `tg-chat` node type + command bar ---
+  // ⚠️ SECURITY: these reach a Telegram USER account — they can read ALL your chats and
+  // SEND messages as you. Reachable by anything that hits localhost:3001 / the Vite proxy.
+  // Local single-user only — do NOT expose this server to a network. The GramJS helper is
+  // lazy-imported (server boots without it) and reuses the telegram-mcp login session.
+  'GET /api/telegram/messages': async (req, res) => {
+    try {
+      const params = new URL(req.url, 'http://localhost').searchParams
+      const chat = params.get('chat')
+      if (!chat) {
+        throw new Error('chat (query param) required')
+      }
+      const limit = Number(params.get('limit')) || 30
+      const { getMessages } = await import('../mcp-servers/telegram-mcp/tg-api.js')
+      const messages = await getMessages({ chat, limit })
+      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(messages))
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: error.message }))
+    }
+  },
+
+  'GET /api/telegram/chats': async (req, res) => {
+    try {
+      const limit = Number(new URL(req.url, 'http://localhost').searchParams.get('limit')) || 50
+      const { listChats } = await import('../mcp-servers/telegram-mcp/tg-api.js')
+      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(await listChats({ limit })))
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: error.message }))
+    }
+  },
+
+  'POST /api/telegram/send': async (req, res) => {
+    try {
+      const { chat, text } = await readBody(req)
+      if (!chat || !text) {
+        throw new Error('chat and text required')
+      }
+      const { sendMessage } = await import('../mcp-servers/telegram-mcp/tg-api.js')
+      const sent = await sendMessage({ chat, text })
+      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(sent))
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: error.message }))
+    }
+  },
+
   // --- Universal RUN manager — one view over everything that runs (see ./runManager.js) ---
   // GET /api/runs lists AI runs (owned/ephemeral) + service daemons + task executions
   // as one uniform record set. POST starts on-demand 'ai' runs (task/service are
@@ -447,7 +647,7 @@ const matchUrl = (method, url) => {
           return [name, match[index + 1]]
         }),
       )
-      return { handler: routes[key], params }
+      return { handler: routes[key], params, key }
     }
   }
   return null
@@ -457,6 +657,28 @@ const ASSETS_PREFIX = '/api/assets/'
 
 const server = http.createServer(async (req, res) => {
   const path = req.url.split('?')[0]
+  // Login/logout manage the session cookie — reachable WITHOUT an existing session.
+  if (req.method === 'POST' && path === '/api/login') {
+    await handleLogin(req, res)
+    return
+  }
+  if (req.method === 'POST' && path === '/api/logout') {
+    handleLogout(res)
+    return
+  }
+  // Serve the built frontend (frontend/dist) for any non-API GET — no auth (see
+  // serveStatic). All /api/* requests fall through to the auth gate below.
+  if (req.method === 'GET' && !path.startsWith('/api/')) {
+    await serveStatic(res, path)
+    return
+  }
+  // Everything else needs a valid session cookie or bearer (open if API_TOKEN unset).
+  if (!isAuthorized(req)) {
+    res
+      .writeHead(401, { 'Content-Type': 'application/json' })
+      .end(JSON.stringify({ error: 'unauthorized' }))
+    return
+  }
   // Asset files live under a nested path, which the :param matcher (which stops at
   // '/') can't capture — handle the prefix directly before the route table.
   if (req.method === 'GET' && path.startsWith(ASSETS_PREFIX)) {
@@ -465,6 +687,14 @@ const server = http.createServer(async (req, res) => {
   }
   const route = matchUrl(req.method, path)
   if (route) {
+    // Node ids index folders on disk — reject a non-numeric `:id` (e.g. `..`) before it
+    // reaches a handler. (Run ids are UUIDs, so this guards only the node routes.)
+    if (route.key.includes('/api/nodes/:id') && !isNodeId(route.params.id)) {
+      res
+        .writeHead(400, { 'Content-Type': 'application/json' })
+        .end(JSON.stringify({ error: 'bad node id' }))
+      return
+    }
     await route.handler(req, res, route.params)
     return
   }
