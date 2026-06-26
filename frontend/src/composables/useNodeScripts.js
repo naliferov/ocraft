@@ -143,7 +143,7 @@ export async function runNodeCode(code, selfId, ui) {
 
 // Compile + return an SFC view component (node.scriptType = 'vue-sfc'). The body is .vue
 // source, not JS — so there's no blob import; useVueSfc compiles it and we hand it
-// the same `x` context the esm path gets, so <script setup> can call x.x / x.auth.
+// the same `x` context the esm path gets, so <script setup> can call x.x.
 export async function runSfcCode(source, selfId) {
   const id = String(selfId)
   return compileSfc(source, makeCtx(id, [], [id]))

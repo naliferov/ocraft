@@ -15,7 +15,7 @@
 // stays shared — no second Vue), and build the component with
 // `new Function('Vue', 'x', …)`. A `with (Vue)` wrapper makes the auto-imported
 // composition API (`ref`, `computed`, …) and explicit imports BOTH resolve, and `x`
-// (the node runtime) is a parameter so <script setup> can call x.x / x.auth / etc.
+// (the node runtime) is a parameter so <script setup> can call x.x / etc.
 //
 // <style> blocks are auto-scoped to the component's unique id (data-v-<id>) and
 // injected for its mounted lifetime, so a plain <style> can't bleed into other views.

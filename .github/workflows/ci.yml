@@ -22,6 +22,19 @@ jobs:
           echo "Timestamp: $(date)"
           node --version
 
+      # Build the frontend HERE, on the runner — the droplet (~256MB RAM) OOMs on
+      # `vite build`. We ship the built dist/ to the box instead of building there.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build frontend (on runner)
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
       - name: Deploy
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -29,12 +42,18 @@ jobs:
         run: |
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > /tmp/deploy_key
           chmod 600 /tmp/deploy_key
-          ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no root@165.232.75.109 \
+          KEY="-i /tmp/deploy_key -o StrictHostKeyChecking=no"
+          HOST=root@165.232.75.109
+          # Update code + runtime deps + prod .env on the box. NO frontend build here
+          # (it's built on the runner). Served HTTPS by Cloudflare -> origin :80, so the
+          # app runs on :80 (BIND_HOST=0.0.0.0) with NODE_ENV=production (Secure cookie + HSTS).
+          ssh $KEY $HOST \
             "cd /root/ocraft && \
-             printf 'TELEGRAM_BOT_TOKEN=%s\nAPI_TOKEN=%s\nNODE_ENV=production\n' '$TELEGRAM_BOT_TOKEN' '$API_TOKEN' > .env && \
+             printf 'TELEGRAM_BOT_TOKEN=%s\nAPI_TOKEN=%s\nNODE_ENV=production\nPORT=80\nBIND_HOST=0.0.0.0\n' '$TELEGRAM_BOT_TOKEN' '$API_TOKEN' > .env && \
              git pull && \
              npm install && \
-             npm --prefix frontend install && \
-             npm --prefix frontend run build && \
-             node runtime/cli.js run deploy && \
-             node runtime/cli.js service restart api"
+             node runtime/cli.js run deploy"
+          # Ship the runner-built bundle (dist/ is gitignored, so git pull won't carry it).
+          rsync -az --delete -e "ssh $KEY" frontend/dist/ $HOST:/root/ocraft/frontend/dist/
+          # Restart so the API serves the new code + bundle on :80.
+          ssh $KEY $HOST "cd /root/ocraft && node runtime/cli.js service restart api"

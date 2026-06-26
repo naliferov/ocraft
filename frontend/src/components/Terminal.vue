@@ -127,6 +127,22 @@ const COMMANDS = {
       }
     },
   },
+  format: {
+    desc: 'pretty-print the open html note (client-side)',
+    needs: 'html',
+    // Pretty-print the active html note's body in the browser (prettier's standalone build,
+    // no backend) — same dispatch route as `edit-html`: flips no API, just asks the open
+    // node's view to run its `format` command (see Html.vue VIEW_COMMANDS / formatContent.js).
+    run: () => {
+      const node = store.activeNode
+      if (node?.type !== 'html') {
+        print(`format: open an html note first (current: ${node ? node.type ?? 'html' : 'none'})`, 'error')
+        return
+      }
+      store.dispatchViewCommand('format')
+      print(`#${node.id} — formatted`, 'ok')
+    },
+  },
   'edit-html': {
     desc: 'edit the open note as raw html',
     needs: 'html',

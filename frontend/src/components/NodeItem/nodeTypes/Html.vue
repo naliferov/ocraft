@@ -9,6 +9,7 @@ import { ref, watch, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton } from 'naive-ui'
 import { useNodesStore } from '../../../stores/nodes.js'
+import { formatContent } from '../../../lib/formatContent.js'
 
 const props = defineProps({
   node: { type: Object, required: true },
@@ -87,13 +88,20 @@ const editSource = () => {
   editing.value = true
 }
 
-// The terminal (Terminal) drives node-type actions by dispatching a named command
-// through the store; the active node's view runs the ones it knows. For html that's
-// `source` — the "pure html" raw-edit mode that used to be the </> HTML button.
-// dispatchViewCommand assigns a fresh object each call, so this fires every time;
-// names we don't handle are ignored.
+// Pretty-print the raw HTML body, client-side (prettier's browser build, lazy-loaded) — no
+// backend. Makes the source readable in edit mode; the source textarea is v-model-bound to
+// `content`, so it updates live. In rich mode it reformats the stored markup too (harmless —
+// HTML collapses the added whitespace on render).
+const formatBody = async () => {
+  content.value = await formatContent(content.value, 'html')
+}
+
+// The terminal (Terminal) drives node-type actions by dispatching a named command through the
+// store; the active node's view runs the ones it knows: `source` (raw-edit) and `format`
+// (pretty-print). dispatchViewCommand assigns a fresh object each call, so this fires every
+// time; names we don't handle are ignored.
 const store = useNodesStore()
-const VIEW_COMMANDS = { source: editSource }
+const VIEW_COMMANDS = { source: editSource, format: formatBody }
 watch(
   () => store.viewCommand,
   (command) => VIEW_COMMANDS[command?.name]?.(),
@@ -200,6 +208,13 @@ const applyLink = () => {
     <div class="bar">
       <template v-if="editing">
         <n-button size="small" @click="editing = false">Done</n-button>
+        <n-button
+          v-if="source"
+          size="small"
+          title="Pretty-print the HTML (client-side)"
+          @click="formatBody"
+          >⌗ Format</n-button
+        >
         <template v-if="!source">
           <button
             v-for="p in PARTS"
