@@ -44,8 +44,17 @@ const SESSION_COOKIE = 'ocraft_session'
 const IS_PROD = process.env.NODE_ENV === 'production'
 const COOKIE_SECURE = IS_PROD || process.env.COOKIE_SECURE === 'true'
 if (!API_TOKEN) {
+  if (IS_PROD) {
+    // Fail CLOSED in prod: a production server with no token would serve EVERYTHING
+    // unauthenticated (isAuthorized returns true when API_TOKEN is empty). Refuse to
+    // start instead of silently exposing the API. Set API_TOKEN in the environment.
+    console.error(
+      '❌ FATAL: NODE_ENV=production but API_TOKEN is empty — refusing to start an unauthenticated server. Set API_TOKEN.',
+    )
+    process.exit(1)
+  }
   console.warn(
-    '⚠️  API_TOKEN is not set — the API server is UNAUTHENTICATED. Add API_TOKEN to .env to lock it.',
+    '⚠️  API_TOKEN is not set — the API server is UNAUTHENTICATED (dev only). Add API_TOKEN to .env to lock it.',
   )
 }
 

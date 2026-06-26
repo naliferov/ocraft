@@ -57,3 +57,9 @@ jobs:
           rsync -az --delete -e "ssh $KEY" frontend/dist/ $HOST:/root/ocraft/frontend/dist/
           # Restart so the API serves the new code + bundle on :80.
           ssh $KEY $HOST "cd /root/ocraft && node runtime/cli.js service restart api"
+          # Health check: fail the deploy if the API isn't actually serving — e.g. it
+          # refused to start because API_TOKEN is unset (fail-closed). curl localhost ON
+          # THE BOX so this still works once :80 is firewalled to Cloudflare only.
+          ssh $KEY $HOST "sleep 3 && curl -fsS -m 10 http://localhost/api/session > /dev/null" \
+            && echo "health check: API is serving" \
+            || { echo "HEALTH CHECK FAILED — API not serving (API_TOKEN unset, or crash on boot)"; exit 1; }
