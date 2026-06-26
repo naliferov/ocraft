@@ -1,0 +1,175 @@
+ocraft — PROD SECURITY HARDENING sprint (ship-to-prod-now)
+==========================================================
+(written 2026-06-26; grounded in runtime/apiServer.js @ 581 lines, file:line inline)
+
+SCOPE. This is the tactical security sprint that gates the FIRST real prod deploy
+of the now-authed API server (login/session-cookie + /api/session landed this
+week). It is the concrete companion to plans/production-readiness-plan.txt §4
+(which is strategic and predates auth — it still says "no auth"; treat THIS file as
+the current state for the security items). Numbering matches the security review
+done in-session.
+
+Tags: [FIX] land in this sprint · [ANALYZE→verdict] reviewed, verdict given.
+
+
+0. PREREQUISITE — TLS REVERSE PROXY (blocks #2 and #3)
+-----------------------------------------------------
+Today the CI deploy (.github/workflows/ci.yml) starts the app but sets up NO
+reverse proxy; if prod is reached as http://<ip>:3001 the session token travels in
+cleartext and there is no TLS. #2 (bind 127.0.0.1) makes the app unreachable
+without a proxy, and #3 (Secure cookie) requires HTTPS. So a TLS proxy is the
+foundation both depend on.
+  [ ] Stand up Caddy (simplest auto-TLS) on the droplet: reverse_proxy 127.0.0.1:3001,
+      automatic Let's Encrypt cert for the domain.
+  [ ] Open 80/443, firewall-drop 3001 from the public interface (defense in depth
+      with #2's localhost bind).
+  [ ] Point a real domain at 165.232.75.109 (auto-TLS needs a hostname).
+  NOTE: until a domain+proxy exist, keep BIND_HOST=0.0.0.0 (see #2) so prod stays
+  reachable — but that window is the cleartext-token risk, so keep it short.
+
+
+1. (AI bypassPermissions endpoints) — NOT in this sprint, but read this
+-----------------------------------------------------------------------
+#1 (RCE via the Claude Agent SDK endpoints, permissionMode 'bypassPermissions',
+cwd=repo root: POST /api/ai-chat and POST /api/runs kind:'ai') was deliberately
+left out of this sprint. The reasoning, recorded so it's a decision not a gap:
+  - #2 (bind 127.0.0.1) + the TLS proxy + the shared-token auth is the practical
+    containment: the only network path is the authenticated proxy, and ocraft is
+    single-user, so "the one authorized user can run code as themselves" is the
+    intended design, not an escalation.
+  - The PROPER gate (env opt-in OCRAFT_ENABLE_AGENT, off by default) already lives
+    in plans/production-readiness-plan.txt §4.1 — do it there.
+  - The one amplifier this sprint DOES touch: the service runs as ROOT (deploy is
+    root@165.232.75.109), so the agent runs as root. The non-root service user is
+    folded into #5 below.
+
+
+2. [FIX] BIND TO LOCALHOST  (apiServer.js:578)
+----------------------------------------------
+Today: `server.listen(PORT, () => …)` — no host arg → binds 0.0.0.0/:: → :3001 is
+public, bypassing TLS.
+  [ ] `const HOST = process.env.BIND_HOST || '127.0.0.1'`
+      `server.listen(PORT, HOST, () => …)`  — default localhost, overridable.
+  [ ] Depends on §0 proxy: with the proxy up, BIND_HOST stays unset (→127.0.0.1).
+      Before the proxy, set BIND_HOST=0.0.0.0 in .env explicitly (and accept the
+      cleartext window).
+  [ ] Log the bound host on boot so "why can't I reach it" is obvious.
+
+
+3. [FIX] SESSION COOKIE / TOKEN HARDENING  (apiServer.js:62, :72)
+----------------------------------------------------------------
+The cookie VALUE is the raw API_TOKEN (sessionCookie, :72), Max-Age 1yr, no
+server-side session/rotation/revocation. HttpOnly+SameSite=Strict are already set;
+Secure is conditional on COOKIE_SECURE.
+  [ ] MUST: set COOKIE_SECURE=true in prod. The CI .env write (ci.yml) currently
+      writes ONLY TELEGRAM_BOT_TOKEN + API_TOKEN — it does NOT set COOKIE_SECURE, so
+      prod cookies are sent without Secure today. Add COOKIE_SECURE=true to the .env
+      written by the deploy (overlaps #5). Requires §0 (HTTPS) to be live first.
+  [ ] SHOULD: stop putting the master token in the cookie. Mint a random session id
+      on login (crypto.randomBytes), store it server-side (a small Set / file under
+      state/), set THAT as the cookie; validate the cookie against it and keep the
+      bearer path for the raw token. Then logout actually revokes, and a captured
+      cookie isn't the master secret. (Small, single-user-friendly; do if time.)
+  [ ] OPTIONAL: drop Max-Age from 1yr to e.g. 30d.
+
+
+4. [FIX] LOGIN RATE LIMITING  (apiServer.js:525 handleLogin)
+------------------------------------------------------------
+No throttle on POST /api/login → brute-forceable (mitigated only by token entropy).
+  [ ] App-level: in-memory failed-attempt counter with a sliding window; after N
+      (e.g. 5) failures in 60s return 429 with Retry-After. Single-user, so legit
+      logins are rare — a tight global cap is fine and needs no IP plumbing.
+  [ ] If behind the proxy, optionally also enforce at Caddy (rate_limit) / fail2ban
+      as a second layer — but ship the app-level cap regardless (don't depend on
+      proxy config being present).
+  [ ] Ensure the API_TOKEN itself is a long random secret (audit the value in the
+      GH secret) — rate limiting is the backstop, entropy is the real defense.
+
+
+5. [FIX] CI DEPLOY HARDENING  (.github/workflows/ci.yml)
+--------------------------------------------------------
+  [ ] HOST KEY PINNING: replace `-o StrictHostKeyChecking=no` (MITM-able — it carries
+      the SSH key + API_TOKEN) with a pinned known_hosts: store the droplet host key
+      as a GH secret (KNOWN_HOSTS), write it to a file, use
+      `-o UserKnownHostsFile=<file> -o StrictHostKeyChecking=yes`.
+  [ ] SSH KEY VIA ENV: move DEPLOY_SSH_KEY out of direct `${{ }}` interpolation in
+      the run-script (injection surface) into `env:` like API_TOKEN already is, then
+      `echo "$DEPLOY_SSH_KEY" > /tmp/deploy_key`.
+  [ ] SAFE .env WRITE: API_TOKEN is currently baked into the remote command string
+      (a token with shell metacharacters breaks the .env write / is an injection
+      point). Base64-encode the whole .env locally and `base64 -d` it on the remote,
+      OR scp a generated .env file — no shell expansion of secret values. Include
+      COOKIE_SECURE=true (from #3) in that .env.
+  [ ] NON-ROOT SERVICE USER (the #1 amplifier): create an unprivileged `ocraft` user,
+      own the repo to it, run the service as it (and deploy as it). Larger sub-item —
+      may split to its own PR, but it's what bounds the agent-endpoint blast radius.
+
+
+6. [ANALYZE→FIX] UNHANDLED EXCEPTIONS HANG REQUESTS  (promote into sprint)
+-------------------------------------------------------------------------
+The server callback (apiServer.js:522) has no try/catch around `await serveStatic`
+(:545) or `await route.handler` (:571). A throw → unhandled rejection → response
+never written → socket hangs (no default response timeout). Throw sources:
+  - decodeURIComponent on malformed `%` in serveStatic (:224) — serveStatic is on
+    the UNAUTHENTICATED GET path, so `GET /%ZZ` hangs a connection with NO token.
+    Pre-auth DoS.
+  - JSON.parse in readBody for POST /api/nodes/:id (:368), POST /api/nodes (:378),
+    and ai-chat (readBody outside its try). Authed DoS.
+  VERDICT: FOLD INTO SPRINT (pre-auth, cheap).
+  [ ] Wrap the dispatch body in try/catch → 500 (and log, see #9).
+  [ ] Guard readBody's JSON.parse → respond 400 on bad JSON instead of throwing.
+
+
+7. [ANALYZE→FIX] NO BODY-SIZE LIMIT  (promote into sprint)
+----------------------------------------------------------
+readBody/readText (:268, :276) buffer the entire request into memory uncapped, and
+readBody is reached PRE-AUTH via POST /api/login (:89) → unauthenticated memory
+exhaustion. /api/nodes/:id/body also writes unbounded content to disk.
+  VERDICT: FOLD INTO SPRINT (pre-auth, cheap).
+  [ ] Reject when Content-Length exceeds a cap (e.g. 5MB) with 413; abort the stream
+      if the streamed total exceeds it (don't trust the header alone).
+
+
+8. [ANALYZE→DEFER] STORED XSS VIA HTML BODIES
+---------------------------------------------
+GET /api/nodes/:id/body serves html-node content as text/html. Single-user PATH A:
+the only writer is the user, so not an escalation TODAY. Becomes real if (a)
+multi-user, or (b) external/AI-written content lands in an html node — then
+same-origin script can drive the authed API incl. the agent endpoints.
+  VERDICT: DEFER. Accepted risk for single-user.
+  [ ] Free hedge now: add `X-Content-Type-Options: nosniff` on body responses.
+  [ ] Real fix (sandboxed render / serve as attachment) is coupled to the
+      multi-user/sandbox work — production-readiness-plan.txt §4.4. Revisit BEFORE
+      multi-user or before ingesting external content into html nodes.
+
+
+9. [ANALYZE→DEFER/opportunistic] ERROR-MESSAGE DISCLOSURE
+---------------------------------------------------------
+Raw error.message returned at :407 (DELETE), :427 (runs POST), :492 (resume) — leaks
+fs paths. All authed, single-user → low severity.
+  VERDICT: bundle with #6 (you're touching error paths anyway).
+  [ ] Log the full error server-side; return a generic { error: 'internal error' }.
+
+
+10. ALSO — DEPLOY DOESN'T RESTART THE SERVICE  (correctness, must-fix)
+---------------------------------------------------------------------
+ci.yml's remote script ends with `node runtime/cli.js run deploy`, and the deploy
+task (runtime/tasks/deploy.js) only does `git pull` — nothing restarts the `api`
+service, so prod keeps running the OLD code after every deploy (exactly the stale-
+server 404 we hit locally). The frontend rebuild lands but the Node API doesn't.
+  [ ] Add `node runtime/cli.js service restart api` to the remote script AFTER the
+      build step (and `service restart scheduler` if the scheduler runs on the box).
+  [ ] Decide ownership: either the SSH script restarts (simplest, do this), or fold
+      the restart into the deploy task itself — not both. The redundant double
+      `git pull` (task + script) can also be collapsed.
+
+
+SEQUENCE
+--------
+  P0 (do first): §0 proxy + domain → then §2 bind + §3 COOKIE_SECURE (they depend on it).
+  P0 same PR-ish: §6 + §7 (pre-auth DoS, cheap) + §10 (deploy restart — independent, do anytime).
+  P1: §4 rate limit, §5 CI hardening (host-key pin + env key + safe .env), §9 generic errors.
+  P2: §5 non-root user, §3 server-side session id, §8 revisit (only if multi-user/external content).
+
+RELATED: plans/production-readiness-plan.txt (strategic §4 — agent-endpoint gate §4.1,
+sandbox §4.4), plans/deploy-target-plan.txt (the droplet/DEPLOY_HOST story).

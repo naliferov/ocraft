@@ -31,9 +31,10 @@ jobs:
           chmod 600 /tmp/deploy_key
           ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no root@165.232.75.109 \
             "cd /root/ocraft && \
-             printf 'TELEGRAM_BOT_TOKEN=%s\nAPI_TOKEN=%s\n' '$TELEGRAM_BOT_TOKEN' '$API_TOKEN' > .env && \
+             printf 'TELEGRAM_BOT_TOKEN=%s\nAPI_TOKEN=%s\nNODE_ENV=production\n' '$TELEGRAM_BOT_TOKEN' '$API_TOKEN' > .env && \
              git pull && \
              npm install && \
              npm --prefix frontend install && \
              npm --prefix frontend run build && \
-             node runtime/cli.js run deploy"
+             node runtime/cli.js run deploy && \
+             node runtime/cli.js service restart api"

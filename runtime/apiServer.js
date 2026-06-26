@@ -6,7 +6,7 @@ import zlib from 'node:zlib'
 import crypto from 'node:crypto'
 import { getDirname } from './lib/path.js'
 import * as runManager from './runManager.js'
-import * as aiRunner from './runners/ai.js'
+// import * as aiRunner from './runners/ai.js' // DISABLED for prod — see registration below
 import * as taskSource from './runners/task.js'
 import * as serviceSource from './runners/service.js'
 
@@ -14,7 +14,13 @@ import * as serviceSource from './runners/service.js'
 // owned/ephemeral runner (started + streamed + cancelled here); 'task' and 'service'
 // are read-only SOURCES surfacing taskExecutor executions and serviceManager daemons
 // in the one unified GET /api/runs view (they're started via the CLI / scheduler).
-runManager.registerRunner('ai', aiRunner)
+//
+// ⚠️ SECURITY: the 'ai' runner executes the Claude Agent SDK with bypassPermissions
+// (arbitrary file edits + shell), cwd = repo root. DISABLED for the prod deploy — any
+// authed caller could otherwise run code on the box. Re-enable behind an explicit
+// off-by-default env gate (OCRAFT_ENABLE_AGENT) when sandboxed. With it unregistered,
+// POST /api/runs {kind:'ai'} returns "unknown kind", which is the intended refusal.
+// runManager.registerRunner('ai', aiRunner)
 runManager.registerRunner('task', taskSource)
 runManager.registerRunner('service', serviceSource)
 
@@ -31,7 +37,12 @@ const DIST_DIR = path.join(currentDir, '..', 'frontend/dist') // built Vue SPA �
 // doesn't silently break.
 const API_TOKEN = process.env.API_TOKEN || ''
 const SESSION_COOKIE = 'ocraft_session'
-const COOKIE_SECURE = process.env.COOKIE_SECURE === 'true' // set in prod (HTTPS); off for http://localhost dev
+// Prod runs HTTPS-only behind a TLS proxy. In prod the session cookie gets `Secure` (never
+// sent over http) and every response carries HSTS (so the browser refuses http:// to this
+// origin going forward). Auto-on when NODE_ENV=production; COOKIE_SECURE=true forces it too.
+// Off for local http://localhost dev so the cookie still rides over plain http.
+const IS_PROD = process.env.NODE_ENV === 'production'
+const COOKIE_SECURE = IS_PROD || process.env.COOKIE_SECURE === 'true'
 if (!API_TOKEN) {
   console.warn(
     '⚠️  API_TOKEN is not set — the API server is UNAUTHENTICATED. Add API_TOKEN to .env to lock it.',
@@ -83,19 +94,51 @@ const clearedCookie = () => `${SESSION_COOKIE}=; HttpOnly; SameSite=Strict; Path
 
 // POST /api/login { token } → validate and set the session cookie. POST /api/logout →
 // clear it. Both are reachable WITHOUT an existing session (that's how you get one).
+// Brute-force throttle for /api/login: after LOGIN_MAX_FAILS bad attempts from one IP
+// within LOGIN_WINDOW_MS, refuse with 429 until the window clears. A success clears the
+// IP. Client IP comes from the proxy's X-Forwarded-For first hop (we own the proxy, and
+// the app is localhost-bound so the header can't be forged from outside), else the socket.
+const LOGIN_MAX_FAILS = 5
+const LOGIN_WINDOW_MS = 60_000
+const loginFailsByIp = new Map() // ip -> [recent failure timestamps]
+
+const clientIp = (req) => {
+  const forwarded = req.headers['x-forwarded-for']
+  return forwarded ? forwarded.split(',')[0].trim() : req.socket.remoteAddress || 'unknown'
+}
+
+const recentFails = (ip) => {
+  const cutoff = Date.now() - LOGIN_WINDOW_MS
+  const fresh = (loginFailsByIp.get(ip) || []).filter((at) => at > cutoff)
+  loginFailsByIp.set(ip, fresh)
+  return fresh
+}
+
 const handleLogin = async (req, res) => {
+  const ip = clientIp(req)
+  if (recentFails(ip).length >= LOGIN_MAX_FAILS) {
+    res
+      .writeHead(429, { 'Content-Type': 'application/json', 'Retry-After': '60' })
+      .end(JSON.stringify({ error: 'too many attempts' }))
+    return
+  }
   let token = ''
   try {
     ;({ token } = await readBody(req))
-  } catch {
+  } catch (err) {
+    if (err.statusCode) {
+      throw err // payload too large → let the dispatch return 413, don't mask it as 401
+    }
     // missing/invalid body → token stays '' → fails the check below (unless open)
   }
   if (API_TOKEN && !tokenMatches(token)) {
+    loginFailsByIp.get(ip).push(Date.now()) // recentFails() seeded the array above
     res
       .writeHead(401, { 'Content-Type': 'application/json' })
       .end(JSON.stringify({ error: 'invalid token' }))
     return
   }
+  loginFailsByIp.delete(ip) // success clears the throttle for this IP
   res
     .writeHead(200, { 'Content-Type': 'application/json', 'Set-Cookie': sessionCookie(token) })
     .end(JSON.stringify({ ok: true }))
@@ -265,21 +308,37 @@ const sendText = (req, res, body, contentType) => {
   }
 }
 
-const readBody = async (req) => {
-  const chunks = []
-  for await (const chunk of req) {
-    chunks.push(chunk)
-  }
-  return JSON.parse(Buffer.concat(chunks).toString('utf-8'))
+// Cap request bodies so a client can't exhaust memory by streaming an unbounded payload
+// (readBody is reachable pre-auth via POST /api/login). Reject early on the declared
+// Content-Length, and abort mid-stream if the actual bytes exceed the cap. The thrown
+// error carries statusCode 413, which the top-level dispatch turns into a 413 response.
+const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES) || 5 * 1024 * 1024 // 5 MB
+
+const tooLarge = () => {
+  const err = new Error('payload too large')
+  err.statusCode = 413
+  return err
 }
 
-const readText = async (req) => {
+const readRaw = async (req) => {
+  if (Number(req.headers['content-length']) > MAX_BODY_BYTES) {
+    throw tooLarge()
+  }
   const chunks = []
+  let size = 0
   for await (const chunk of req) {
+    size += chunk.length
+    if (size > MAX_BODY_BYTES) {
+      req.destroy()
+      throw tooLarge()
+    }
     chunks.push(chunk)
   }
   return Buffer.concat(chunks).toString('utf-8')
 }
+
+const readBody = async (req) => JSON.parse(await readRaw(req))
+const readText = (req) => readRaw(req)
 
 // A node's body lives in a sidecar file (kept out of state.json so the node list
 // stays tiny). Which file + content-type is decided by node type — both are served
@@ -455,14 +514,29 @@ const routes = {
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
     })
-    const send = (event) => res.write(`data: ${JSON.stringify(event)}\n\n`)
+    // A client can vanish (ECONNRESET) between heartbeats. Writing to the dropped socket
+    // emits an 'error' on res that, with no listener, would crash the process — and a
+    // late write can fire before the 'close' cleanup below runs. Swallow the error event
+    // and guard every write so a gone client just stops receiving, it never takes us down.
+    res.on('error', () => {})
+    const safeWrite = (chunk) => {
+      if (res.writableEnded || res.destroyed) {
+        return
+      }
+      try {
+        res.write(chunk)
+      } catch {
+        // socket closed under us — the 'close' handler tears down the subscription
+      }
+    }
+    const send = (event) => safeWrite(`data: ${JSON.stringify(event)}\n\n`)
     const unsubscribe = runManager.subscribe(id, send)
     if (!unsubscribe) {
       send({ type: 'error', error: 'not found' })
       res.end()
       return
     }
-    const heartbeat = setInterval(() => res.write(': ping\n\n'), 15000)
+    const heartbeat = setInterval(() => safeWrite(': ping\n\n'), 15000)
     req.on('close', () => {
       clearInterval(heartbeat)
       unsubscribe()
@@ -519,7 +593,53 @@ const matchUrl = (method, url) => {
 
 const ASSETS_PREFIX = '/api/assets/'
 
+// A dropped/reset connection (the client closed mid-request or mid-response) shows up as
+// one of these codes. They carry no server state — the only correct response is to stop
+// touching that socket, never to crash. Used by the request catch and the process guards.
+const isTransientNetworkError = (err) =>
+  !!err &&
+  ['ECONNRESET', 'EPIPE', 'ECONNABORTED', 'ECANCELED', 'ERR_STREAM_DESTROYED', 'ERR_STREAM_WRITE_AFTER_END'].includes(
+    err.code,
+  )
+
 const server = http.createServer(async (req, res) => {
+  // If the client drops the connection, 'error' fires on the request/response stream;
+  // with no listener Node throws it as an uncaught exception and the process dies. A
+  // vanished client needs no response — swallow it here for every route.
+  req.on('error', () => {})
+  res.on('error', () => {})
+  // Prod is HTTPS-only: tell the browser to refuse http:// to this origin for a year.
+  // setHeader (not writeHead) so it merges into every route's response. TLS itself is
+  // terminated by the front proxy; the app is bound to localhost (see server.listen).
+  if (IS_PROD) {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+  }
+  try {
+    await handleRequest(req, res)
+  } catch (err) {
+    // A handler threw: bad JSON body, a malformed %-escape, an fs error, a write to a
+    // socket the client already closed, … Convert it to a response instead of letting it
+    // bubble out as an unhandled rejection (which would take the whole server down).
+    if (isTransientNetworkError(err)) {
+      return // client went away mid-flight — nothing to send, nothing worth logging loudly
+    }
+    // Client-fault errors get their own status (413 over-size, 400 malformed JSON); only a
+    // genuine server fault is a 500 and worth logging loudly.
+    const status = err.statusCode || (err instanceof SyntaxError ? 400 : 500)
+    if (status >= 500) {
+      console.error(`[api] ${req.method} ${req.url} failed:`, err)
+    }
+    if (!res.headersSent) {
+      res
+        .writeHead(status, { 'Content-Type': 'application/json' })
+        .end(JSON.stringify({ error: status === 500 ? 'internal error' : err.message }))
+    } else {
+      res.destroy()
+    }
+  }
+})
+
+const handleRequest = async (req, res) => {
   const path = req.url.split('?')[0]
   // Login/logout manage the session cookie — reachable WITHOUT an existing session.
   if (req.method === 'POST' && path === '/api/login') {
@@ -572,9 +692,51 @@ const server = http.createServer(async (req, res) => {
     return
   }
   res.writeHead(404).end('Not found')
+}
+
+// A connection that errors before/while we parse the request (abrupt reset, garbage
+// bytes) surfaces here, not in the request handler. Reply 400 if the socket can still
+// take it, else just drop it — never let it bubble into an uncaught exception.
+server.on('clientError', (err, socket) => {
+  if (socket.writable && !socket.destroyed) {
+    socket.end('HTTP/1.1 400 Bad Request\r\n\r\n')
+  } else {
+    socket.destroy()
+  }
 })
 
+// Listen-level faults (e.g. EADDRINUSE) — log instead of an opaque crash.
+server.on('error', (err) => {
+  console.error('[api] server error:', err)
+})
+
+// Last-resort process guards so a dropped connection can NEVER bring the server down.
+// Transient socket errors (ECONNRESET/EPIPE/…) carry no state — log quietly and keep
+// serving. A genuinely unexpected error is logged loudly; we keep running because nothing
+// supervises this process yet (serviceManager spawns it detached + unref'd and does not
+// act on autoRestart). Once a supervisor is in place (systemd Restart=on-failure, or
+// honoured autoRestart — see plans/prod-security-hardening-plan.txt §10 / production-
+// readiness-plan.txt §3.4), switch the non-transient branch to process.exit(1) so a real
+// crash restarts with clean state instead of limping on.
+process.on('uncaughtException', (err) => {
+  if (isTransientNetworkError(err)) {
+    console.warn(`[api] ignored transient socket error: ${err.code}`)
+    return
+  }
+  console.error('[api] uncaught exception (kept process alive):', err)
+})
+process.on('unhandledRejection', (reason) => {
+  if (isTransientNetworkError(reason)) {
+    console.warn(`[api] ignored transient socket rejection: ${reason.code}`)
+    return
+  }
+  console.error('[api] unhandled rejection (kept process alive):', reason)
+})
+
+// Bind to localhost by default so the API is reachable ONLY through the front TLS proxy,
+// never directly on a public interface. Override with BIND_HOST=0.0.0.0 for LAN/dev use.
 const PORT = process.env.PORT || 3001
-server.listen(PORT, () => {
-  console.log(`API server running on port ${PORT}`)
+const BIND_HOST = process.env.BIND_HOST || '127.0.0.1'
+server.listen(PORT, BIND_HOST, () => {
+  console.log(`API server running on http://${BIND_HOST}:${PORT}`)
 })

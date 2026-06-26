@@ -1,0 +1,160 @@
+MULTI-USER PIVOT — Postgres + Google OAuth + per-user isolation
+================================================================
+
+Goal: turn ocraft from a single-user local file-store into a multi-user hosted product:
+sign in with Google, each user gets their own isolated node tree (Postgres), deployed on
+a droplet. This is a deliberate pivot from "personal local-first" to "hosted SaaS" — see
+README monetization caveats — but we're committing.
+
+THE LOAD-BEARING CONSTRAINT — execution isolation (resolved, see Phase 4)
+------------------------------------------------------------------------
+ocraft's power is single-user-trusted today. Multi-user is NOT gated by the DB; it's gated
+by who can run code on the server. Resolution (the user's two points, made precise):
+
+  1. Arbitrary script JS — SAFE per-user, no work needed. `script` nodes run in the user's
+     BROWSER, not on the server. A user's script can only fetch /api as themselves (auth
+     scopes every request to their user_id), so it can touch only their own nodes and only
+     harm their own session. Browser = their own sandbox. (External CDN imports = their risk.)
+
+  2. The AI runner — the ONE server-side execution path, and the real risk. Today it runs
+     Claude with bypassPermissions + Bash/Read/Write/Edit, cwd = repo root → it could read
+     every user's files + the host. Fix = TWO changes (Phase 4):
+       a. per-user Anthropic key/login (their credits, not the server's — solves cost + ownership)
+       b. CONSTRAIN the tool surface: no Bash, no host filesystem. The AI gets only
+          node operations SCOPED to that user (read/write their own nodes via the store).
+          So "minimal-txt edits content.html on disk" becomes "rewrite the user's node body
+          via the store." No host escape, no cross-user reach.
+     => per-user AI without a container-per-user. (Full sandboxing stays a later hardening.)
+
+ARCHITECTURE PRINCIPLE
+----------------------
+Storage is already behind /api (the frontend never sees files), so file->DB is a BACKEND
+swap. Introduce a node-store INTERFACE; the API depends on the interface, not on fs or pg.
+
+OWNERSHIP MODEL — every node belongs to EXACTLY ONE user
+-------------------------------------------------------
+- nodes.user_id is NOT NULL (FK -> users). No shared, global, or unowned nodes. A node's
+  BODY (script.js / content.html, in node_bodies) and all its metadata inherit that owner
+  via the node. A user only ever sees/edits their own subtree; x.x(id) and every /api call
+  resolve WITHIN the caller's user_id — a request can never reach another user's node.
+- On migration (Phase 6) YOUR current nodes — ALL of them, scripts and notes alike — are
+  attached to YOUR user (the first/owner user, created during import). Nothing is lost: the
+  existing tree simply becomes "your" tree under the new model. New users start with an empty tree.
+
+----------------------------------------------------------------------------------------
+PHASE 1 — Storage abstraction (no behavior change; single-user still works)
+----------------------------------------------------------------------------------------
+- New module runtime/nodeStore.js — the interface every node op goes through:
+    listNodes(userId)            -> [{id, ...meta}]
+    getNode(userId, id)          -> {id, ...meta} | null
+    saveNode(userId, id, data)   -> upsert
+    deleteNode(userId, id)       -> {ok} | {error:'has-children', children}
+    childrenOf(userId, parentId) -> [id]
+    getBody(userId, id) / saveBody(userId, id, body)
+    mintId(userId)               -> next id
+- Implement fileNodeStore.js = today's behavior (userId is the single owner; ignored).
+- Rewrite apiServer.js node handlers (GET/POST/DELETE /api/nodes, /body) to call nodeStore
+  instead of fs directly. Numeric-id + traversal guards stay.
+- SHIP THIS ALONE first. Pure refactor, fully backward compatible. Verify: app unchanged.
+
+----------------------------------------------------------------------------------------
+PHASE 2 — Postgres + schema + the pg store
+----------------------------------------------------------------------------------------
+- dep: `pg`. Config: DATABASE_URL in .env. Connection pool in runtime/db.js.
+- Migrations (runtime/migrations/, run by a `cli.js migrate`):
+    users        (id uuid pk default gen_random_uuid(),
+                  google_sub text unique, email text, name text, created_at timestamptz)
+    nodes        (id bigserial pk, user_id uuid NOT NULL references users,   -- owner; every node has one
+                  parent_id bigint references nodes null,   -- adjacency-list tree
+                  type text, name text,
+                  data jsonb,                                -- the rest of state.json (open-ended:
+                                                             --   collapsed, runOnOpen, scriptType, …)
+                  created_at, updated_at)
+    node_bodies  (node_id bigint pk references nodes, body text, updated_at)
+    sessions     (id text pk, user_id uuid references users, created_at, expires_at)
+  Indexes: nodes(user_id), nodes(user_id, parent_id).
+  Rationale: type/name/parent_id promoted to columns for the tree + queries; everything else
+  in `data` jsonb (node state.json is open-ended). Bodies in a SEPARATE table so the
+  list query stays light — mirrors today's "body is a sidecar, fetched on open".
+- Implement pgNodeStore.js over the interface. EVERY query carries `WHERE user_id = $1`.
+  Tree is still parent_id (load the user's nodes, build the tree client-side as now — no
+  recursive SQL needed at this scale).
+- Switch by config: NODE_STORE=file|pg.
+
+----------------------------------------------------------------------------------------
+PHASE 3 — Google OAuth + sessions + per-user identity
+----------------------------------------------------------------------------------------
+- OAuth flow (no heavy framework needed):
+    GET  /api/auth/google           -> 302 to Google consent (client_id, redirect_uri, scope=openid email profile, state)
+    GET  /api/auth/google/callback  -> exchange code -> verify id_token -> upsert users by google_sub
+                                       -> create sessions row -> Set-Cookie ocraft_session=<session id> (HttpOnly,
+                                          SameSite=Lax for the OAuth redirect, Secure in prod) -> 302 to /
+    POST /api/logout                -> delete session + clear cookie
+- isAuthorized(req): resolve session cookie -> sessions -> user. Attach req.userId. ALL node
+  handlers pass req.userId into nodeStore. No session -> 401 (or redirect to /login).
+  (Reuse the cookie machinery already built; the value becomes a random session id, not the token.)
+- Frontend: Login.vue -> a single "Sign in with Google" button (drops the token input). The
+  GET /api/session check stays (drives the router gate). Everything else (terminal, tree) unchanged.
+- Keep a dev fallback: if DATABASE_URL unset OR DEV_USER set, use a single local "owner" user
+  + the file store + the API_TOKEN path — so local dev never needs Google/Postgres.
+
+----------------------------------------------------------------------------------------
+PHASE 4 — Per-user AI (the execution model — the crux)
+----------------------------------------------------------------------------------------
+- Per-user Anthropic credential: a user_settings row (anthropic_api_key, encrypted at rest
+  with a server KEY_SECRET). A terminal command / settings UI to set it. Each user's AI runs
+  use THEIR key. (Optional later: Anthropic OAuth instead of a pasted key.)
+- Constrain the runner (runners/ai.js): for a multi-user run, DROP bypassPermissions + Bash +
+  cwd=repo. Replace with a NODE-SCOPED tool surface — an in-process MCP (or the SDK's tool
+  hooks) exposing ONLY: list_nodes / read_node / write_node / create_node (all scoped to the
+  run's userId via nodeStore). The agent can reshape the user's tree and nothing else: no
+  host fs, no shell, no other users.
+- minimal-txt / the `ai` command then operate on node bodies through these tools, not files.
+- Cost guard: per-user rate limit on /api/runs (even on their key).
+- (Local single-user dev MAY keep the powerful repo-scoped runner behind DEV_USER; prod uses
+  the constrained one.)
+
+----------------------------------------------------------------------------------------
+PHASE 5 — Deployment (droplet)
+----------------------------------------------------------------------------------------
+- Droplet (2GB): runs the api server (serves built SPA + gated /api on one origin — static
+  serving already built) + Postgres (or a managed PG later). `npm run build` -> dist served
+  by the api.
+- HTTPS: Caddy (auto Let's Encrypt) in front -> set COOKIE_SECURE=true (Secure cookies),
+  SameSite stays Strict for /api (Lax only on the OAuth callback).
+- Secrets (.env on the box, never committed): DATABASE_URL, GOOGLE_CLIENT_ID/SECRET,
+  SESSION_SECRET, KEY_SECRET. Google OAuth redirect URI = https://<domain>/api/auth/google/callback.
+- Process: the `api` service under the existing service manager; add a `migrate` step on deploy.
+  (Reserved IP for a stable DEPLOY_HOST — see the deploy-target roadmap item.)
+
+----------------------------------------------------------------------------------------
+PHASE 6 — Migrate the existing file store
+----------------------------------------------------------------------------------------
+- Create the OWNER user (you) first. Then one-off `cli.js import-nodes`: read EVERY node in
+  data/nodes/* — metadata AND bodies (scripts + html alike) — and insert it attached to your
+  user_id (nodes.user_id = owner; bodies -> node_bodies). After this, ALL your current nodes
+  are yours under the new model; nothing is shared or orphaned. Verify counts + a spot-check,
+  then flip NODE_STORE=pg.
+
+SEQUENCING / WHAT TO BUILD FIRST
+-------------------------------
+1 (storage interface) -> 2 (pg store, still single owner) -> 6 (migrate, prove pg works) ->
+3 (Google OAuth, real multi-user) -> 4 (per-user AI) -> 5 (deploy). Each phase ships green.
+Phase 1 is safe to do immediately; nothing else changes until Phase 3 flips on real users.
+
+OPEN DECISIONS / RISKS
+----------------------
+- Sharing (a node/subtree visible or editable by ANOTHER user) — OUT OF SCOPE for v1, a
+  deliberate FUTURE add. The model stays strict single-owner (the clean invariant above).
+  Later, additively: a node_shares table (node_id, grantee_user_id, perms read|write) +
+  widening reads from `WHERE user_id = me` to `owned OR shared-with-me`; the owner column
+  stays the source of truth, so nothing about v1 has to change. Building it now would
+  complicate every query + the AI tool scope for zero current need.
+- SQLite as a cheaper Phase-2 (single file, no PG ops) before Postgres? Recommended stepping
+  stone; same interface, swap later. (User chose PG — fine; this is the only "are you sure".)
+- Node versioning: the DB loses git-free history -> add a node_versions table if wanted.
+- gdrive fs-mount (parked roadmap item): per-user Drive in a hosted world needs per-user Drive
+  OAuth scope + storage — defer; it fights the multi-user model. Keep mounts a local-only feature.
+- Abuse/cost: AI rate limits, body size caps, max nodes per user.
+- Full container-per-user sandboxing: only needed if we ever let the AI run real code/Bash for
+  users; the node-scoped tool surface (Phase 4) avoids it for now.

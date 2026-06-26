@@ -1,4 +1,5 @@
 {
   "name": "words",
-  "type": "html"
+  "type": "category",
+  "collapsed": true
 }
