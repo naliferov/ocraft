@@ -69,66 +69,6 @@ export function clearCache() {
   moduleCache.clear()
 }
 
-// Host functions an AssemblyScript module can import to talk to the page — this
-// is how you DEBUG INSIDE a wasm node. With these wired, your AS source can use:
-//   console.log("…")                     -> browser console (prefixed with the node)
-//   trace("label", argCount, a, b, …)    -> AS's built-in debug print (numbers)
-//   assert(cond, "msg")                  -> on failure, logs msg + source location
-// AS passes strings as pointers into linear memory, so we lift them back to text
-// once the instance's memory is known. The memory is set right after instantiate;
-// these imports aren't *called* until the module runs an export, by which point
-// `memory` is in place. `seed` backs Math.random and is harmless when unused.
-function createWasmDebugImports(id) {
-  const label = nodeLabel(id)
-  let memory = null
-  const decoder = new TextDecoder('utf-16le')
-  const liftString = (pointer) => {
-    if (!pointer || !memory) {
-      return String(pointer)
-    }
-    // AS string layout: UTF-16LE data at `pointer`, byte length in the object
-    // header one word before it.
-    const byteLength = new Uint32Array(memory.buffer)[(pointer - 4) >>> 2]
-    return decoder.decode(new Uint8Array(memory.buffer, pointer, byteLength))
-  }
-  const imports = {
-    env: {
-      abort: (messagePtr, fileNamePtr, line, column) =>
-        console.error(
-          `[${label}] wasm abort: ${liftString(messagePtr)} (${liftString(fileNamePtr)}:${line}:${column})`,
-        ),
-      trace: (messagePtr, argCount, arg0, arg1, arg2, arg3, arg4) =>
-        console.log(
-          `[${label}] wasm trace:`,
-          liftString(messagePtr),
-          ...[arg0, arg1, arg2, arg3, arg4].slice(0, argCount),
-        ),
-      'console.log': (messagePtr) => console.log(`[${label}] wasm:`, liftString(messagePtr)),
-      seed: () => Date.now(),
-    },
-  }
-  return {
-    imports,
-    useMemory: (wasmMemory) => {
-      memory = wasmMemory
-    },
-  }
-}
-
-// Compile (server-side) + instantiate a wasm node, returning its exports. Fetched
-// and instantiated fresh on every call, with the debug imports above so the module
-// can console.log / trace / assert.
-async function loadWasmExports(id) {
-  const res = await fetch(`/api/nodes/${id}/wasm`)
-  if (!res.ok) {
-    throw new Error(`wasm compile failed:\n${await res.text()}`)
-  }
-  const { imports, useMemory } = createWasmDebugImports(id)
-  const { instance } = await WebAssembly.instantiate(await res.arrayBuffer(), imports)
-  useMemory(instance.exports.memory)
-  return instance.exports
-}
-
 async function loadModule(id) {
   if (!moduleCache.has(id)) {
     moduleCache.set(
@@ -157,37 +97,6 @@ const nodeLabel = (id) => {
   return node?.name ? `${node.name} (${id})` : `node ${id}`
 }
 
-// Auth tokens shared across scripts (x.auth). A token entered once via the "auth"
-// node persists in localStorage and any script can read it by name — e.g. the
-// websocket tester grabbing a bearer for the cloud exchange. Named slots keep
-// multiple tokens apart ('default' when unnamed). Browser-only and guarded, so a
-// future headless runner (no localStorage) just sees empty tokens instead of
-// throwing.
-const AUTH_PREFIX = 'ocraft.auth.'
-const authStore = {
-  get: (name = 'default') => {
-    try {
-      return globalThis.localStorage?.getItem(AUTH_PREFIX + name) ?? ''
-    } catch {
-      return ''
-    }
-  },
-  set: (name = 'default', token = '') => {
-    try {
-      globalThis.localStorage?.setItem(AUTH_PREFIX + name, token)
-    } catch {
-      /* no storage */
-    }
-  },
-  clear: (name = 'default') => {
-    try {
-      globalThis.localStorage?.removeItem(AUTH_PREFIX + name)
-    } catch {
-      /* no storage */
-    }
-  },
-}
-
 // Build the `x` context passed to a running script. `stack` carries the chain
 // of node ids currently executing, so a re-entry is caught as a cycle instead of
 // recursing forever. `ui` is the browser UI surface (see useScriptUi.js); it's
@@ -196,25 +105,14 @@ function makeCtx(selfId, args, stack, ui) {
   return {
     args,
     log: (...messages) => console.log(`[${nodeLabel(selfId)}]`, ...messages),
-    auth: authStore,
     vue: vueApi,
     ...(ui ? { ui } : {}),
     // x.x(id, ...args) — run another node's script by its bare id.
-    // x.x(id, args?) — args is an ARRAY of arguments (it becomes the callee's
-    // x.args, or is spread into a wasm main()).
+    // x.x(id, args?) — args is an ARRAY of arguments (becomes the callee's x.args).
     x: async (targetId, args = []) => {
       const id = String(targetId)
       if (stack.includes(id)) {
         throw new Error(`call cycle: ${[...stack, id].join(' → ')}`)
-      }
-      // wasm: `main` is the "default" — if present, x.x runs it (args spread in)
-      // and returns its result, just like a JS node's default export. With no
-      // main, hand back the exports so the caller picks a named function:
-      // `const w = await x.x("10"); w.add(2, 3)`.
-      const target = useNodesStore().nodes.find((candidate) => candidate.id === id)
-      if (target?.scriptType === 'assembly-script') {
-        const ex = await loadWasmExports(id)
-        return typeof ex.main === 'function' ? ex.main(...args) : ex
       }
       const mod = await loadModule(id)
       if (typeof mod.default !== 'function') {
@@ -249,24 +147,4 @@ export async function runNodeCode(code, selfId, ui) {
 export async function runSfcCode(source, selfId) {
   const id = String(selfId)
   return compileSfc(source, makeCtx(id, [], [id]))
-}
-
-// Run an assembly-script node: the backend compiles its (saved) AssemblyScript source to
-// wasm at GET /api/nodes/:id/wasm; we instantiate it. `main()` is just our Run
-// convention (the wasm analog of a JS node's `export default`) — it is NOT
-// required by AssemblyScript. If present, Run calls it; otherwise we report the
-// module's exports (still callable) rather than erroring. Compile errors arrive
-// as a 400 with asc's diagnostics.
-export async function runWasmNode(id) {
-  const ex = await loadWasmExports(id)
-  if (typeof ex.main === 'function') {
-    const result = ex.main()
-    console.log(`[${nodeLabel(id)}] wasm main() =`, result)
-    return result
-  }
-  const fns = Object.keys(ex).filter((key) => typeof ex[key] === 'function')
-  console.log(
-    `[${nodeLabel(id)}] wasm ready — exports: ${fns.join(', ') || '(none)'}. Add a main() for Run to call one.`,
-  )
-  return ex
 }

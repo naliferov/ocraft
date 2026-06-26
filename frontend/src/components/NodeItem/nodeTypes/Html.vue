@@ -69,58 +69,11 @@ const onViewClick = (event) => {
   router.push(href)
 }
 
-// Action: compress this note in place via the `minimal-txt` skill, run as a tracked
-// AI run (POST /api/runs, kind 'ai'). The agent rewrites content.html headlessly,
-// so we navigate to the api-runs-monitor node to watch it + read the result. The
-// edit is in-place but recoverable via git (node files are committed).
-const store = useNodesStore()
-const running = ref(false)
-const runMinimalTxt = async () => {
-  if (running.value) {
-    return
-  }
-  if (
-    !confirm(
-      'Run the minimal-txt skill on this note? It compresses the note in place (recoverable via git).',
-    )
-  ) {
-    return
-  }
-  running.value = true
-  try {
-    const id = props.node.id
-    const message =
-      `Use the "minimal-txt" skill to losslessly compress ocraft html node ${id}. ` +
-      `Its body is the file data/nodes/${id}/content.html — read it, apply the skill's rules ` +
-      `(aggressive lowercase compression, keep every fact, flat <br> layout, no headings/lists), and ` +
-      `overwrite that file in place. Change no other file. Report briefly what changed.`
-    const res = await fetch('/api/runs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ kind: 'ai', input: { message, label: `minimal-txt #${id}` } }),
-    })
-    if (!res.ok) {
-      throw new Error((await res.json().catch(() => ({})))?.error || `HTTP ${res.status}`)
-    }
-    const monitor = store.nodes.find((n) => n.name === 'api-runs-monitor')
-    if (monitor) {
-      router.push(`/node/${monitor.id}`)
-    } else {
-      alert(
-        'Run started — open the "api-runs-monitor" node to watch it (reload if not listed yet).',
-      )
-    }
-  } catch (error) {
-    alert(`Failed to start run: ${error.message}`)
-  } finally {
-    running.value = false
-  }
-}
-
-// Two ways into edit mode, picked from the view bar. editRich seeds the
-// contenteditable from `content` imperatively (not v-html) so Vue never re-renders
-// it out from under the cursor while typing; the source textarea is v-model-bound
-// to `content`, so editSource needs no seeding.
+// Two ways into edit mode: editRich (the view bar's Edit button) and editSource (the
+// terminal's `html` command — see the viewCommand watch below). editRich seeds the
+// contenteditable from `content` imperatively (not v-html) so Vue never re-renders it
+// out from under the cursor while typing; the source textarea is v-model-bound to
+// `content`, so editSource needs no seeding.
 const editRich = async () => {
   source.value = false
   editing.value = true
@@ -134,10 +87,33 @@ const editSource = () => {
   editing.value = true
 }
 
+// The terminal (Terminal) drives node-type actions by dispatching a named command
+// through the store; the active node's view runs the ones it knows. For html that's
+// `source` — the "pure html" raw-edit mode that used to be the </> HTML button.
+// dispatchViewCommand assigns a fresh object each call, so this fires every time;
+// names we don't handle are ignored.
+const store = useNodesStore()
+const VIEW_COMMANDS = { source: editSource }
+watch(
+  () => store.viewCommand,
+  (command) => VIEW_COMMANDS[command?.name]?.(),
+)
+
 const syncFromDom = () => {
   if (bodyRef.value) {
     content.value = bodyRef.value.innerHTML
   }
+}
+
+// Escape leaves the editor: persist the body and drop back to view mode — i.e. the
+// Done button plus the save the header would otherwise do. In rich mode, pull the
+// latest DOM into `content` first (@input already syncs, but be safe before save()).
+const exitEdit = async () => {
+  if (!source.value) {
+    syncFromDom()
+  }
+  editing.value = false
+  await save()
 }
 
 // The one "insert a part" primitive: execCommand inserts HTML/format at the
@@ -239,14 +215,6 @@ const applyLink = () => {
       </template>
       <template v-else>
         <n-button size="small" @click="editRich">Edit</n-button>
-        <n-button size="small" @click="editSource">&lt;/&gt; HTML</n-button>
-        <n-button
-          size="small"
-          :loading="running"
-          title="Compress this note in place via the minimal-txt skill (runs Claude as a tracked /api/runs job)"
-          @click="runMinimalTxt"
-          >⚡ minimal-txt</n-button
-        >
         <n-button
           size="small"
           :type="readMode ? 'primary' : 'default'"
@@ -281,6 +249,7 @@ const applyLink = () => {
       contenteditable="true"
       spellcheck="false"
       @input="syncFromDom"
+      @keydown.esc="exitEdit"
     />
     <textarea
       v-else-if="editing && source"
@@ -288,6 +257,7 @@ const applyLink = () => {
       class="body source"
       spellcheck="false"
       placeholder="<p>Raw HTML…</p>"
+      @keydown.esc="exitEdit"
     />
     <div
       v-else

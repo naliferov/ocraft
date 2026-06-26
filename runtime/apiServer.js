@@ -4,7 +4,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import zlib from 'node:zlib'
 import crypto from 'node:crypto'
-import { fileURLToPath } from 'node:url'
+import { getDirname } from './lib/path.js'
 import * as runManager from './runManager.js'
 import * as aiRunner from './runners/ai.js'
 import * as taskSource from './runners/task.js'
@@ -18,8 +18,7 @@ runManager.registerRunner('ai', aiRunner)
 runManager.registerRunner('task', taskSource)
 runManager.registerRunner('service', serviceSource)
 
-const currentDir = path.dirname(fileURLToPath(import.meta.url)) // runtime/
-const ROOT_DIR = path.join(currentDir, '..') // repo root — the cwd the AI runner works in
+const currentDir = getDirname(import.meta.url) // runtime/
 const NODES_DIR = path.join(currentDir, '..', 'data/nodes') // node store lives at <root>/data
 const ASSETS_DIR = path.join(currentDir, '..', 'data/assets')
 const DIST_DIR = path.join(currentDir, '..', 'frontend/dist') // built Vue SPA — served in prod after `npm run build`
@@ -111,18 +110,6 @@ const handleLogout = (res) => {
 // Node ids are numeric folder names; reject anything else so a `:id` can't smuggle a
 // `..` into a filesystem path. (The /api/assets route has its own traversal guard.)
 const isNodeId = (id) => /^[0-9]+$/.test(id)
-
-// Render prior chat turns as plain context so each ai-chat request carries the
-// conversation (the endpoint is stateless; the node stores the history).
-const buildChatPrompt = (history, message) => {
-  if (!history?.length) {
-    return message
-  }
-  const transcript = history
-    .map((turn) => `${turn.role === 'user' ? 'User' : 'Assistant'}: ${turn.text}`)
-    .join('\n\n')
-  return `Continuing our conversation. History so far:\n\n${transcript}\n\nUser: ${message}`
-}
 
 const nodePath = (id) => path.join(NODES_DIR, id, 'state.json')
 
@@ -376,29 +363,6 @@ const routes = {
     res.writeHead(200).end('Saved')
   },
 
-  // Compile an isWasm node's AssemblyScript source (script.js) to wasm on demand.
-  // The frontend fetches this, instantiates it, and calls an export. asc is heavy,
-  // so it's lazy-imported — the server pays nothing until wasm is requested.
-  // Compile errors return 400 + the asc diagnostics so the editor can show them.
-  'GET /api/nodes/:id/wasm': async (req, res, { id }) => {
-    let source
-    try {
-      source = await fs.readFile(path.join(NODES_DIR, id, NODE_BODY.script.file), 'utf-8')
-    } catch {
-      res.writeHead(404).end('Not found')
-      return
-    }
-    const { default: asc } = await import('assemblyscript/asc')
-    const { error, stderr, binary } = await asc.compileString(source, {
-      optimizeLevel: 3,
-      runtime: 'stub',
-    })
-    if (error || !binary) {
-      res.writeHead(400, { 'Content-Type': 'text/plain' }).end(stderr?.toString() || String(error))
-      return
-    }
-    res.writeHead(200, { 'Content-Type': 'application/wasm' }).end(Buffer.from(binary))
-  },
 
   'POST /api/nodes/:id': async (req, res, { id }) => {
     const body = await readBody(req)
@@ -444,111 +408,11 @@ const routes = {
     }
   },
 
-  // ⚠️ SECURITY: this runs the Claude Agent SDK with permissionMode 'bypassPermissions'
-  // and full Read/Write/Edit/Bash tools, cwd = repo root. Anything that can reach
-  // this endpoint (localhost:3001 / the Vite proxy) can make Claude edit files and
-  // run shell commands on this machine. It's intended for local single-user dev only —
-  // do NOT expose this server to a network. Auth is the user's own Claude Code login
-  // (Pro/Max subscription via ~/.claude or CLAUDE_CODE_OAUTH_TOKEN); no API key is used.
-  'POST /api/ai-chat': async (req, res) => {
-    const { message, history = [] } = await readBody(req)
-    if (!message || typeof message !== 'string') {
-      res
-        .writeHead(400, { 'Content-Type': 'application/json' })
-        .end(JSON.stringify({ error: 'message (string) required' }))
-      return
-    }
-
-    const { query } = await import('@anthropic-ai/claude-agent-sdk') // lazy: server boots without loading the SDK
-    const prompt = buildChatPrompt(history, message)
-
-    let text = ''
-    const toolUses = []
-    let result = null
-    try {
-      for await (const event of query({
-        prompt,
-        options: { cwd: ROOT_DIR, permissionMode: 'bypassPermissions', maxTurns: 30 },
-      })) {
-        if (event.type === 'assistant') {
-          for (const block of event.message.content) {
-            if (block.type === 'text') {
-              text += block.text
-            } else if (block.type === 'tool_use') {
-              toolUses.push({ name: block.name, input: block.input })
-            }
-          }
-        } else if (event.type === 'result') {
-          result = {
-            subtype: event.subtype,
-            cost: event.total_cost_usd,
-            turns: event.num_turns,
-            sessionId: event.session_id,
-          }
-        }
-      }
-    } catch (error) {
-      res
-        .writeHead(500, { 'Content-Type': 'application/json' })
-        .end(JSON.stringify({ error: error.message }))
-      return
-    }
-
-    res
-      .writeHead(200, { 'Content-Type': 'application/json' })
-      .end(JSON.stringify({ text: text.trim(), toolUses, result }))
-  },
-
-  // --- Telegram (user account, MTProto) — backs the `tg-chat` node type + command bar ---
-  // ⚠️ SECURITY: these reach a Telegram USER account — they can read ALL your chats and
-  // SEND messages as you. Reachable by anything that hits localhost:3001 / the Vite proxy.
-  // Local single-user only — do NOT expose this server to a network. The GramJS helper is
-  // lazy-imported (server boots without it) and reuses the telegram-mcp login session.
-  'GET /api/telegram/messages': async (req, res) => {
-    try {
-      const params = new URL(req.url, 'http://localhost').searchParams
-      const chat = params.get('chat')
-      if (!chat) {
-        throw new Error('chat (query param) required')
-      }
-      const limit = Number(params.get('limit')) || 30
-      const { getMessages } = await import('../mcp-servers/telegram-mcp/tg-api.js')
-      const messages = await getMessages({ chat, limit })
-      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(messages))
-    } catch (error) {
-      res.writeHead(500, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: error.message }))
-    }
-  },
-
-  'GET /api/telegram/chats': async (req, res) => {
-    try {
-      const limit = Number(new URL(req.url, 'http://localhost').searchParams.get('limit')) || 50
-      const { listChats } = await import('../mcp-servers/telegram-mcp/tg-api.js')
-      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(await listChats({ limit })))
-    } catch (error) {
-      res.writeHead(500, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: error.message }))
-    }
-  },
-
-  'POST /api/telegram/send': async (req, res) => {
-    try {
-      const { chat, text } = await readBody(req)
-      if (!chat || !text) {
-        throw new Error('chat and text required')
-      }
-      const { sendMessage } = await import('../mcp-servers/telegram-mcp/tg-api.js')
-      const sent = await sendMessage({ chat, text })
-      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(sent))
-    } catch (error) {
-      res.writeHead(500, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: error.message }))
-    }
-  },
-
   // --- Universal RUN manager — one view over everything that runs (see ./runManager.js) ---
   // GET /api/runs lists AI runs (owned/ephemeral) + service daemons + task executions
   // as one uniform record set. POST starts on-demand 'ai' runs (task/service are
   // observe-only here). ⚠️ The 'ai' runner runs Claude with bypassPermissions —
-  // same localhost-only caveat as ai-chat.
+  // single-user / trusted only — never expose this server to a network without sandboxing.
   'POST /api/runs': async (req, res) => {
     try {
       const { kind, input = {} } = await readBody(req)
@@ -664,6 +528,15 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === 'POST' && path === '/api/logout') {
     handleLogout(res)
+    return
+  }
+  // GET /api/session → report auth state WITHOUT gating (always 200, never 401). The SPA
+  // asks this once on load to decide app-vs-login, instead of inferring it from a data
+  // request's 401. Ungated like login/logout — it reveals only a boolean, not any data.
+  if (req.method === 'GET' && path === '/api/session') {
+    res
+      .writeHead(200, { 'Content-Type': 'application/json' })
+      .end(JSON.stringify({ authorized: isAuthorized(req) }))
     return
   }
   // Serve the built frontend (frontend/dist) for any non-API GET — no auth (see

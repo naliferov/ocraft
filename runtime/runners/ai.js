@@ -11,9 +11,9 @@
 // and especially its skills (e.g. minimal-txt). Without that the SDK loads no
 // filesystem settings and "run the <name> skill" prompts have nothing to invoke.
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { getDirname } from '../lib/path.js'
 
-const ROOT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
+const ROOT_DIR = path.join(getDirname(import.meta.url), '..', '..')
 
 // Render prior chat turns as plain context (same shape the legacy ai-chat used).
 const buildChatPrompt = (history, message) => {

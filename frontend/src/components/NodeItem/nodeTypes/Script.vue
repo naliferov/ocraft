@@ -59,7 +59,7 @@ const callableOptions = computed(() =>
   store.nodes
     .filter((candidate) => candidate.type === 'script' && candidate.id !== props.node.id)
     .map((candidate) => ({
-      label: `${candidate.name || '(unnamed)'}${candidate.scriptType === 'assembly-script' ? ' ⚙' : ''}  ·  ${candidate.id}`,
+      label: `${candidate.name || '(unnamed)'}  ·  ${candidate.id}`,
       value: candidate.id,
     })),
 )
@@ -149,7 +149,6 @@ const onKeydown = (event) => {
       >Run on open</n-checkbox
     >
     <n-popselect
-      v-if="(node.scriptType || 'js') !== 'assembly-script'"
       v-model:value="insertTarget"
       :options="callableOptions"
       trigger="click"
@@ -163,7 +162,7 @@ const onKeydown = (event) => {
       :options="scriptTypeOptions"
       size="small"
       style="width: 150px; flex-shrink: 0"
-      title="How this script node runs: js · vue-esm · vue-sfc · assembly-script"
+      title="How this script node runs: js · vue-esm · vue-sfc"
       @update:value="setScriptType"
     />
   </div>

@@ -2,14 +2,13 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
 // The backend API server (port 3001) runs as its own managed process now —
-// see runtime/services/backend.js (`node bin/cli.js service start backend`). Vite only
-// proxies /api to it; it no longer spawns the backend itself. (The old
-// backendPlugin spawned it once and never respawned, so a single backend death
-// took /api down for the whole session.)
+// see runtime/services/api.js (`node runtime/cli.js service start api`). Vite only
+// proxies /api to it; it no longer spawns the backend itself.
 //
-// Build stays on the DEFAULT runtime-only Vue. View script nodes that ship a
-// `template` string get the compiler bolted on at runtime, lazily and code-split,
-// without changing the app's build — see composables/useScriptView.js.
+// AUTH: the backend requires a bearer token (API_TOKEN in <repo>/.env) on every
+// request. The browser supplies it — entered once at /login, stored in localStorage,
+// and attached to every /api call by the global fetch wrapper (src/lib/apiAuth.js).
+// So the proxy is a plain forward; the token isn't baked into the build.
 export default defineConfig({
   plugins: [vue()],
   server: {

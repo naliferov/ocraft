@@ -1,12 +1,10 @@
 <script setup>
-import { computed, ref, nextTick, defineAsyncComponent } from 'vue'
+import { computed, ref, nextTick } from 'vue'
 import { NSelect, NButton } from 'naive-ui'
 import { useNodesStore } from '../../stores/nodes.js'
-import Scene2d from './nodeTypes/Scene2d.vue'
 import Script from './nodeTypes/Script.vue'
 import Html from './nodeTypes/Html.vue'
 import Category from './nodeTypes/Category.vue'
-import AiChat from './nodeTypes/AiChat.vue'
 
 const props = defineProps({
   node: { type: Object, required: true },
@@ -16,7 +14,7 @@ const store = useNodesStore()
 // The single Save: persists state.json (name, type, and whatever the active
 // node-type component mutated on `node`), then asks that component to persist
 // anything it owns separately — e.g. Script's script.js. Components that keep
-// everything on `node` (Html, Scene, …) expose no save() and are covered above.
+// everything on `node` (Html, …) expose no save() and are covered above.
 const componentRef = ref(null)
 const save = async () => {
   await store.save(props.node.id, props.node)
@@ -28,17 +26,9 @@ const save = async () => {
 // `hidden: true` keeps the mapping (so existing nodes of that type still render)
 // but drops it from the type picker — used to park a not-yet-ready type.
 const NODE_TYPES = {
-  scene2d: { label: 'scene2d', component: Scene2d },
-  // Lazy-loaded: Three.js is heavy (~500 KB), so code-split it — the chunk loads
-  // only when a scene3d node is opened, keeping the main bundle lean.
-  scene3d: {
-    label: 'scene3d',
-    component: defineAsyncComponent(() => import('./nodeTypes/Scene3d.vue')),
-  },
-  script: { label: 'script', component: Script },
   html: { label: 'html', component: Html },
+  script: { label: 'script', component: Script },
   category: { label: 'category', component: Category },
-  'ai-chat': { label: 'ai-chat', component: AiChat },
 }
 
 const typeOptions = Object.entries(NODE_TYPES)
@@ -46,16 +36,15 @@ const typeOptions = Object.entries(NODE_TYPES)
   .map(([value, { label }]) => ({ label, value }))
 
 const nodeType = computed({
-  get: () => props.node.type ?? 'scene2d',
+  get: () => props.node.type ?? 'html',
   set: (val) => {
-    props.node.type = val === 'scene2d' ? undefined : val
+    props.node.type = val
   },
 })
 
 // No silent fallback: an unknown type resolves to null so the template can show an
-// explicit "no handler for this type" card instead of masquerading as an empty Scene.
-// (Untyped nodes still resolve to 'scene2d' via nodeType's getter above — only a
-// genuinely unregistered type lands here as null.)
+// explicit "no handler for this type" card. (Untyped/legacy nodes resolve to 'html'
+// via nodeType's getter above — only a genuinely unregistered type lands here as null.)
 const activeComponent = computed(() => NODE_TYPES[nodeType.value]?.component ?? null)
 
 // Click the name to rename. `name` is just a display label — a node's id is its

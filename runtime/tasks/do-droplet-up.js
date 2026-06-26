@@ -1,6 +1,6 @@
 // do-droplet-up — provision the ocraft VPS from scratch, end to end.
 //
-//   node bin/cli.js run do-droplet-up [region] [size]
+//   node runtime/cli.js run do-droplet-up [region] [size]
 //
 // Steps (each logged via ctx.log):
 //   1. pick the latest Ubuntu image

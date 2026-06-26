@@ -1,6 +1,6 @@
 // do-droplet-down — destroy the ocraft VPS to stop billing (counterpart to do-droplet-up).
 //
-//   node bin/cli.js run do-droplet-down
+//   node runtime/cli.js run do-droplet-down
 //
 // Finds the droplet(s) named ocraft-vps and deletes them. Logs each key moment.
 // Auth: the DigitalOcean token in mcp-servers/digitalocean-mcp/.env (via do-api.js).

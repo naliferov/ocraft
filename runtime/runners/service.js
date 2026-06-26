@@ -1,7 +1,7 @@
 // SOURCE adapter for the universal run manager (../runManager.js): surfaces
 // serviceManager's long-running daemons (api / frontend / scheduler / ticker) as
 // runs of kind 'service'. Services are configured + started via the CLI
-// (`node bin/cli.js service ...`) and supervised by serviceManager; this adapter
+// (`node runtime/cli.js service ...`) and supervised by serviceManager; this adapter
 // only AGGREGATES their live status into the unified GET /api/runs view.
 //
 // Read-only in v1: start/stop stay on the CLI (the api would otherwise be able to

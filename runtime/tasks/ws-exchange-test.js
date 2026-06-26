@@ -1,6 +1,6 @@
 // ws-exchange-test — smoke-test the cloud WebSocket exchange (stream.x8.deno.net).
 //
-//   node bin/cli.js run ws-exchange-test [url] [probeText]
+//   node runtime/cli.js run ws-exchange-test [url] [probeText]
 //
 // SUCCESS = the socket opens (the exchange is reachable). It also sends one probe
 // and reports whether any reply came back, but a missing reply is NOT a failure:

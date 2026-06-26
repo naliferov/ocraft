@@ -1,6 +1,6 @@
 node_modules
 .env
-runtime/executions/
+runtime/state/taskExecutions/
 runtime/state/scheduler.json
 runtime/state/tasks/
 runtime/state/services/

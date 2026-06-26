@@ -1,6 +1,6 @@
 // SOURCE adapter for the universal run manager (../runManager.js): surfaces taskExecutor
-// executions (runtime/executions/) as read-only runs of kind 'task'. Tasks are
-// started by the scheduler or the CLI (`node bin/cli.js run <task>`), NOT over HTTP
+// executions (runtime/state/taskExecutions/) as read-only runs of kind 'task'. Tasks are
+// started by the scheduler or the CLI (`node runtime/cli.js run <task>`), NOT over HTTP
 // — this adapter only AGGREGATES their recorded state into the unified GET /api/runs
 // view. (taskExecutor writes a 'running' record at start and overwrites it on
 // completion, so in-flight tasks show up too.)
@@ -8,7 +8,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { getDirname } from '../lib/path.js'
 
-const EXECUTIONS_DIR = path.join(getDirname(import.meta.url), '..', 'executions')
+const TASK_EXECUTIONS_DIR = path.join(getDirname(import.meta.url), '..', 'state', 'taskExecutions')
 const RECENT = 25 // how many most-recent executions to surface
 
 const STATUS = { success: 'done', error: 'error', running: 'running' }
@@ -26,7 +26,7 @@ const toRecord = (execution) => ({
 export const list = async () => {
   let files
   try {
-    files = await fs.readdir(EXECUTIONS_DIR)
+    files = await fs.readdir(TASK_EXECUTIONS_DIR)
   } catch {
     return [] // no executions yet
   }
@@ -38,7 +38,7 @@ export const list = async () => {
   const records = await Promise.all(
     recent.map(async (file) => {
       try {
-        return toRecord(JSON.parse(await fs.readFile(path.join(EXECUTIONS_DIR, file), 'utf-8')))
+        return toRecord(JSON.parse(await fs.readFile(path.join(TASK_EXECUTIONS_DIR, file), 'utf-8')))
       } catch {
         return null
       }
@@ -49,7 +49,7 @@ export const list = async () => {
 
 export const get = async (id) => {
   try {
-    const execution = JSON.parse(await fs.readFile(path.join(EXECUTIONS_DIR, `${id}.json`), 'utf-8'))
+    const execution = JSON.parse(await fs.readFile(path.join(TASK_EXECUTIONS_DIR, `${id}.json`), 'utf-8'))
     return { ...toRecord(execution), log: execution.logs ?? [], result: execution.result ?? null }
   } catch {
     return null // not a task-execution id

@@ -4,7 +4,6 @@
 //   js               normal `export default (x) => {…}`; gets an imperative x.ui panel
 //   vue-esm          `export default (x) => Component`; mounts (template compiled lazily)
 //   vue-sfc          a real .vue source; compiled at runtime, then mounts
-//   assembly-script  AssemblyScript → wasm (compiled on the backend from SAVED source)
 //
 // Each type's run() executes the body and returns a `cleanup()` (so teardown is uniform
 // — close x.ui sockets, unmount a view app, …). Adding a flavor (react-esm, vue-sfc-ts,
@@ -14,7 +13,7 @@
 
 import * as VueRuntime from 'vue'
 import { createApp, registerRuntimeCompiler } from 'vue'
-import { runNodeCode, runSfcCode, runWasmNode } from './useNodeScripts.js'
+import { runNodeCode, runSfcCode } from './useNodeScripts.js'
 import { createScriptUi } from './useScriptUi.js'
 
 // On-demand Vue template compilation (vue-esm components carrying a `template:'…'`).
@@ -71,18 +70,11 @@ async function runVue(produce, code, selfId, hostEl) {
   const component = await produce(code, selfId)
   return component ? mountVue(hostEl, component) : null
 }
-async function runAssemblyScript(selfId, save) {
-  await save() // wasm compiles from the SAVED source on the backend — persist first
-  await runWasmNode(selfId)
-  return null
-}
-
-// --- registry: scriptType → run({ code, selfId, hostEl, save }) => cleanup|null ---
+// --- registry: scriptType → run({ code, selfId, hostEl }) => cleanup|null ---
 const SCRIPT_TYPES = {
   js: (opts) => runJs(opts.code, opts.selfId, opts.hostEl),
   'vue-esm': (opts) => runVue(runNodeCode, opts.code, opts.selfId, opts.hostEl),
   'vue-sfc': (opts) => runVue(runSfcCode, opts.code, opts.selfId, opts.hostEl),
-  'assembly-script': (opts) => runAssemblyScript(opts.selfId, opts.save),
 }
 
 // The registered script types — drives the editor's type picker (single source of truth).

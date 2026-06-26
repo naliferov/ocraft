@@ -19,6 +19,16 @@ export const useNodesStore = defineStore('nodes', () => {
     () => nodes.value.find((node) => node.id === activeNodeId.value) ?? null,
   )
 
+  // A command the terminal (Terminal) asks the *active node's view component* to
+  // run — e.g. an html node's "enter raw-source edit" mode, which is local UI state
+  // the store can't reach directly. It's a request channel, not owned state:
+  // dispatchViewCommand assigns a fresh object so the component's watcher fires on
+  // every call; the component dispatches by `name` and ignores names it doesn't know.
+  const viewCommand = ref(null)
+  const dispatchViewCommand = (name, args = []) => {
+    viewCommand.value = { name, args }
+  }
+
   // Build the nesting hierarchy from each node's `parentId`. Identity stays the
   // flat `id`; the tree (and any path derived from it) is computed, never stored.
   const tree = computed(() => {
@@ -63,7 +73,13 @@ export const useNodesStore = defineStore('nodes', () => {
   }
 
   const load = async () => {
+    // Auth is decided upstream by the router guard (GET /api/session); by the time we
+    // load, the session is valid. A 401 here would only mean the cookie expired mid-flight
+    // — throw so we never assign an error body to the node list.
     const res = await fetch('/api/nodes')
+    if (!res.ok) {
+      throw new Error(`load failed: ${res.status}`)
+    }
     nodes.value = await res.json()
   }
 
@@ -219,6 +235,8 @@ export const useNodesStore = defineStore('nodes', () => {
     nodes,
     activeNodeId,
     activeNode,
+    viewCommand,
+    dispatchViewCommand,
     deletedNodes,
     tree,
     childrenOf,

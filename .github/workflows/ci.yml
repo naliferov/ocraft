@@ -36,4 +36,4 @@ jobs:
              npm install && \
              npm --prefix frontend install && \
              npm --prefix frontend run build && \
-             node bin/cli.js run deploy"
+             node runtime/cli.js run deploy"

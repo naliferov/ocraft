@@ -1,7 +1,7 @@
 import 'dotenv/config'
-import { execute } from '../runtime/taskExecutor.js'
-import { listExecutions } from '../runtime/storage.js'
-import { runScheduler, runSchedulerLoop } from '../runtime/scheduler.js'
+import { execute } from './taskExecutor.js'
+import { listTaskExecutions } from './storage.js'
+import { runScheduler, runSchedulerLoop } from './scheduler.js'
 import {
   listServices,
   getService,
@@ -10,7 +10,7 @@ import {
   restartService,
   readLog,
   clearLog,
-} from '../runtime/serviceManager.js'
+} from './serviceManager.js'
 
 const [command, ...args] = process.argv.slice(2)
 
@@ -19,7 +19,7 @@ const commands = {
   run: async () => {
     const [name, ...fnArgs] = args
     if (!name) {
-      console.error('Usage: node bin/cli.js run <task-name> [args...]')
+      console.error('Usage: node runtime/cli.js run <task-name> [args...]')
       process.exit(1)
     }
 
@@ -37,7 +37,7 @@ const commands = {
     await runSchedulerLoop()
   },
   'list-executions': async () => {
-    const executions = await listExecutions()
+    const executions = await listTaskExecutions()
     if (executions.length === 0) {
       console.log('No executions yet')
       return
@@ -81,29 +81,29 @@ const commands = {
           return
         }
         case 'status':
-          requireId('Usage: node bin/cli.js service status <id>')
+          requireId('Usage: node runtime/cli.js service status <id>')
           console.log(JSON.stringify(await getService(id), null, 2))
           return
         case 'start':
-          requireId('Usage: node bin/cli.js service start <id>')
+          requireId('Usage: node runtime/cli.js service start <id>')
           console.log(fmt(await startService(id)))
           return
         case 'stop':
-          requireId('Usage: node bin/cli.js service stop <id>')
+          requireId('Usage: node runtime/cli.js service stop <id>')
           console.log(fmt(await stopService(id)))
           return
         case 'restart':
-          requireId('Usage: node bin/cli.js service restart <id>')
+          requireId('Usage: node runtime/cli.js service restart <id>')
           console.log(fmt(await restartService(id)))
           return
         case 'logs': {
-          requireId('Usage: node bin/cli.js service logs <id> [lines]')
+          requireId('Usage: node runtime/cli.js service logs <id> [lines]')
           const lines = rest[0] ? Number(rest[0]) : 200
           console.log(await readLog(id, { lines }))
           return
         }
         case 'clear-logs':
-          requireId('Usage: node bin/cli.js service clear-logs <id>')
+          requireId('Usage: node runtime/cli.js service clear-logs <id>')
           await clearLog(id)
           console.log(`Cleared logs for ${id}`)
           return
@@ -121,7 +121,7 @@ const commands = {
 
 const exec = commands[command]
 if (!exec) {
-  console.error('Usage: node bin/cli.js <command> [args...]')
+  console.error('Usage: node runtime/cli.js <command> [args...]')
   console.error('Commands:')
   console.error('  run <task-name> [args...]   run a single task to completion')
   console.error('  start-scheduler             run all due tasks once (call from cron)')

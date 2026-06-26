@@ -23,7 +23,7 @@ const open = (id) => router.push(`/node/${id}`)
       nest it here.
     </div>
     <div v-for="c in children" :key="c.id" class="child" @click="open(c.id)">
-      <span class="ctype">{{ c.type ?? 'scene2d' }}</span>
+      <span class="ctype">{{ c.type ?? 'html' }}</span>
       <span class="cname">{{ c.name }}</span>
     </div>
   </div>

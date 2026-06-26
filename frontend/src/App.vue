@@ -5,6 +5,8 @@ import { NConfigProvider, NLayout, NLayoutSider, NLayoutContent } from 'naive-ui
 import { useNodesStore } from './stores/nodes.js'
 import NodeItem from './components/NodeItem/NodeItem.vue'
 import NodeTree from './components/NodeTree.vue'
+import Terminal from './components/Terminal.vue'
+import Login from './components/Login.vue'
 
 const store = useNodesStore()
 const router = useRouter()
@@ -87,89 +89,106 @@ const reparentNode = async ({ id, parentId }) => {
 
 <template>
   <n-config-provider>
-    <n-layout has-sider content-style="height: 100vh;">
-      <n-layout-sider :width="240" bordered content-style="padding: 10px 8px 0 8px;">
-        <div class="tree-toolbar">
-          <div class="tree-brand">
-            <span
-              class="tree-logo"
-              title="Home"
-              role="link"
-              tabindex="0"
-              @click="router.push('/')"
-              @keydown.enter="router.push('/')"
-              >ocraft</span
+    <Login v-if="route.path === '/login'" />
+    <div v-else class="app-col">
+      <n-layout class="main-row" has-sider content-style="height: 100%;">
+        <n-layout-sider :width="240" bordered content-style="padding: 10px 8px 0 8px;">
+          <div class="tree-toolbar">
+            <div class="tree-brand">
+              <span
+                class="tree-logo"
+                title="Home"
+                role="link"
+                tabindex="0"
+                @click="router.push('/')"
+                @keydown.enter="router.push('/')"
+                >ocraft</span
+              >
+              <span class="tree-title">Nodes</span>
+            </div>
+            <button class="new-node" title="New root node" @click="createNode()">+ node</button>
+          </div>
+          <div class="tree-search">
+            <input
+              v-model="searchQuery"
+              class="tree-search-input"
+              type="search"
+              placeholder="Search nodes…"
+            />
+            <button
+              v-if="searchQuery"
+              class="tree-search-clear"
+              title="Clear search"
+              @click="searchQuery = ''"
             >
-            <span class="tree-title">Nodes</span>
+              ×
+            </button>
           </div>
-          <button class="new-node" title="New root node" @click="createNode()">+ node</button>
-        </div>
-        <div class="tree-search">
-          <input
-            v-model="searchQuery"
-            class="tree-search-input"
-            type="search"
-            placeholder="Search nodes…"
+          <div v-if="deleteError" class="tree-error" @click="deleteError = ''">{{ deleteError }}</div>
+          <div v-if="store.deletedNodes.length" class="trash-pool">
+            <div class="trash-pool-title">Recently deleted</div>
+            <div v-for="entry in store.deletedNodes" :key="entry.id" class="trash-item">
+              <span class="trash-name" :title="entry.name">{{ entry.name }}</span>
+              <button class="trash-restore" title="Restore" @click="restoreNode(entry.id)">↩</button>
+            </div>
+          </div>
+          <div v-if="searchQuery.trim() && !displayTree.length" class="tree-empty">
+            No nodes match “{{ searchQuery.trim() }}”.
+          </div>
+          <NodeTree
+            :nodes="displayTree"
+            :active-id="store.activeNodeId"
+            :query="searchQuery.trim()"
+            :expand-all="!!searchQuery.trim()"
+            @select="navigate"
+            @toggle="store.toggleCollapsed"
+            @create="createNode"
+            @rename="renameNode"
+            @remove="removeNode"
+            @reparent="reparentNode"
           />
-          <button
-            v-if="searchQuery"
-            class="tree-search-clear"
-            title="Clear search"
-            @click="searchQuery = ''"
-          >
-            ×
-          </button>
-        </div>
-        <div v-if="deleteError" class="tree-error" @click="deleteError = ''">{{ deleteError }}</div>
-        <div v-if="store.deletedNodes.length" class="trash-pool">
-          <div class="trash-pool-title">Recently deleted</div>
-          <div v-for="entry in store.deletedNodes" :key="entry.id" class="trash-item">
-            <span class="trash-name" :title="entry.name">{{ entry.name }}</span>
-            <button class="trash-restore" title="Restore" @click="restoreNode(entry.id)">↩</button>
-          </div>
-        </div>
-        <div v-if="searchQuery.trim() && !displayTree.length" class="tree-empty">
-          No nodes match “{{ searchQuery.trim() }}”.
-        </div>
-        <NodeTree
-          :nodes="displayTree"
-          :active-id="store.activeNodeId"
-          :query="searchQuery.trim()"
-          :expand-all="!!searchQuery.trim()"
-          @select="navigate"
-          @toggle="store.toggleCollapsed"
-          @create="createNode"
-          @rename="renameNode"
-          @remove="removeNode"
-          @reparent="reparentNode"
-        />
-      </n-layout-sider>
+        </n-layout-sider>
 
-      <n-layout-content content-style="height: 100%; overflow: hidden;">
-        <NodeItem
-          v-if="route.params.id && store.activeNode"
-          :key="store.activeNode.id"
-          :node="store.activeNode"
-        />
-        <!-- Explicit not-found state: an id that resolves to no node (deleted, or a
-             bad address). Guarded by store.nodes.length so it doesn't flash before
-             the tree has loaded. Mirrors NodeItem's "no handler for type" card. -->
-        <div v-else-if="route.params.id && store.nodes.length" class="node-missing">
-          <p>
-            No node <code>#{{ route.params.id }}</code>.
-          </p>
-          <p>
-            This address doesn't resolve to a node in the store — it may have been deleted, or the id
-            is wrong. Pick a node from the tree, or
-            <a href="#" @click.prevent="router.push('/')">go home</a>.
-          </p>
-        </div>
-      </n-layout-content>
-    </n-layout>
+        <n-layout-content content-style="height: 100%; overflow: hidden;">
+          <NodeItem
+            v-if="route.params.id && store.activeNode"
+            :key="store.activeNode.id"
+            :node="store.activeNode"
+          />
+          <!-- Explicit not-found state: an id that resolves to no node (deleted, or a
+              bad address). Guarded by store.nodes.length so it doesn't flash before
+              the tree has loaded. Mirrors NodeItem's "no handler for type" card. -->
+          <div v-else-if="route.params.id && store.nodes.length" class="node-missing">
+            <p>
+              No node <code>#{{ route.params.id }}</code>.
+            </p>
+            <p>
+              This address doesn't resolve to a node in the store — it may have been deleted, or the id
+              is wrong. Pick a node from the tree, or
+              <a href="#" @click.prevent="router.push('/')">go home</a>.
+            </p>
+          </div>
+        </n-layout-content>
+      </n-layout>
+      <Terminal />
+    </div>
   </n-config-provider>
 </template>
 
 <style scoped>
+/* The app is a vertical column: the sider+content row on top, the global terminal
+   bar pinned full-width along the bottom. The row flexes to fill the height; the
+   bar takes a drag-controlled height beneath it. */
+.app-col {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+.main-row {
+  flex: 1;
+  min-height: 0;
+}
+
 /* Shown for /node/:id when the id resolves to no node — the explicit not-found
    card (was a blank content pane). Mirrors NodeItem's .no-handler styling. */
 .node-missing {

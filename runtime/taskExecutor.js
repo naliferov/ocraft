@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { getTime } from './lib/time.js'
-import { saveExecution, loadTaskState, saveTaskState } from './storage.js'
+import { saveTaskExecution, loadTaskState, saveTaskState } from './storage.js'
 import { getDirname } from './lib/path.js'
 
 const currentDir = getDirname(import.meta.url)
@@ -76,7 +76,7 @@ export const execute = async (name, args = []) => {
     status = 'success',
     error
 
-  await saveExecution({ id, task: name, startedAt, status: 'running', logs })
+  await saveTaskExecution({ id, task: name, startedAt, status: 'running', logs })
 
   try {
     result = await runWithTimeout(fn, ctx, timeoutMs, name)
@@ -100,7 +100,7 @@ export const execute = async (name, args = []) => {
     error,
   }
 
-  await saveExecution(execution)
+  await saveTaskExecution(execution)
 
   return execution
 }

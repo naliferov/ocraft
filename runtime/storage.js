@@ -3,29 +3,29 @@ import path from 'node:path'
 import { getDirname } from './lib/path.js'
 
 const currentDir = getDirname(import.meta.url)
-const EXECUTIONS_DIR = path.join(currentDir, 'executions')
-const MAX_EXECUTIONS = 500
+const TASK_EXECUTIONS_DIR = path.join(currentDir, 'state', 'taskExecutions') // task-run records, under runtime/state/
+const MAX_TASK_EXECUTIONS = 500
 
-export const saveExecution = async (execution) => {
-  await fs.mkdir(EXECUTIONS_DIR, { recursive: true })
-  const filePath = path.join(EXECUTIONS_DIR, `${execution.id}.json`)
+export const saveTaskExecution = async (execution) => {
+  await fs.mkdir(TASK_EXECUTIONS_DIR, { recursive: true })
+  const filePath = path.join(TASK_EXECUTIONS_DIR, `${execution.id}.json`)
   await fs.writeFile(filePath, JSON.stringify(execution, null, 2))
-  await rotateExecutions()
+  await rotateTaskExecutions()
   return execution.id
 }
 
-const rotateExecutions = async () => {
-  const files = (await fs.readdir(EXECUTIONS_DIR)).sort()
-  if (files.length > MAX_EXECUTIONS) {
-    for (const fileName of files.slice(0, files.length - MAX_EXECUTIONS)) {
-      await fs.unlink(path.join(EXECUTIONS_DIR, fileName))
+const rotateTaskExecutions = async () => {
+  const files = (await fs.readdir(TASK_EXECUTIONS_DIR)).sort()
+  if (files.length > MAX_TASK_EXECUTIONS) {
+    for (const fileName of files.slice(0, files.length - MAX_TASK_EXECUTIONS)) {
+      await fs.unlink(path.join(TASK_EXECUTIONS_DIR, fileName))
     }
   }
 }
 
-export const listExecutions = async () => {
-  await fs.mkdir(EXECUTIONS_DIR, { recursive: true })
-  const files = await fs.readdir(EXECUTIONS_DIR)
+export const listTaskExecutions = async () => {
+  await fs.mkdir(TASK_EXECUTIONS_DIR, { recursive: true })
+  const files = await fs.readdir(TASK_EXECUTIONS_DIR)
 
   return files
     .sort()
