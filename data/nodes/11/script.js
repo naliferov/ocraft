@@ -64,8 +64,9 @@ export default (x) => {
 
   x.ui.row((row) => {
     urlField = row.input({
-      value: 'wss://stream.x8.deno.net/ws',
-      placeholder: 'wss://host/path',
+      // default to THIS ocraft's own /ws hub (same origin): ws:// on http, wss:// on https
+      value: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`,
+      placeholder: 'ws://host/path',
       onEnter: connect,
     })
     row.button('Connect', connect)

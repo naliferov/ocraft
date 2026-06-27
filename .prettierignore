@@ -6,13 +6,8 @@ dist
 
 # Backend data plane — node bodies (script.js / content.html), state.json, and
 # assets. This is sandboxed user content + runtime state, NOT project source.
-backend/data
-backend/executions
-backend/state
-
-# Deno service — different runtime (JSR imports, Deno globals); format it with
-# deno's own tooling, not this Node toolchain.
-runtime/transport/ws-exchange
+data
+runtime/state
 
 # Generated / vendored
 package-lock.json
@@ -24,6 +19,3 @@ plans
 
 # Personal / local Claude settings (also gitignored)
 **/.claude
-
-# Non-JS experiment file
-js-engine/program.yo

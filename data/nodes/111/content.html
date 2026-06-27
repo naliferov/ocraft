@@ -1,8 +1,9 @@
 <h1>yolang (yo)</h1>
 <p>
   A tiny, async-first toy language. Keywords are <code>@</code>-mentions (&quot;yo, @log
-  this&quot;). Pipeline: source → tokens (lexer) → AST (parser) → value (evaluator). Lives in ocraft
-  at <code>js-engine/yo.js</code>, runs <code>program.yo</code>.
+  this&quot;). Pipeline: source → tokens (lexer) → AST (parser) → <strong>JavaScript</strong> (code
+  generator). Lives in ocraft as the <code>yo-to-js</code> script node (id 200), which transpiles to
+  JS and runs the emitted code — it no longer interprets the AST.
 </p>
 <p>Current features:</p>
 <ul>

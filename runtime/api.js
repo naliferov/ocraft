@@ -1,14 +1,22 @@
 import 'dotenv/config' // load <repo>/.env (API_TOKEN, PORT) — the service runs with cwd = repo root
-import http from 'node:http'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import zlib from 'node:zlib'
 import crypto from 'node:crypto'
 import { getDirname } from './lib/path.js'
+import {
+  readBody,
+  readText,
+  sendText,
+  matchUrl,
+  serveStatic,
+  serveAsset,
+  createServer,
+} from './lib/http.js'
 import * as runManager from './runManager.js'
 // import * as aiRunner from './runners/ai.js' // DISABLED for prod — see registration below
 import * as taskSource from './runners/task.js'
 import * as serviceSource from './runners/service.js'
+import { attachWsServer } from './wsServer.js'
 
 // Register the run KINDS with the universal run manager (./runManager.js): 'ai' is an
 // owned/ephemeral runner (started + streamed + cancelled here); 'task' and 'service'
@@ -204,8 +212,8 @@ const childrenOf = async (parentId) => {
   return children
 }
 
-// Static asset serving (GET /api/assets/<relpath>). Used by the scene renderer to
-// load clipart SVGs from data/assets/. Read-only; guarded against path traversal.
+// Content types for static assets (GET /api/assets/<relpath>) — clipart SVGs etc. for the
+// scene renderer. Passed to lib/http serveAsset, which does the read + traversal guard.
 const ASSET_CONTENT_TYPES = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
@@ -215,22 +223,6 @@ const ASSET_CONTENT_TYPES = {
   '.gif': 'image/gif',
   '.txt': 'text/plain; charset=utf-8',
   '.json': 'application/json',
-}
-
-const serveAsset = async (res, relPath) => {
-  // Resolve under ASSETS_DIR and reject anything that escapes it (../ traversal).
-  const full = path.resolve(ASSETS_DIR, decodeURIComponent(relPath))
-  if (full !== ASSETS_DIR && !full.startsWith(ASSETS_DIR + path.sep)) {
-    res.writeHead(403).end('Forbidden')
-    return
-  }
-  try {
-    const data = await fs.readFile(full)
-    const type = ASSET_CONTENT_TYPES[path.extname(full).toLowerCase()] ?? 'application/octet-stream'
-    res.writeHead(200, { 'Content-Type': type }).end(data)
-  } catch {
-    res.writeHead(404).end('Not found')
-  }
 }
 
 // --- Frontend (built Vue SPA) -------------------------------------------------
@@ -253,101 +245,6 @@ const STATIC_CONTENT_TYPES = {
   '.woff2': 'font/woff2',
   '.map': 'application/json',
 }
-
-// Serve index.html — the SPA entry. no-cache so a redeploy (which renames the hashed
-// asset files index.html points at) is picked up at once; a missing file means the
-// frontend simply wasn't built.
-const serveIndexHtml = async (res) => {
-  try {
-    const html = await fs.readFile(path.join(DIST_DIR, 'index.html'))
-    res
-      .writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' })
-      .end(html)
-  } catch {
-    res.writeHead(404).end('Frontend not built — run `npm run build` in frontend/')
-  }
-}
-
-// Serve a built-SPA file under DIST_DIR, falling back to index.html so vue-router's
-// history-mode routes (/node/:id) resolve on direct load / refresh. A path WITH a file
-// extension that isn't found is a real 404 — only extension-less paths (client routes)
-// fall back to index.html. Path-guarded against ../ traversal out of DIST_DIR.
-const serveStatic = async (res, urlPath) => {
-  const relPath = urlPath === '/' ? 'index.html' : decodeURIComponent(urlPath).slice(1)
-  const full = path.resolve(DIST_DIR, relPath)
-  if (full === DIST_DIR || full.startsWith(DIST_DIR + path.sep)) {
-    try {
-      const data = await fs.readFile(full)
-      const type =
-        STATIC_CONTENT_TYPES[path.extname(full).toLowerCase()] ?? 'application/octet-stream'
-      // Vite content-hashes everything under /assets/ — cache those forever.
-      const cacheControl = urlPath.startsWith('/assets/')
-        ? 'public, max-age=31536000, immutable'
-        : 'no-cache'
-      res.writeHead(200, { 'Content-Type': type, 'Cache-Control': cacheControl }).end(data)
-      return
-    } catch {
-      // not a real file — fall through to the SPA fallback
-    }
-  }
-  if (path.extname(urlPath)) {
-    res.writeHead(404).end('Not found')
-    return
-  }
-  await serveIndexHtml(res)
-}
-
-// Send a text/JSON body, gzipped when the client accepts it. The text-heavy reads
-// here (the node list, html content bodies, script source) compress ~4-5×; tiny
-// bodies skip it (the gzip header overhead isn't worth it). Single-user local dev
-// server, so synchronous gzip is fine.
-const sendText = (req, res, body, contentType) => {
-  const buffer = Buffer.from(body)
-  const acceptsGzip = (req.headers['accept-encoding'] || '').includes('gzip')
-  if (acceptsGzip && buffer.length > 512) {
-    res
-      .writeHead(200, {
-        'Content-Type': contentType,
-        'Content-Encoding': 'gzip',
-        Vary: 'Accept-Encoding',
-      })
-      .end(zlib.gzipSync(buffer))
-  } else {
-    res.writeHead(200, { 'Content-Type': contentType }).end(buffer)
-  }
-}
-
-// Cap request bodies so a client can't exhaust memory by streaming an unbounded payload
-// (readBody is reachable pre-auth via POST /api/login). Reject early on the declared
-// Content-Length, and abort mid-stream if the actual bytes exceed the cap. The thrown
-// error carries statusCode 413, which the top-level dispatch turns into a 413 response.
-const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES) || 5 * 1024 * 1024 // 5 MB
-
-const tooLarge = () => {
-  const err = new Error('payload too large')
-  err.statusCode = 413
-  return err
-}
-
-const readRaw = async (req) => {
-  if (Number(req.headers['content-length']) > MAX_BODY_BYTES) {
-    throw tooLarge()
-  }
-  const chunks = []
-  let size = 0
-  for await (const chunk of req) {
-    size += chunk.length
-    if (size > MAX_BODY_BYTES) {
-      req.destroy()
-      throw tooLarge()
-    }
-    chunks.push(chunk)
-  }
-  return Buffer.concat(chunks).toString('utf-8')
-}
-
-const readBody = async (req) => JSON.parse(await readRaw(req))
-const readText = (req) => readRaw(req)
 
 // A node's body lives in a sidecar file (kept out of state.json so the node list
 // stays tiny). Which file + content-type is decided by node type — both are served
@@ -481,174 +378,111 @@ const routes = {
   // as one uniform record set. POST starts on-demand 'ai' runs (task/service are
   // observe-only here). ⚠️ The 'ai' runner runs Claude with bypassPermissions —
   // single-user / trusted only — never expose this server to a network without sandboxing.
-  'POST /api/runs': async (req, res) => {
-    try {
-      const { kind, input = {} } = await readBody(req)
-      if (!kind) {
-        throw new Error('kind (string) required')
-      }
-      const run = runManager.start(kind, input)
-      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(run))
-    } catch (error) {
-      res
-        .writeHead(400, { 'Content-Type': 'application/json' })
-        .end(JSON.stringify({ error: error.message }))
-    }
-  },
+  // 'POST /api/runs': async (req, res) => {
+  //   try {
+  //     const { kind, input = {} } = await readBody(req)
+  //     if (!kind) {
+  //       throw new Error('kind (string) required')
+  //     }
+  //     const run = runManager.start(kind, input)
+  //     res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(run))
+  //   } catch (error) {
+  //     res
+  //       .writeHead(400, { 'Content-Type': 'application/json' })
+  //       .end(JSON.stringify({ error: error.message }))
+  //   }
+  // },
 
-  'GET /api/runs': async (req, res) => {
-    const kind = new URL(req.url, 'http://localhost').searchParams.get('kind') || undefined
-    res
-      .writeHead(200, { 'Content-Type': 'application/json' })
-      .end(JSON.stringify(await runManager.list(kind)))
-  },
+  // 'GET /api/runs': async (req, res) => {
+  //   const kind = new URL(req.url, 'http://localhost').searchParams.get('kind') || undefined
+  //   res
+  //     .writeHead(200, { 'Content-Type': 'application/json' })
+  //     .end(JSON.stringify(await runManager.list(kind)))
+  // },
 
-  'GET /api/runs/:id': async (req, res, { id }) => {
-    const run = await runManager.get(id)
-    if (!run) {
-      res
-        .writeHead(404, { 'Content-Type': 'application/json' })
-        .end(JSON.stringify({ error: 'not found' }))
-      return
-    }
-    res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(run))
-  },
+  // 'GET /api/runs/:id': async (req, res, { id }) => {
+  //   const run = await runManager.get(id)
+  //   if (!run) {
+  //     res
+  //       .writeHead(404, { 'Content-Type': 'application/json' })
+  //       .end(JSON.stringify({ error: 'not found' }))
+  //     return
+  //   }
+  //   res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(run))
+  // },
 
-  // Server-Sent Events: a snapshot, then live deltas until the run ends or the
-  // client disconnects. The handler returns immediately; the socket stays open
-  // (no res.end) and is fed by the controller's listener.
-  'GET /api/runs/:id/stream': async (req, res, { id }) => {
-    res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-    })
-    // A client can vanish (ECONNRESET) between heartbeats. Writing to the dropped socket
-    // emits an 'error' on res that, with no listener, would crash the process — and a
-    // late write can fire before the 'close' cleanup below runs. Swallow the error event
-    // and guard every write so a gone client just stops receiving, it never takes us down.
-    res.on('error', () => {})
-    const safeWrite = (chunk) => {
-      if (res.writableEnded || res.destroyed) {
-        return
-      }
-      try {
-        res.write(chunk)
-      } catch {
-        // socket closed under us — the 'close' handler tears down the subscription
-      }
-    }
-    const send = (event) => safeWrite(`data: ${JSON.stringify(event)}\n\n`)
-    const unsubscribe = runManager.subscribe(id, send)
-    if (!unsubscribe) {
-      send({ type: 'error', error: 'not found' })
-      res.end()
-      return
-    }
-    const heartbeat = setInterval(() => safeWrite(': ping\n\n'), 15000)
-    req.on('close', () => {
-      clearInterval(heartbeat)
-      unsubscribe()
-    })
-  },
+  // // Server-Sent Events: a snapshot, then live deltas until the run ends or the
+  // // client disconnects. The handler returns immediately; the socket stays open
+  // // (no res.end) and is fed by the controller's listener.
+  // 'GET /api/runs/:id/stream': async (req, res, { id }) => {
+  //   res.writeHead(200, {
+  //     'Content-Type': 'text/event-stream',
+  //     'Cache-Control': 'no-cache',
+  //     Connection: 'keep-alive',
+  //   })
+  //   // A client can vanish (ECONNRESET) between heartbeats. Writing to the dropped socket
+  //   // emits an 'error' on res that, with no listener, would crash the process — and a
+  //   // late write can fire before the 'close' cleanup below runs. Swallow the error event
+  //   // and guard every write so a gone client just stops receiving, it never takes us down.
+  //   res.on('error', () => {})
+  //   const safeWrite = (chunk) => {
+  //     if (res.writableEnded || res.destroyed) {
+  //       return
+  //     }
+  //     try {
+  //       res.write(chunk)
+  //     } catch {
+  //       // socket closed under us — the 'close' handler tears down the subscription
+  //     }
+  //   }
+  //   const send = (event) => safeWrite(`data: ${JSON.stringify(event)}\n\n`)
+  //   const unsubscribe = runManager.subscribe(id, send)
+  //   if (!unsubscribe) {
+  //     send({ type: 'error', error: 'not found' })
+  //     res.end()
+  //     return
+  //   }
+  //   const heartbeat = setInterval(() => safeWrite(': ping\n\n'), 15000)
+  //   req.on('close', () => {
+  //     clearInterval(heartbeat)
+  //     unsubscribe()
+  //   })
+  // },
 
-  'POST /api/runs/:id/cancel': async (req, res, { id }) => {
-    const ok = await runManager.cancel(id)
-    res
-      .writeHead(ok ? 200 : 404, { 'Content-Type': 'application/json' })
-      .end(JSON.stringify({ cancelled: ok }))
-  },
+  // 'POST /api/runs/:id/cancel': async (req, res, { id }) => {
+  //   const ok = await runManager.cancel(id)
+  //   res
+  //     .writeHead(ok ? 200 : 404, { 'Content-Type': 'application/json' })
+  //     .end(JSON.stringify({ cancelled: ok }))
+  // },
 
-  'POST /api/runs/:id/resume': async (req, res, { id }) => {
-    try {
-      let input = {}
-      try {
-        input = await readBody(req)
-      } catch {
-        // empty body is fine — resume with no new input
-      }
-      const run = runManager.resume(id, input)
-      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(run))
-    } catch (error) {
-      res
-        .writeHead(400, { 'Content-Type': 'application/json' })
-        .end(JSON.stringify({ error: error.message }))
-    }
-  },
-}
-
-const matchUrl = (method, url) => {
-  for (const key of Object.keys(routes)) {
-    const [routeMethod, routePath] = key.split(' ')
-    if (routeMethod !== method) {
-      continue
-    }
-
-    const pattern = routePath.replace(/:\w+/g, '([^/]+)')
-    const match = url.match(new RegExp(`^${pattern}$`))
-
-    if (match) {
-      const paramNames = [...routePath.matchAll(/:(\w+)/g)].map((paramMatch) => paramMatch[1])
-      const params = Object.fromEntries(
-        paramNames.map((name, index) => {
-          return [name, match[index + 1]]
-        }),
-      )
-      return { handler: routes[key], params, key }
-    }
-  }
-  return null
+  // 'POST /api/runs/:id/resume': async (req, res, { id }) => {
+  //   try {
+  //     let input = {}
+  //     try {
+  //       input = await readBody(req)
+  //     } catch {
+  //       // empty body is fine — resume with no new input
+  //     }
+  //     const run = runManager.resume(id, input)
+  //     res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(run))
+  //   } catch (error) {
+  //     res
+  //       .writeHead(400, { 'Content-Type': 'application/json' })
+  //       .end(JSON.stringify({ error: error.message }))
+  //   }
+  // },
 }
 
 const ASSETS_PREFIX = '/api/assets/'
 
-// A dropped/reset connection (the client closed mid-request or mid-response) shows up as
-// one of these codes. They carry no server state — the only correct response is to stop
-// touching that socket, never to crash. Used by the request catch and the process guards.
-const isTransientNetworkError = (err) =>
-  !!err &&
-  ['ECONNRESET', 'EPIPE', 'ECONNABORTED', 'ECANCELED', 'ERR_STREAM_DESTROYED', 'ERR_STREAM_WRITE_AFTER_END'].includes(
-    err.code,
-  )
-
-const server = http.createServer(async (req, res) => {
-  // If the client drops the connection, 'error' fires on the request/response stream;
-  // with no listener Node throws it as an uncaught exception and the process dies. A
-  // vanished client needs no response — swallow it here for every route.
-  req.on('error', () => {})
-  res.on('error', () => {})
-  // Prod is HTTPS-only: tell the browser to refuse http:// to this origin for a year.
-  // setHeader (not writeHead) so it merges into every route's response. TLS itself is
-  // terminated by the front proxy; the app is bound to localhost (see server.listen).
+const handleRequest = async (req, res) => {
+  // Prod is HTTPS-only (TLS terminated by the front proxy / Cloudflare): tell the browser
+  // to refuse http:// to this origin for a year. setHeader (not writeHead) so it merges
+  // into every route's response below.
   if (IS_PROD) {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
   }
-  try {
-    await handleRequest(req, res)
-  } catch (err) {
-    // A handler threw: bad JSON body, a malformed %-escape, an fs error, a write to a
-    // socket the client already closed, … Convert it to a response instead of letting it
-    // bubble out as an unhandled rejection (which would take the whole server down).
-    if (isTransientNetworkError(err)) {
-      return // client went away mid-flight — nothing to send, nothing worth logging loudly
-    }
-    // Client-fault errors get their own status (413 over-size, 400 malformed JSON); only a
-    // genuine server fault is a 500 and worth logging loudly.
-    const status = err.statusCode || (err instanceof SyntaxError ? 400 : 500)
-    if (status >= 500) {
-      console.error(`[api] ${req.method} ${req.url} failed:`, err)
-    }
-    if (!res.headersSent) {
-      res
-        .writeHead(status, { 'Content-Type': 'application/json' })
-        .end(JSON.stringify({ error: status === 500 ? 'internal error' : err.message }))
-    } else {
-      res.destroy()
-    }
-  }
-})
-
-const handleRequest = async (req, res) => {
   const path = req.url.split('?')[0]
   // Login/logout manage the session cookie — reachable WITHOUT an existing session.
   if (req.method === 'POST' && path === '/api/login') {
@@ -671,7 +505,12 @@ const handleRequest = async (req, res) => {
   // Serve the built frontend (frontend/dist) for any non-API GET — no auth (see
   // serveStatic). All /api/* requests fall through to the auth gate below.
   if (req.method === 'GET' && !path.startsWith('/api/')) {
-    await serveStatic(res, path)
+    await serveStatic(res, {
+      dir: DIST_DIR,
+      urlPath: path,
+      contentTypes: STATIC_CONTENT_TYPES,
+      notBuiltMessage: 'Frontend not built — run `npm run build` in frontend/',
+    })
     return
   }
   // Everything else needs a valid session cookie or bearer (open if API_TOKEN unset).
@@ -684,10 +523,14 @@ const handleRequest = async (req, res) => {
   // Asset files live under a nested path, which the :param matcher (which stops at
   // '/') can't capture — handle the prefix directly before the route table.
   if (req.method === 'GET' && path.startsWith(ASSETS_PREFIX)) {
-    await serveAsset(res, path.slice(ASSETS_PREFIX.length))
+    await serveAsset(res, {
+      dir: ASSETS_DIR,
+      relPath: path.slice(ASSETS_PREFIX.length),
+      contentTypes: ASSET_CONTENT_TYPES,
+    })
     return
   }
-  const route = matchUrl(req.method, path)
+  const route = matchUrl(routes, req.method, path)
   if (route) {
     // Node ids index folders on disk — reject a non-numeric `:id` (e.g. `..`) before it
     // reaches a handler. (Run ids are UUIDs, so this guards only the node routes.)
@@ -703,47 +546,14 @@ const handleRequest = async (req, res) => {
   res.writeHead(404).end('Not found')
 }
 
-// A connection that errors before/while we parse the request (abrupt reset, garbage
-// bytes) surfaces here, not in the request handler. Reply 400 if the socket can still
-// take it, else just drop it — never let it bubble into an uncaught exception.
-server.on('clientError', (err, socket) => {
-  if (socket.writable && !socket.destroyed) {
-    socket.end('HTTP/1.1 400 Bad Request\r\n\r\n')
-  } else {
-    socket.destroy()
-  }
-})
+// Build the hardened HTTP server (per-request error guards, dispatch try/catch with
+// 413/400/500 mapping, and uncaught/unhandledRejection process guards — all in lib/http)
+// around our request handler, attach the WS exchange on /ws, then bind. Bound to localhost
+// by default so the API is reachable ONLY through the front TLS proxy / Cloudflare; override
+// with BIND_HOST=0.0.0.0 for LAN/dev use.
+const server = createServer(handleRequest)
+attachWsServer(server, { isAuthorized })
 
-// Listen-level faults (e.g. EADDRINUSE) — log instead of an opaque crash.
-server.on('error', (err) => {
-  console.error('[api] server error:', err)
-})
-
-// Last-resort process guards so a dropped connection can NEVER bring the server down.
-// Transient socket errors (ECONNRESET/EPIPE/…) carry no state — log quietly and keep
-// serving. A genuinely unexpected error is logged loudly; we keep running because nothing
-// supervises this process yet (serviceManager spawns it detached + unref'd and does not
-// act on autoRestart). Once a supervisor is in place (systemd Restart=on-failure, or
-// honoured autoRestart — see plans/prod-security-hardening-plan.txt §10 / production-
-// readiness-plan.txt §3.4), switch the non-transient branch to process.exit(1) so a real
-// crash restarts with clean state instead of limping on.
-process.on('uncaughtException', (err) => {
-  if (isTransientNetworkError(err)) {
-    console.warn(`[api] ignored transient socket error: ${err.code}`)
-    return
-  }
-  console.error('[api] uncaught exception (kept process alive):', err)
-})
-process.on('unhandledRejection', (reason) => {
-  if (isTransientNetworkError(reason)) {
-    console.warn(`[api] ignored transient socket rejection: ${reason.code}`)
-    return
-  }
-  console.error('[api] unhandled rejection (kept process alive):', reason)
-})
-
-// Bind to localhost by default so the API is reachable ONLY through the front TLS proxy,
-// never directly on a public interface. Override with BIND_HOST=0.0.0.0 for LAN/dev use.
 const PORT = process.env.PORT || 3001
 const BIND_HOST = process.env.BIND_HOST || '127.0.0.1'
 server.listen(PORT, BIND_HOST, () => {

@@ -6,11 +6,9 @@
 // Adding a feature to the bar = one entry in COMMANDS — that registry is what lets
 // it grow into a feature switcher (open/new/run/search…) later.
 import { ref, computed, watch, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
 import { useNodesStore } from '../stores/nodes.js'
 
 const store = useNodesStore()
-const router = useRouter()
 
 const input = ref('')
 const busy = ref(false)
@@ -57,76 +55,6 @@ const startResize = (event) => {
 }
 
 const COMMANDS = {
-  'minimal-txt': {
-    desc: 'compress an html note in place (AI)',
-    needs: 'html',
-    // Compress an html note in place via the minimal-txt skill, run as a tracked AI
-    // job (POST /api/runs, kind 'ai'). Target is an explicit `#id` arg, else the open
-    // node. The agent rewrites content.html headlessly, so we hop to the run monitor
-    // to watch it. In-place but recoverable — node files are committed.
-    run: async ({ args }) => {
-      const [idArg] = args
-      const id = idArg ?? store.activeNodeId
-      const node = store.nodes.find((candidate) => candidate.id === id)
-      if (!node) {
-        print(id ? `no node #${id}` : 'no node open', 'error')
-        return
-      }
-      if (node.type !== 'html') {
-        print(`#${node.id} is a ${node.type ?? 'html'} node — minimal-txt needs an html note`, 'error')
-        return
-      }
-      const message =
-        `Use the "minimal-txt" skill to losslessly compress ocraft html node ${node.id}. ` +
-        `Its body is the file data/nodes/${node.id}/content.html — read it, apply the skill's rules ` +
-        `(aggressive lowercase compression, keep every fact, flat <br> layout, no headings/lists), and ` +
-        `overwrite that file in place. Change no other file. Report briefly what changed.`
-      const res = await fetch('/api/runs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: 'ai', input: { message, label: `minimal-txt #${node.id}` } }),
-      })
-      if (!res.ok) {
-        throw new Error((await res.json().catch(() => ({})))?.error || `HTTP ${res.status}`)
-      }
-      print(`run started — minimal-txt #${node.id}`, 'ok')
-      const monitor = store.nodes.find((candidate) => candidate.name === 'api-runs-monitor')
-      if (monitor) {
-        router.push(`/node/${monitor.id}`)
-      } else {
-        print('open the "api-runs-monitor" node to watch it (reload if not listed yet)', 'info')
-      }
-    },
-  },
-  ai: {
-    desc: 'run an AI agent on a prompt (tracked /api/runs job)',
-    // General AI — the consolidated path that replaces the old ai-chat node: start a
-    // tracked AI run (POST /api/runs, kind 'ai') with the rest of the line as the prompt,
-    // then hop to the run monitor to watch it. The runner is Claude (bypassPermissions,
-    // cwd = repo root) — same localhost-only caveat as every AI run.
-    run: async ({ args }) => {
-      const message = args.join(' ').trim()
-      if (!message) {
-        print('ai: give it a prompt — ai <your message>', 'error')
-        return
-      }
-      const res = await fetch('/api/runs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: 'ai', input: { message, label: `ai: ${message.slice(0, 40)}` } }),
-      })
-      if (!res.ok) {
-        throw new Error((await res.json().catch(() => ({})))?.error || `HTTP ${res.status}`)
-      }
-      print(`run started — ${message.slice(0, 60)}`, 'ok')
-      const monitor = store.nodes.find((candidate) => candidate.name === 'api-runs-monitor')
-      if (monitor) {
-        router.push(`/node/${monitor.id}`)
-      } else {
-        print('open the "api-runs-monitor" node to watch it (reload if not listed yet)', 'info')
-      }
-    },
-  },
   format: {
     desc: 'pretty-print the open html note (client-side)',
     needs: 'html',

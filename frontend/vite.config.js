@@ -5,15 +5,17 @@ import vue from '@vitejs/plugin-vue'
 // see runtime/services/api.js (`node runtime/cli.js service start api`). Vite only
 // proxies /api to it; it no longer spawns the backend itself.
 //
-// AUTH: the backend requires a bearer token (API_TOKEN in <repo>/.env) on every
-// request. The browser supplies it — entered once at /login, stored in localStorage,
-// and attached to every /api call by the global fetch wrapper (src/lib/apiAuth.js).
-// So the proxy is a plain forward; the token isn't baked into the build.
+// AUTH: the backend requires the secret API_TOKEN (<repo>/.env) on every request. The
+// browser gets a session by POSTing the token once at /login; the backend then sets an
+// HttpOnly, SameSite=Strict cookie the browser auto-attaches (JS never holds the token).
+// So the proxy is a plain forward — the cookie rides along on same-origin localhost.
 export default defineConfig({
   plugins: [vue()],
   server: {
     proxy: {
       '/api': 'http://localhost:3001',
+      // WebSocket hub (runtime/wsServer.js): ws:true forwards the upgrade handshake to :3001.
+      '/ws': { target: 'http://localhost:3001', ws: true },
     },
   },
 })

@@ -53,7 +53,7 @@ PHASE 1 — Storage abstraction (no behavior change; single-user still works)
     getBody(userId, id) / saveBody(userId, id, body)
     mintId(userId)               -> next id
 - Implement fileNodeStore.js = today's behavior (userId is the single owner; ignored).
-- Rewrite apiServer.js node handlers (GET/POST/DELETE /api/nodes, /body) to call nodeStore
+- Rewrite api.js node handlers (GET/POST/DELETE /api/nodes, /body) to call nodeStore
   instead of fs directly. Numeric-id + traversal guards stay.
 - SHIP THIS ALONE first. Pure refactor, fully backward compatible. Verify: app unchanged.
 

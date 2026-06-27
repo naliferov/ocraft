@@ -1,6 +1,6 @@
 ocraft — PROD SECURITY HARDENING sprint (ship-to-prod-now)
 ==========================================================
-(written 2026-06-26; grounded in runtime/apiServer.js @ 581 lines, file:line inline)
+(written 2026-06-26; grounded in runtime/api.js @ 581 lines, file:line inline)
 
 SCOPE. This is the tactical security sprint that gates the FIRST real prod deploy
 of the now-authed API server (login/session-cookie + /api/session landed this
@@ -44,7 +44,7 @@ left out of this sprint. The reasoning, recorded so it's a decision not a gap:
     folded into #5 below.
 
 
-2. [FIX] BIND TO LOCALHOST  (apiServer.js:578)
+2. [FIX] BIND TO LOCALHOST  (api.js:578)
 ----------------------------------------------
 Today: `server.listen(PORT, () => …)` — no host arg → binds 0.0.0.0/:: → :3001 is
 public, bypassing TLS.
@@ -56,7 +56,7 @@ public, bypassing TLS.
   [ ] Log the bound host on boot so "why can't I reach it" is obvious.
 
 
-3. [FIX] SESSION COOKIE / TOKEN HARDENING  (apiServer.js:62, :72)
+3. [FIX] SESSION COOKIE / TOKEN HARDENING  (api.js:62, :72)
 ----------------------------------------------------------------
 The cookie VALUE is the raw API_TOKEN (sessionCookie, :72), Max-Age 1yr, no
 server-side session/rotation/revocation. HttpOnly+SameSite=Strict are already set;
@@ -73,7 +73,7 @@ Secure is conditional on COOKIE_SECURE.
   [ ] OPTIONAL: drop Max-Age from 1yr to e.g. 30d.
 
 
-4. [FIX] LOGIN RATE LIMITING  (apiServer.js:525 handleLogin)
+4. [FIX] LOGIN RATE LIMITING  (api.js:525 handleLogin)
 ------------------------------------------------------------
 No throttle on POST /api/login → brute-forceable (mitigated only by token entropy).
   [ ] App-level: in-memory failed-attempt counter with a sliding window; after N
@@ -107,7 +107,7 @@ No throttle on POST /api/login → brute-forceable (mitigated only by token entr
 
 6. [ANALYZE→FIX] UNHANDLED EXCEPTIONS HANG REQUESTS  (promote into sprint)
 -------------------------------------------------------------------------
-The server callback (apiServer.js:522) has no try/catch around `await serveStatic`
+The server callback (api.js:522) has no try/catch around `await serveStatic`
 (:545) or `await route.handler` (:571). A throw → unhandled rejection → response
 never written → socket hangs (no default response timeout). Throw sources:
   - decodeURIComponent on malformed `%` in serveStatic (:224) — serveStatic is on

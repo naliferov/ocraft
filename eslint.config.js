@@ -7,9 +7,8 @@ import pluginVue from 'eslint-plugin-vue'
 import prettier from 'eslint-config-prettier'
 
 export default [
-  // Not project source: deps, build output, the backend data plane (node
-  // bodies / state / assets — sandboxed user content), and the Deno service
-  // (lint that with deno's own tooling, not here).
+  // Not project source: deps, build output, and the backend data plane (node
+  // bodies / state / assets — sandboxed user content).
   {
     ignores: [
       '**/node_modules/**',
@@ -17,8 +16,6 @@ export default [
       'data/**',
       'runtime/executions/**',
       'runtime/state/**',
-      'runtime/transport/ws-exchange/**',
-      'experiments/js-engine/program.yo',
     ],
   },
 
@@ -32,8 +29,8 @@ export default [
     rules: {
       // README convention: no single-letter variable names, EXCEPT i/j/k as numeric
       // loop counters (exempted below). The ~150 pre-existing single-letter names
-      // (callback args, catch errors, graphics math, the `yo` interpreter) were
-      // renamed to descriptive names; only i/j/k loop indices remain, by design.
+      // (callback args, catch errors, graphics math) were renamed to descriptive
+      // names; only i/j/k loop indices remain, by design.
       // Kept as 'warn'; bump to 'error' to hard-enforce once it's proven stable.
       'id-length': ['warn', { min: 2, properties: 'never', exceptions: ['_', 'i', 'j', 'k'] }],
       'no-unused-vars': [
@@ -49,7 +46,7 @@ export default [
       // it is RE-ASSERTED in a final block below — without that, this line is
       // silently overridden and the convention goes unenforced.
       curly: ['error', 'all'],
-      // Node-type components are intentionally single-word (Scene, Html, …).
+      // Node-type components are intentionally single-word (Html, Script, …).
       'vue/multi-word-component-names': 'off',
       // The editor edits the `node` prop in place, then persists via store.save()
       // — a deliberate edit-in-place model, not accidental prop mutation. (A future
