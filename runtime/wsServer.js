@@ -63,18 +63,18 @@ const handleMessage = (socket, raw) => {
   send(socket, { type: 'error', error: 'unknown type', received: message.type })
 }
 
-// Attach the exchange to an existing http.Server. Upgrades on /ws ONLY, behind the same
-// auth as /api (isAuthorized reads the session cookie / bearer off the upgrade request).
-export const attachWsServer = (server, { isAuthorized }) => {
+// Attach the exchange to an existing http.Server. Upgrades on /ws ONLY, behind the same auth as
+// /api (resolveUser reads the session cookie off the upgrade request; null = reject).
+export const attachWsServer = (server, { resolveUser }) => {
   const wss = new WebSocketServer({ noServer: true })
 
-  server.on('upgrade', (req, socket, head) => {
+  server.on('upgrade', async (req, socket, head) => {
     const path = req.url.split('?')[0]
     if (path !== '/ws') {
       socket.destroy() // not our endpoint, and there's no other upgrade handler — drop it
       return
     }
-    if (!isAuthorized(req)) {
+    if (!(await resolveUser(req))) {
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
       socket.destroy()
       return

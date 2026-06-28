@@ -49,6 +49,16 @@ const commands = {
       console.log(`${formatted}  ${execution.name}  (${execution.id})`)
     }
   },
+  // Apply pending Postgres migrations (runtime/store/migrations/*.sql). Needs DATABASE_URL.
+  migrate: async () => {
+    const { migrate } = await import('./store/migrate.js')
+    await migrate()
+  },
+  // One-off: copy the file node store into Postgres under the dev owner (Phase 6). Needs DATABASE_URL.
+  'import-nodes': async () => {
+    const { importFiles } = await import('./store/import-files.js')
+    await importFiles()
+  },
   // Manage SERVICES — long-running processes. See runtime/services/.
   service: async () => {
     const [sub, id, ...rest] = args

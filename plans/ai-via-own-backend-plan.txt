@@ -1,0 +1,90 @@
+AI VIA THE USER'S OWN BACKEND — "bring your own Claude"
+========================================================
+
+Goal: let a user send AI requests WITHOUT ocraft hosting or proxying the model. The AI runs on
+the USER's machine, under THEIR login (e.g. the `claude` CLI / Agent SDK they're already signed
+into). ocraft only relays the prompt and the answer. This is the cleanest answer to the
+multi-user execution-isolation crux (see multi-user-postgres-oauth-plan.txt Phase 4): if ocraft
+never runs anyone's AI, there's no server-side bypassPermissions, no keys to hold, no cross-user
+reach. "bypassPermissions" becomes scoped to the user's OWN box, which is exactly where it belongs.
+
+WHY (the crux it dissolves)
+---------------------------
+Today the AI runner is server-side, bypassPermissions, Bash + repo-cwd — single-user-trusted only,
+and disabled in prod for that reason. The Postgres plan's Phase 4 tries to TAME it (per-user key +
+node-scoped tools). This plan instead REMOVES it from the server: each user brings their own AI
+endpoint. ocraft hosts nothing AI; it's a relay. The two approaches can coexist (hosted-constrained
+for convenience; BYO-backend for power users who want full local agency).
+
+THREE SHAPES (pick / combine)
+-----------------------------
+1. BYO API KEY — user pastes an Anthropic key in settings; the browser (or ocraft backend) calls
+   Anthropic with it. Simplest, weakest: key in the browser is exposed; key in the backend means
+   ocraft holds it (encrypted) — that's Phase 4 of the Postgres plan, not this.
+
+2. BYO BACKEND (the user's idea) — the user runs a tiny local server on their machine that wraps
+   the `claude` CLI / Agent SDK (their login, their compute, their credits). ocraft is configured
+   with that endpoint; the browser / a script's `x` POSTs a prompt there and gets the answer back.
+   ocraft never sees the key/login. The AI has exactly the user's own machine's permissions — their
+   sandbox, not ocraft's server.
+
+3. VIA THE /ws EXCHANGE (recommended — uses what we already built) — the user's local agent connects
+   to ocraft's /ws exchange as a peer (gets a name). The browser sends an AI request to that peer by
+   name; the agent runs it locally and DMs the result back over /ws. No public endpoint to expose
+   (the agent dials OUT to /ws, NAT-friendly), no keys in ocraft, per-user by construction. This is
+   the "universalize api/cli/ws — every surface is an adapter over one core" idea cashed out: the
+   user's AI is just another peer on the exchange.
+
+THE LOCAL AGENT (`ocraft-agent`)
+--------------------------------
+A small Node script the user runs on their machine:
+  - LLM: shell out to the `claude` CLI, or the Claude Agent SDK (their existing login).
+  - Transport: connect to ocraft's wss://.../ws as a peer (shape 3), OR expose a localhost HTTP
+    endpoint (shape 2).
+  - On an incoming prompt: run it, stream/return the text. Optionally scoped (only node tools, via
+    ocraft's per-user tool surface) or full-power on the user's own box (their choice).
+  - Pairing: the agent authenticates as the user (a per-user agent token); the browser learns its
+    peer name from the user's settings, so "my agent" is unambiguous on a shared exchange.
+
+FRONTEND / SCRIPT SURFACE
+-------------------------
+- Settings: "AI backend" = none | api-key | local-endpoint | ws-agent (+ the endpoint/peer/token).
+- Expose `x.ai(prompt, opts)` to script nodes → routes to the user's configured AI. Every script can
+  call AI, but the AI is the user's. (Pairs with the broader `x.net` / exchange-for-scripts idea.)
+- A terminal `ai <prompt>` command can come back — but now it relays to the user's agent, not the
+  removed server runner.
+
+SECURITY
+--------
+- The agent runs on the USER's machine with THEIR permissions. Server-side, ocraft executes no AI
+  and stores no model credentials. The relay (HTTP endpoint or /ws) only carries prompt + response
+  text, authenticated as the user.
+- Offline/away: if the user's agent isn't connected, AI requests fail cleanly ("your agent is
+  offline") — no server fallback that would re-introduce the hosted-runner risk.
+
+RELATION TO OTHER PLANS
+-----------------------
+- multi-user-postgres-oauth-plan.txt Phase 4: that's the HOSTED-but-constrained path; this is the
+  NOT-HOSTED path. Shape 3 (ws-agent) is the most on-brand and sidesteps server execution entirely.
+- ws exchange (runtime/wsServer.js): shape 3 is literally a peer on it — no new transport needed.
+
+MONETIZATION / MARKETING (per the lens)
+---------------------------------------
+- Monetization: users bring their own model cost → ocraft stays cheap to host (no AI bill), which
+  makes a free/cheap multi-user tier viable. No direct charge for "AI"; it's the user's.
+- Marketing: "bring your own Claude — your AI, your machine, your login; ocraft just wires it in"
+  is a clean trust story (no keys handed to a SaaS) and very demoable (a local agent answering a
+  prompt typed in the browser, routed over the exchange).
+
+OPEN QUESTIONS
+--------------
+- Discovery/pairing of "my agent" on a shared exchange (per-user agent token + name).
+- Streaming responses over /ws (chunked messages) vs one-shot.
+- Whether to also ship the hosted-constrained Phase-4 path, or make BYO the only AI story.
+- Tool scope: does the user's agent get ocraft's node tools (so AI can reshape their tree), and how
+  are those tools exposed to a process running on the user's box (over the same relay, reversed).
+
+EFFORT — M
+  - Shape 2 (local HTTP endpoint + a settings field + frontend call) — S/M, quickest to prove.
+  - Shape 3 (ws-agent) — M, the on-brand target; needs pairing + the agent script.
+  - `x.ai` for scripts — S once a transport exists.

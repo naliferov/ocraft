@@ -101,6 +101,52 @@ The node API server (`runtime/api.js`) reads/writes node JSON under `data/nodes/
 
 **In production there's no Vite.** Build the editor once (`cd frontend && npm run build` → `frontend/dist/`), and the same `api` process serves that static bundle for every non-`/api` request — hashed assets cached immutably, an `index.html` history-fallback so `/node/:id` resolves on refresh — alongside the `/api` routes on one port. So prod is a **single process** serving app + API from **one origin** (which the `SameSite=Strict` session cookie requires); front it with Caddy/nginx for HTTPS and set `API_TOKEN` + `COOKIE_SECURE=true`. The static bundle is served *without* auth (it holds no secrets — the token isn't baked into the build, and the login page must load first); only `/api/*` is gated. The CI deploy (`.github/workflows/ci.yml`) runs `npm run build` in `frontend/` on the box as part of each deploy.
 
+### Multi-user — Postgres + Google sign-in
+
+The store is moving from local files to **Postgres**, with **Google OAuth** for sign-in — no
+passwords and no sign-up form: the *first* Google sign-in creates your account, and the same click
+signs you in afterwards. The node store is already swappable — set `DATABASE_URL` and the api uses
+Postgres, unset it and it falls back to the local file store (`runtime/store/`).
+
+**1 · Postgres (local dev).** Quickest is Docker — local dev only; **prod uses a native
+`apt install postgresql`** on the box, not Docker:
+
+```bash
+docker run -d --name ocraft-pg -e POSTGRES_PASSWORD=ocraft -e POSTGRES_DB=ocraft -p 5432:5432 postgres:16
+```
+
+Then add `DATABASE_URL` to `.env`, create the schema, and (optionally) import your existing file tree:
+
+```bash
+# .env
+DATABASE_URL=postgresql://postgres:ocraft@localhost:5432/ocraft
+
+node runtime/cli.js migrate        # apply runtime/store/migrations/*.sql
+node runtime/cli.js import-nodes   # one-off: copy data/nodes/* into pg under your account
+```
+
+**2 · Google sign-in (Phase 3 — being built).** "Sign up" *is* "sign in" — one Google click. Same
+flow locally as in prod, just a localhost redirect URI:
+
+- **Google Cloud Console** → a project → *APIs & Services → OAuth consent screen*: **External**,
+  app name + your email, and add yourself as a **Test user** (so you can sign in while it's in testing).
+- *Credentials → Create credentials → OAuth client ID → Web application* → **Authorized redirect URIs**:
+  - local: `http://localhost:5173/api/auth/google/callback`  (the Vite dev server proxies `/api`)
+  - prod:  `https://<your-domain>/api/auth/google/callback`
+- Put the client id/secret in `.env`:
+
+  ```
+  GOOGLE_CLIENT_ID=...
+  GOOGLE_CLIENT_SECRET=...
+  ```
+
+- Open the app → **Sign in with Google** → consent → you're in. A `users` + `accounts` + `sessions`
+  row is created and a session cookie keeps you logged in. No passwords are stored, and Google gates
+  bots/spam, so no reCAPTCHA is needed.
+
+Until Google sign-in lands, the api still uses the single-user **`API_TOKEN`** (a random value in
+`.env`, entered once at `/login`); Google OAuth *replaces* it — no open gap.
+
 ## Reference
 
 ### Tasks vs services

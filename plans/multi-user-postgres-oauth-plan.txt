@@ -42,9 +42,9 @@ OWNERSHIP MODEL — every node belongs to EXACTLY ONE user
   existing tree simply becomes "your" tree under the new model. New users start with an empty tree.
 
 ----------------------------------------------------------------------------------------
-PHASE 1 — Storage abstraction (no behavior change; single-user still works)
+PHASE 1 — Storage abstraction (no behavior change; single-user still works)  [SHIPPED]
 ----------------------------------------------------------------------------------------
-- New module runtime/nodeStore.js — the interface every node op goes through:
+- New module runtime/store/index.js — the interface every node op goes through:
     listNodes(userId)            -> [{id, ...meta}]
     getNode(userId, id)          -> {id, ...meta} | null
     saveNode(userId, id, data)   -> upsert
@@ -52,7 +52,7 @@ PHASE 1 — Storage abstraction (no behavior change; single-user still works)
     childrenOf(userId, parentId) -> [id]
     getBody(userId, id) / saveBody(userId, id, body)
     mintId(userId)               -> next id
-- Implement fileNodeStore.js = today's behavior (userId is the single owner; ignored).
+- Implement runtime/store/file.js = today's behavior (userId is the single owner; ignored).
 - Rewrite api.js node handlers (GET/POST/DELETE /api/nodes, /body) to call nodeStore
   instead of fs directly. Numeric-id + traversal guards stay.
 - SHIP THIS ALONE first. Pure refactor, fully backward compatible. Verify: app unchanged.
@@ -60,8 +60,11 @@ PHASE 1 — Storage abstraction (no behavior change; single-user still works)
 ----------------------------------------------------------------------------------------
 PHASE 2 — Postgres + schema + the pg store
 ----------------------------------------------------------------------------------------
-- dep: `pg`. Config: DATABASE_URL in .env. Connection pool in runtime/db.js.
-- Migrations (runtime/migrations/, run by a `cli.js migrate`):
+- dep: `postgres` (porsager/postgres.js — ESM-native, tagged-template SQL, tiny; fits the
+  framework-free `.js` style. `pg` is the conservative, most-documented alternative; an ORM is
+  not worth it without TypeScript). The nodeStore interface (Phase 1) hides the choice → swappable.
+  Config: DATABASE_URL in .env. Connection pool in runtime/db.js.
+- Migrations (runtime/store/migrations/, run by a `cli.js migrate`):
     users        (id uuid pk default gen_random_uuid(),
                   google_sub text unique, email text, name text, created_at timestamptz)
     nodes        (id bigserial pk, user_id uuid NOT NULL references users,   -- owner; every node has one
@@ -70,16 +73,25 @@ PHASE 2 — Postgres + schema + the pg store
                   data jsonb,                                -- the rest of state.json (open-ended:
                                                              --   collapsed, runOnOpen, scriptType, …)
                   created_at, updated_at)
-    node_bodies  (node_id bigint pk references nodes, body text, updated_at)
+    node_bodies  (node_id bigint pk references nodes, content bytea, content_type text, updated_at)
+                 -- content bytea + content_type (MIME): ONE shape for text bodies (html/script)
+                 -- AND binary bodies (image/video/audio) — see the `binary` node type. The mime
+                 -- drives frontend rendering; a binary node also keeps {mime, filename} in nodes.data.
     sessions     (id text pk, user_id uuid references users, created_at, expires_at)
   Indexes: nodes(user_id), nodes(user_id, parent_id).
   Rationale: type/name/parent_id promoted to columns for the tree + queries; everything else
-  in `data` jsonb (node state.json is open-ended). Bodies in a SEPARATE table so the
-  list query stays light — mirrors today's "body is a sidecar, fetched on open".
-- Implement pgNodeStore.js over the interface. EVERY query carries `WHERE user_id = $1`.
+  in `data` jsonb (node state.json is open-ended). Bodies in a SEPARATE table so the list query
+  stays light — mirrors today's "body is a sidecar, fetched on open" — stored as bytea +
+  content_type so one column holds text AND binary (no special-casing the `binary` type).
+- Implement runtime/store/pg.js over the interface. EVERY query carries `WHERE user_id = $1`.
   Tree is still parent_id (load the user's nodes, build the tree client-side as now — no
   recursive SQL needed at this scale).
-- Switch by config: NODE_STORE=file|pg.
+- Selecting the backend: api.js imports the store directly. Today that's `./store/file.js`.
+  When pg.js exists, pick it explicitly in ONE place (no env-magic facade) — e.g.
+  `import * as fileStore from './store/file.js'; import * as pgStore from './store/pg.js';
+   const nodeStore = process.env.DATABASE_URL ? pgStore : fileStore`. So local dev (no
+  DATABASE_URL) stays file-backed; prod uses pg. Both implement the same interface, so it's a
+  one-line choice.
 
 ----------------------------------------------------------------------------------------
 PHASE 3 — Google OAuth + sessions + per-user identity
@@ -117,7 +129,8 @@ PHASE 4 — Per-user AI (the execution model — the crux)
 ----------------------------------------------------------------------------------------
 PHASE 5 — Deployment (droplet)
 ----------------------------------------------------------------------------------------
-- Droplet (2GB): runs the api server (serves built SPA + gated /api on one origin — static
+- Droplet (1GB + a 1-2GB swap file; steady-state OS+PG+api ≈ 400-550MB): runs the api server
+  (serves built SPA + gated /api on one origin — static
   serving already built) + Postgres (or a managed PG later). `npm run build` -> dist served
   by the api.
 - HTTPS: Caddy (auto Let's Encrypt) in front -> set COOKIE_SECURE=true (Secure cookies),
@@ -134,7 +147,7 @@ PHASE 6 — Migrate the existing file store
   data/nodes/* — metadata AND bodies (scripts + html alike) — and insert it attached to your
   user_id (nodes.user_id = owner; bodies -> node_bodies). After this, ALL your current nodes
   are yours under the new model; nothing is shared or orphaned. Verify counts + a spot-check,
-  then flip NODE_STORE=pg.
+  then set DATABASE_URL (api.js then uses pg).
 
 SEQUENCING / WHAT TO BUILD FIRST
 -------------------------------
@@ -152,6 +165,14 @@ OPEN DECISIONS / RISKS
   complicate every query + the AI tool scope for zero current need.
 - SQLite as a cheaper Phase-2 (single file, no PG ops) before Postgres? Recommended stepping
   stone; same interface, swap later. (User chose PG — fine; this is the only "are you sure".)
+- HOSTING — self-host Postgres on the droplet (CHOSEN) vs Supabase. Self-host: on-brand ("own your
+  data"), no vendor, co-located with the app, cheap (~$12/mo at 2GB) — but you run backups/upgrades
+  (`apt install postgresql` + a nightly pg_dump cron). Supabase: managed PG + Auth + Storage +
+  Realtime; free tier ($0 but PAUSES after ~1wk idle — bad for always-on), Pro $25/mo; its Auth could
+  replace Phase 3 and its Storage could hold binary bodies, but it adds a vendor + moves data off your
+  box (against local-first). Decision: self-host on a resized 2GB droplet; revisit Supabase only if PG
+  ops become a burden. NB: the current droplet is 512MB — too small for PG + the api; resize to
+  s-1vcpu-2gb-50gb (~$12/mo), or s-1vcpu-1gb ($6) as a tight minimum.
 - Node versioning: the DB loses git-free history -> add a node_versions table if wanted.
 - gdrive fs-mount (parked roadmap item): per-user Drive in a hosted world needs per-user Drive
   OAuth scope + storage — defer; it fights the multi-user model. Keep mounts a local-only feature.

@@ -7,6 +7,7 @@ import NodeItem from './components/NodeItem/NodeItem.vue'
 import NodeTree from './components/NodeTree.vue'
 import Terminal from './components/Terminal.vue'
 import Login from './components/Login.vue'
+import { logout } from './lib/apiAuth.js'
 
 const store = useNodesStore()
 const router = useRouter()
@@ -23,6 +24,13 @@ watch(
 )
 
 const navigate = (id) => router.push(`/node/${id}`)
+
+// Sign out: clear the server session, then HARD-navigate to /login. A full reload (not router.push)
+// drops the Pinia store too, so the next sign-in can never see the previous user's tree.
+const signOut = async () => {
+  await logout()
+  window.location.href = '/login'
+}
 
 // Search the tree by node name. Prune to branches that contain a match (keeping
 // ancestors so the path stays visible); while searching, NodeTree force-expands
@@ -106,7 +114,10 @@ const reparentNode = async ({ id, parentId }) => {
               >
               <span class="tree-title">Nodes</span>
             </div>
-            <button class="new-node" title="New root node" @click="createNode()">+ node</button>
+            <div class="tree-actions">
+              <button class="new-node" title="New root node" @click="createNode()">+ node</button>
+              <button class="logout-btn" title="Sign out" @click="signOut">log out</button>
+            </div>
           </div>
           <div class="tree-search">
             <input
@@ -293,6 +304,25 @@ const reparentNode = async ({ id, parentId }) => {
   border-radius: 4px;
 }
 .new-node:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
+}
+.tree-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.logout-btn {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+  font-size: 0.8em;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.logout-btn:hover {
   opacity: 1;
   background: rgba(255, 255, 255, 0.08);
 }

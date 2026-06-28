@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import NodeItem from './components/NodeItem/NodeItem.vue'
 import { useNodesStore } from './stores/nodes.js'
-import { checkAuth } from './lib/apiAuth.js'
+import { getSession } from './lib/apiAuth.js'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -20,7 +20,7 @@ export const router = createRouter({
 //  - on any other page while not authed → /login
 //  - authed and entering the app → make sure the node tree is loaded
 router.beforeEach(async (to) => {
-  const authed = await checkAuth()
+  const { authorized: authed } = await getSession()
   if (to.path === '/login') {
     return authed ? '/' : true
   }
