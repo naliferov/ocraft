@@ -5,10 +5,10 @@ import vue from '@vitejs/plugin-vue'
 // see runtime/services/api.js (`node runtime/cli.js service start api`). Vite only
 // proxies /api to it; it no longer spawns the backend itself.
 //
-// AUTH: the backend requires the secret API_TOKEN (<repo>/.env) on every request. The
-// browser gets a session by POSTing the token once at /login; the backend then sets an
-// HttpOnly, SameSite=Strict cookie the browser auto-attaches (JS never holds the token).
-// So the proxy is a plain forward — the cookie rides along on same-origin localhost.
+// AUTH: the backend gates every /api request on a session cookie. Sign in at /login (email+password,
+// or Google when configured); the backend sets an HttpOnly, SameSite=Lax cookie the browser
+// auto-attaches (JS never holds anything secret). So the proxy is a plain forward — the cookie
+// rides along on same-origin localhost.
 export default defineConfig({
   plugins: [vue()],
   server: {

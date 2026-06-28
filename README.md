@@ -99,14 +99,14 @@ npm run build
 
 The node API server (`runtime/api.js`) reads/writes node JSON under `data/nodes/` and can also run standalone with `node runtime/api.js`. It runs as a managed service (`api`); Vite only proxies `/api` to it.
 
-**In production there's no Vite.** Build the editor once (`cd frontend && npm run build` → `frontend/dist/`), and the same `api` process serves that static bundle for every non-`/api` request — hashed assets cached immutably, an `index.html` history-fallback so `/node/:id` resolves on refresh — alongside the `/api` routes on one port. So prod is a **single process** serving app + API from **one origin** (which the `SameSite=Strict` session cookie requires); front it with Caddy/nginx for HTTPS and set `API_TOKEN` + `COOKIE_SECURE=true`. The static bundle is served *without* auth (it holds no secrets — the token isn't baked into the build, and the login page must load first); only `/api/*` is gated. The CI deploy (`.github/workflows/ci.yml`) runs `npm run build` in `frontend/` on the box as part of each deploy.
+**In production there's no Vite.** Build the editor once (`cd frontend && npm run build` → `frontend/dist/`), and the same `api` process serves that static bundle for every non-`/api` request — hashed assets cached immutably, an `index.html` history-fallback so `/node/:id` resolves on refresh — alongside the `/api` routes on one port. So prod is a **single process** serving app + API from **one origin** (which the `SameSite=Strict` session cookie requires); front it with Cloudflare/Caddy for HTTPS and set `COOKIE_SECURE=true`. The static bundle is served *without* auth (it holds no secrets — nothing sensitive is baked into the build, and the login page must load first); only `/api/*` is gated. The CI deploy (`.github/workflows/ci.yml`) runs `npm run build` in `frontend/` on the box as part of each deploy.
 
 ### Multi-user — Postgres + Google sign-in
 
-The store is moving from local files to **Postgres**, with **Google OAuth** for sign-in — no
-passwords and no sign-up form: the *first* Google sign-in creates your account, and the same click
-signs you in afterwards. The node store is already swappable — set `DATABASE_URL` and the api uses
-Postgres, unset it and it falls back to the local file store (`runtime/store/`).
+The store moved from local files to **Postgres**, with sign-in by **email + password** (the default —
+Node `scrypt`, no deps) or **Google** (optional, shown only when configured). Sign-in *is* sign-up:
+the first time creates your account. The node store is swappable — set `DATABASE_URL` and the api
+uses Postgres, unset it and it falls back to the local file store (`runtime/store/`).
 
 **1 · Postgres (local dev).** Quickest is Docker — local dev only; **prod uses a native
 `apt install postgresql`** on the box, not Docker:
@@ -125,8 +125,8 @@ node runtime/cli.js migrate        # apply runtime/store/migrations/*.sql
 node runtime/cli.js import-nodes   # one-off: copy data/nodes/* into pg under your account
 ```
 
-**2 · Google sign-in (Phase 3 — being built).** "Sign up" *is* "sign in" — one Google click. Same
-flow locally as in prod, just a localhost redirect URI:
+**2 · Google sign-in (optional).** Set the two `GOOGLE_*` vars and the "Sign in with Google" button
+appears — same flow locally as in prod, just a localhost redirect URI:
 
 - **Google Cloud Console** → a project → *APIs & Services → OAuth consent screen*: **External**,
   app name + your email, and add yourself as a **Test user** (so you can sign in while it's in testing).
@@ -144,8 +144,8 @@ flow locally as in prod, just a localhost redirect URI:
   row is created and a session cookie keeps you logged in. No passwords are stored, and Google gates
   bots/spam, so no reCAPTCHA is needed.
 
-Until Google sign-in lands, the api still uses the single-user **`API_TOKEN`** (a random value in
-`.env`, entered once at `/login`); Google OAuth *replaces* it — no open gap.
+Prod (`NODE_ENV=production`) is **Google-only** — the email routes are disabled there and it fails
+closed without Google. The old single-user `API_TOKEN` is gone.
 
 ## Reference
 
@@ -183,7 +183,7 @@ Standalone Model Context Protocol servers in `mcp-servers/`, registered in [`.mc
 
 > **Secrets:** `.env` files, Telegram session strings, and the Google service-account JSON key are git-ignored and must never be committed. The `.env.example` files are placeholders only. The AI run path (`POST /api/runs` with `kind: 'ai'`, and the terminal's `ai` / `minimal-txt` commands) runs the Claude Agent SDK with **bypassed permissions** — full Read/Write/Edit/Bash, cwd = repo root — so it can edit files and run shell commands on this machine. Because of that the `'ai'` runner is **disabled by default**: it's left unregistered in `runtime/api.js`, so `POST /api/runs {kind:'ai'}` returns *"unknown kind"* (the intended refusal). Re-enable it only behind an explicit, off-by-default env gate (`OCRAFT_ENABLE_AGENT`) and only on a sandboxed host (see the Roadmap's *sandboxed execution*); it stays **single-user / trusted only** and must never face a network.
 >
-> **API auth:** the node API server requires the secret `API_TOKEN` on **every** request — set a random one in `.env` (e.g. `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`). You enter it once at **`/login`**; the backend validates it (`POST /api/login`) and sets an **HttpOnly, `SameSite=Strict`** session cookie. The browser then auto-sends it on every `/api` request and **JS never holds the token** — an HttpOnly cookie is invisible to scripts (XSS-safe), and `SameSite=Strict` means it isn't sent cross-site (CSRF-safe). A `Bearer` header is also accepted for non-browser callers. In production over HTTPS, set `COOKIE_SECURE=true` so the cookie is also `Secure`. Unset `API_TOKEN` = the server runs open with a loud boot warning (so a fresh checkout doesn't break). After changing the token, restart the `api` service and re-`/login`.
+> **Auth:** every `/api` request needs a session — sign in at **`/login`** with **email + password** (hashed with Node `scrypt`, no deps) or **Google** (when `GOOGLE_CLIENT_ID/SECRET` are set). The session id rides in an **HttpOnly, `SameSite=Lax`** cookie (JS never holds anything secret); sessions are stored in Postgres. In prod set `COOKIE_SECURE=true` (implied by `NODE_ENV=production`), which also makes prod **Google-only** and fails closed without Google. See `runtime/auth.js`. (The old `API_TOKEN` is gone.)
 
 ## Conventions & coding rules
 
@@ -195,6 +195,7 @@ Follow these when writing or editing code here (it's `.js` everywhere — every 
 - **No boolean flag parameters.** A `fn(…, true)` call site is opaque — the reader can't tell what `true` selects. When a flag would switch between two behaviours, prefer the most minimal split that removes the boolean: usually **two intention-named functions**, otherwise a named mode/strategy (e.g. a string `'rich'`/`'source'`, a passed-in handler, or a small factory). Write `editRich()` / `editSource()`, not `enterEdit(true)` / `enterEdit(false)`. This applies to new code and to flags you touch while editing.
 - **Write the simplest condition that reads plainly — don't over-guard.** Destructure up front, then test the fields: `const { width, height } = obj ?? {}; if (!width || !height) …`, not `if (!obj || !(obj.width > 0) || !(obj.height > 0))`. Prefer `!value`, `value < n`, or `!list.length` over negated comparisons like `!(a > b)`. Guard the failure that can *actually* occur (missing / zero / empty), not theoretical inputs that can't (a negative or `NaN` dimension that nothing produces). Keep thrown messages short — name the thing and the bad value, skip the lecture. If you deviate from the obvious form for a real reason (e.g. `!width` to also catch `undefined`), say why in a one-line comment rather than silently complicating it.
 - **Use the shared naive-ui `<n-button size="small">` for action buttons — don't hand-roll a plain `<button>`.** Save / Run / Edit / Refresh / Send-style actions in node editors and views go through the one button component (see `NodeItem.vue`'s Save, `Script.vue`'s Run, `Html.vue`'s Edit/Add link) so every action button looks the same. A plain styled `<button>` is reserved for compact **chrome / transport / icon** controls that intentionally have their own look — the tree's rename/delete (`NodeTree.vue`), the sidebar's `+ node` (`App.vue`), the html editor's rich-text toolbar (`Html.vue`'s `.tool` buttons). Default a new button to `n-button`; only drop to a plain element for those icon/chrome cases, and say why.
+- **Never `DELETE` rows in `users` or `accounts` — deactivate, never delete.** Both anchor identity: `users` is referenced by `nodes` / `accounts` / `sessions` (FK `user_id`), and `accounts` maps each provider login (google / email) to its user. A hard delete cascade-wipes or orphans that data and leaves id gaps — it breaks DB consistency. To remove someone, soft-delete (a `deleted_at` / `status` flag) and keep the row. Don't spin up throwaway placeholder users to delete later either — import/reassign onto a real user. Holds in every environment, prod and local.
 
 ## Monetization & marketing lens (apply to every feature)
 
@@ -221,7 +222,7 @@ Scratchpad for things to explore, learn, or build later. Not a spec — just a p
 
   The elegant part: the runtime **already** dynamic-imports from the store — for script *bodies* (`useNodeScripts.js` blob-imports `script.js` from `/api/nodes/:id/body`) — just never for *views*. Closing the gap, in leverage order: (1) **kill the silent fallback** → render an explicit *"no handler for type X"* card — **shipped** (`NodeItem.vue:110-113`); the cheap follow-up is to turn that card into an authoring affordance (*"create one?"*); (2) **make the handler a node** — move the `type→renderer` map out of the hardcoded `NODE_TYPES` into the store and load handlers at runtime by reusing the existing blob-import mechanism (a render-function/component module fetched from a node body, mounted via `defineAsyncComponent`; avoid in-browser SFC compilation); (3) give the running `x` a first-class, cycle-guarded **graph-mutation** affordance (`x.create`/`x.save`/`x.tree`) instead of incidental raw fetch; (4) make `NODE_BODY` **data-driven** so a new bodied type needs no server restart; (5) pair this with a **sandbox** (Worker/iframe, capability-scoped) — loading a handler from a node body means executing arbitrary code from data, and scripts already run unsandboxed. Steps 1–2 are the whole ballgame: ship them and *"create any node type"* stops being the name's aspiration and becomes an accurate description of what ocraft is.
 
-- **Multi-user pivot — Postgres + Google OAuth + per-user isolation.** ocraft is single-user/local today (file-backed node store, one shared `API_TOKEN`). The committed next-big-step is multi-tenant: a storage abstraction (a `nodeStore` interface) behind the current file store, then a Postgres backend (`users` / `nodes` / `node_bodies` / `sessions`, with `nodes.data` as jsonb), migrate the existing file nodes in as **owned by you**, then Google OAuth login and **per-user isolation** — every node belongs to exactly one user; sharing is a later additive feature. The load-bearing blocker isn't the DB, it's **execution isolation**: node *scripts* are already safe (each runs in its author's own browser sandbox, scoped by per-user auth), but the **AI runner** needs a per-user Anthropic key/login and node-scoped tools (no Bash/fs) before it can go multi-tenant — which is exactly why it's disabled by default today. Plan: `plans/multi-user-postgres-oauth-plan.txt`. *Monetization:* this is the substrate a hosted/paid tier sits on (per-seat or metered AI), but it's enabling infra — don't gate the open-source core behind it. *Marketing:* not itself demoable; it unlocks the "share a node/subtree" features that are.
+- **Multi-user pivot — Postgres + Google OAuth + per-user isolation.** ocraft began single-user/local (file-backed node store, one shared token). The committed next-big-step is multi-tenant: a storage abstraction (a `nodeStore` interface) behind the current file store, then a Postgres backend (`users` / `nodes` / `node_bodies` / `sessions`, with `nodes.data` as jsonb), migrate the existing file nodes in as **owned by you**, then Google OAuth login and **per-user isolation** — every node belongs to exactly one user; sharing is a later additive feature. The load-bearing blocker isn't the DB, it's **execution isolation**: node *scripts* are already safe (each runs in its author's own browser sandbox, scoped by per-user auth), but the **AI runner** needs a per-user Anthropic key/login and node-scoped tools (no Bash/fs) before it can go multi-tenant — which is exactly why it's disabled by default today. Plan: `plans/multi-user-postgres-oauth-plan.txt`. *Monetization:* this is the substrate a hosted/paid tier sits on (per-seat or metered AI), but it's enabling infra — don't gate the open-source core behind it. *Marketing:* not itself demoable; it unlocks the "share a node/subtree" features that are.
 
 - **Flutter for cloud-driven mobile control** — build a Flutter mobile app that can be controlled / driven from "cloud code" (e.g. trigger actions, push state, or receive commands from a backend service). Explore how this could connect to the existing ocraft runtime + scheduler.
 
