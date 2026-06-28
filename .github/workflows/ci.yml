@@ -38,28 +38,32 @@ jobs:
       - name: Deploy
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          API_TOKEN: ${{ secrets.API_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          APP_ORIGIN: ${{ secrets.APP_ORIGIN }}
         run: |
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > /tmp/deploy_key
           chmod 600 /tmp/deploy_key
           KEY="-i /tmp/deploy_key -o StrictHostKeyChecking=no"
           HOST=root@165.232.75.109
-          # Update code + runtime deps + prod .env on the box. NO frontend build here
-          # (it's built on the runner). Served HTTPS by Cloudflare -> origin :80, so the
-          # app runs on :80 (BIND_HOST=0.0.0.0) with NODE_ENV=production (Secure cookie + HSTS).
+          # Write the prod .env on the box from CI secrets, pull code, install deps, run DB
+          # migrations. NODE_ENV=production -> Google-only auth + Secure cookies + HSTS, and fails
+          # closed without Google/DATABASE_URL. NO frontend build here (built on the runner).
+          # Served HTTPS by Cloudflare -> origin :80, so the app runs on :80 (BIND_HOST=0.0.0.0).
           ssh $KEY $HOST \
             "cd /root/ocraft && \
-             printf 'TELEGRAM_BOT_TOKEN=%s\nAPI_TOKEN=%s\nNODE_ENV=production\nPORT=80\nBIND_HOST=0.0.0.0\n' '$TELEGRAM_BOT_TOKEN' '$API_TOKEN' > .env && \
-             git pull && \
+             printf 'TELEGRAM_BOT_TOKEN=%s\nDATABASE_URL=%s\nGOOGLE_CLIENT_ID=%s\nGOOGLE_CLIENT_SECRET=%s\nAPP_ORIGIN=%s\nNODE_ENV=production\nPORT=80\nBIND_HOST=0.0.0.0\n' '$TELEGRAM_BOT_TOKEN' '$DATABASE_URL' '$GOOGLE_CLIENT_ID' '$GOOGLE_CLIENT_SECRET' '$APP_ORIGIN' > .env && \
+             git fetch origin && git reset --hard origin/main && \
              npm install && \
-             node runtime/cli.js run deploy"
+             node runtime/cli.js migrate"
           # Ship the runner-built bundle (dist/ is gitignored, so git pull won't carry it).
           rsync -az --delete -e "ssh $KEY" frontend/dist/ $HOST:/root/ocraft/frontend/dist/
           # Restart so the API serves the new code + bundle on :80.
           ssh $KEY $HOST "cd /root/ocraft && node runtime/cli.js service restart api"
-          # Health check: fail the deploy if the API isn't actually serving — e.g. it
-          # refused to start because API_TOKEN is unset (fail-closed). curl localhost ON
-          # THE BOX so this still works once :80 is firewalled to Cloudflare only.
+          # Health check: fail the deploy if the API isn't actually serving — e.g. it refused to
+          # start (fail-closed: missing Google creds / DATABASE_URL). curl localhost ON THE BOX so
+          # this still works once :80 is firewalled to Cloudflare only.
           ssh $KEY $HOST "sleep 3 && curl -fsS -m 10 http://localhost/api/session > /dev/null" \
             && echo "health check: API is serving" \
-            || { echo "HEALTH CHECK FAILED — API not serving (API_TOKEN unset, or crash on boot)"; exit 1; }
+            || { echo "HEALTH CHECK FAILED — API not serving (DATABASE_URL/GOOGLE creds unset, or crash on boot)"; exit 1; }
