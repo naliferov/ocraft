@@ -1,21 +1,12 @@
 import 'dotenv/config' // load <repo>/.env (DATABASE_URL, GOOGLE_CLIENT_ID/SECRET, PORT) — cwd = repo root
 import path from 'node:path'
 import { getDirname } from './lib/path.js'
-import {
-  readBody,
-  readText,
-  sendText,
-  matchUrl,
-  serveStatic,
-  serveAsset,
-  createServer,
-} from './lib/http.js'
+import { readBody, readText, sendText, matchUrl, serveStatic, createServer } from './lib/http.js'
 import * as runManager from './runManager.js'
 // import * as aiRunner from './runners/ai.js' // DISABLED for prod — see registration below
 import * as taskSource from './runners/task.js'
 import * as serviceSource from './runners/service.js'
 import { attachWsServer } from './wsServer.js'
-import * as fileStore from './store/file.js'
 import * as pgStore from './store/pg.js'
 import {
   authConfigured,
@@ -44,12 +35,10 @@ runManager.registerRunner('task', taskSource)
 runManager.registerRunner('service', serviceSource)
 
 const currentDir = getDirname(import.meta.url) // runtime/
-const ASSETS_DIR = path.join(currentDir, '..', 'data/assets')
 const DIST_DIR = path.join(currentDir, '..', 'frontend/dist') // built Vue SPA — served in prod after `npm run build`
 
-// Pick the node store: Postgres when DATABASE_URL is set (prod / pg-dev), else the file store
-// (the local default — your tree on disk). Both implement the same interface (runtime/store/).
-const nodeStore = process.env.DATABASE_URL ? pgStore : fileStore
+// The node store is Postgres (runtime/store/pg.js). DATABASE_URL is required.
+const nodeStore = pgStore
 
 // --- Auth ------------------------------------------------------------------
 // Sessions + identity live in runtime/auth.js: email+password by default, Google OAuth optional.
@@ -71,22 +60,8 @@ if (!authConfigured) {
   )
 }
 
-// Node ids are numeric folder names; reject anything else so a `:id` can't smuggle a
-// `..` into a filesystem path. (The /api/assets route has its own traversal guard.)
+// Node ids are numeric; reject anything else so a `:id` can't smuggle a `..` into a path.
 const isNodeId = (id) => /^[0-9]+$/.test(id)
-
-// Content types for static assets (GET /api/assets/<relpath>) — clipart SVGs etc. for the
-// scene renderer. Passed to lib/http serveAsset, which does the read + traversal guard.
-const ASSET_CONTENT_TYPES = {
-  '.svg': 'image/svg+xml',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.webp': 'image/webp',
-  '.gif': 'image/gif',
-  '.txt': 'text/plain; charset=utf-8',
-  '.json': 'application/json',
-}
 
 // --- Frontend (built Vue SPA) -------------------------------------------------
 // In production this same process also serves frontend/dist (built by `npm run
@@ -285,8 +260,6 @@ const routes = {
   // },
 }
 
-const ASSETS_PREFIX = '/api/assets/'
-
 const handleRequest = async (req, res) => {
   // Prod is HTTPS-only (TLS terminated by the front proxy / Cloudflare): tell the browser
   // to refuse http:// to this origin for a year. setHeader (not writeHead) so it merges
@@ -344,16 +317,6 @@ const handleRequest = async (req, res) => {
     res
       .writeHead(401, { 'Content-Type': 'application/json' })
       .end(JSON.stringify({ error: 'unauthorized' }))
-    return
-  }
-  // Asset files live under a nested path, which the :param matcher (which stops at
-  // '/') can't capture — handle the prefix directly before the route table.
-  if (req.method === 'GET' && path.startsWith(ASSETS_PREFIX)) {
-    await serveAsset(res, {
-      dir: ASSETS_DIR,
-      relPath: path.slice(ASSETS_PREFIX.length),
-      contentTypes: ASSET_CONTENT_TYPES,
-    })
     return
   }
   const route = matchUrl(routes, req.method, path)

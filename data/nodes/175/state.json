@@ -1,6 +1,0 @@
-{
-  "name": "api-runs-monitor",
-  "type": "script",
-  "parentId": "3",
-  "runOnOpen": true
-}

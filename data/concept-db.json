@@ -1,7 +1,0 @@
-{
-  "mood": [{ "id": "cold" }, { "id": "detached" }, { "id": "tense" }],
-  "motion": [{ "id": "pulse" }],
-  "setting": [{ "id": "highway" }, { "id": "night-city" }],
-  "style": [{ "id": "chrome-fog" }, { "id": "neo-noir" }],
-  "symbol": [{ "id": "car-lights" }, { "id": "circle" }, { "id": "cross" }, { "id": "grid" }]
-}

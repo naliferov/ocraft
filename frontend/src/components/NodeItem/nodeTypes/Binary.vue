@@ -2,8 +2,8 @@
 // Renderer for `binary` nodes — a node whose body is raw bytes (image / audio / video / …) rather
 // than text. Fetches /api/nodes/:id/body as a blob (the API serves it under the stored MIME), wraps
 // it in an object URL, and branches on the MIME: image/* → <img>, audio/* → <audio>, video/* →
-// <video>, anything else → a download link. The MIME comes from the node's data ({mime, filename})
-// or the response Content-Type. Display-only for now — no upload/edit (that's a follow-up).
+// <video>, anything else → a download link. The MIME comes from the node's data ({mime}) or the
+// response Content-Type. Display-only for now — no upload/edit (that's a follow-up).
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 
 const props = defineProps({
@@ -43,24 +43,22 @@ const kind = computed(() => {
   }
   return 'other'
 })
-
-const filename = computed(() => props.node.filename || props.node.name)
 </script>
 
 <template>
   <div class="binary">
     <div v-if="error" class="binary-error">{{ error }}</div>
     <template v-else-if="url">
-      <img v-if="kind === 'image'" :src="url" :alt="filename" class="media" />
+      <img v-if="kind === 'image'" :src="url" :alt="node.name" class="media" />
       <audio v-else-if="kind === 'audio'" :src="url" controls class="audio" />
       <video v-else-if="kind === 'video'" :src="url" controls class="media" />
       <div v-else class="binary-other">
         <p>No inline preview for <code>{{ mime }}</code>.</p>
-        <a :href="url" :download="filename">Download {{ filename }}</a>
+        <a :href="url" :download="node.name">Download {{ node.name }}</a>
       </div>
     </template>
     <div v-else class="binary-loading">loading…</div>
-    <div class="binary-meta">{{ filename }} · {{ mime }}</div>
+    <div class="binary-meta">{{ mime }}</div>
   </div>
 </template>
 

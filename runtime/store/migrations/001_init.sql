@@ -31,7 +31,7 @@ create table nodes (
   name        text not null default 'new node',
   data        jsonb not null default '{}',                          -- open-ended rest of state.json: collapsed,
                                                                      -- runOnOpen, scriptType … and a binary
-                                                                     -- node's { mime, filename }
+                                                                     -- node's { mime }
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
