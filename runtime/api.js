@@ -135,6 +135,14 @@ const routes = {
       res.writeHead(404).end('Not found')
       return
     }
+    // Binary bodies (image/audio/video/…) go out as raw bytes under their MIME; text bodies
+    // (html/script) keep the gzip-aware text path.
+    if (body.binary) {
+      res
+        .writeHead(200, { 'Content-Type': body.contentType, 'Content-Length': body.content.length })
+        .end(body.content)
+      return
+    }
     sendText(req, res, body.content, body.contentType)
   },
 

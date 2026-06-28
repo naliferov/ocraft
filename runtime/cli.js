@@ -57,7 +57,7 @@ const commands = {
   // One-off: copy the file node store into Postgres under the dev owner (Phase 6). Needs DATABASE_URL.
   'import-nodes': async () => {
     const { importFiles } = await import('./store/import-files.js')
-    await importFiles()
+    await importFiles(args[0])
   },
   // Manage SERVICES — long-running processes. See runtime/services/.
   service: async () => {

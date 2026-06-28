@@ -2,6 +2,9 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
+    "cli": "node runtime/cli.js",
+    "service": "node runtime/cli.js service",
+    "migrate": "node runtime/cli.js migrate",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",

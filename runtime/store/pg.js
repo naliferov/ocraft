@@ -85,6 +85,15 @@ export const getBody = async (userId, id) => {
   if (!row) {
     return null
   }
+  // Binary nodes: serve the raw bytes under their own stored MIME (image/audio/video/svg/…),
+  // flagged so the API sends them raw instead of through the UTF-8/gzip text path.
+  if (row.type === 'binary') {
+    return {
+      content: row.content ?? Buffer.alloc(0),
+      contentType: row.content_type ?? 'application/octet-stream',
+      binary: true,
+    }
+  }
   const contentType = row.content_type ?? BODY_CONTENT_TYPE[row.type]
   if (!contentType) {
     return { content: '', contentType: 'text/plain; charset=utf-8' } // type carries no body

@@ -1,7 +1,7 @@
-// store/import-files.js — one-off: copy the file node store (data/nodes/*) into Postgres under
-// the dev owner. Phase 6 of the multi-user pivot. TWO passes (insert all nodes, THEN set parents)
-// so the parent_id FK is never violated by import order. Idempotent-ish (on conflict do nothing).
-// Run via `cli.js import-nodes` with DATABASE_URL set. The file store is left untouched.
+// store/import-files.js — one-off: copy the file node store (data/nodes/*) into Postgres under an
+// EXISTING user (pass an email or id; users are never deleted, so no throwaway placeholder owner).
+// TWO passes (insert all nodes, THEN set parents) so the parent_id FK is never violated by import
+// order. Idempotent-ish (on conflict do nothing). Run via `cli.js import-nodes <email|id>`.
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { getDirname } from '../lib/path.js'
@@ -13,18 +13,34 @@ const NODE_BODY = {
   html: { file: 'content.html', contentType: 'text/html; charset=utf-8' },
 }
 
-export const importFiles = async () => {
+// Resolve which EXISTING user to attach the imported nodes to. Pass an email or numeric id; with
+// neither, use the sole user when there's exactly one. Never creates a placeholder — users aren't
+// deleted, so a throwaway owner would just be permanent junk.
+const resolveOwner = async (target) => {
+  if (target) {
+    const [user] = /^\d+$/.test(String(target))
+      ? await sql`select id from users where id = ${Number(target)}`
+      : await sql`select id from users where email = ${String(target).toLowerCase()}`
+    if (!user) {
+      throw new Error(`no user matching "${target}" — sign in first, then import`)
+    }
+    return user.id
+  }
+  const users = await sql`select id from users`
+  if (!users.length) {
+    throw new Error('no users yet — sign in first, then import')
+  }
+  if (users.length > 1) {
+    throw new Error('multiple users — pass the target: import-nodes <email|id>')
+  }
+  return users[0].id
+}
+
+export const importFiles = async (target) => {
   if (!sql) {
     throw new Error('DATABASE_URL is not set — nothing to import into')
   }
-  // Import under a placeholder "owner" user (bigserial id). On your first sign-in (email or Google)
-  // you reassign these nodes to your real account and drop this owner. Reuse it if re-running.
-  let [owner] = await sql`select id from users where name = 'import owner' limit 1`
-  if (!owner) {
-    const [created] = await sql`insert into users (name) values ('import owner') returning id`
-    owner = created
-  }
-  const ownerId = owner.id
+  const ownerId = await resolveOwner(target)
 
   const dirs = (await fs.readdir(NODES_DIR))
     .filter((dir) => /^[0-9]+$/.test(dir))
@@ -78,6 +94,6 @@ export const importFiles = async () => {
 
   // Keep the bigserial sequence ahead of the imported explicit ids (so new createNode won't collide).
   await sql`select setval('nodes_id_seq', (select max(id) from nodes))`
-  console.log(`import: ${parsed.length} nodes, ${bodies} bodies → owner ${ownerId}`)
+  console.log(`import: ${parsed.length} nodes, ${bodies} bodies → user ${ownerId}`)
   await sql.end()
 }

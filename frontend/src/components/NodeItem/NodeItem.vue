@@ -5,6 +5,7 @@ import { useNodesStore } from '../../stores/nodes.js'
 import Script from './nodeTypes/Script.vue'
 import Html from './nodeTypes/Html.vue'
 import Category from './nodeTypes/Category.vue'
+import Binary from './nodeTypes/Binary.vue'
 
 const props = defineProps({
   node: { type: Object, required: true },
@@ -29,6 +30,9 @@ const NODE_TYPES = {
   html: { label: 'html', component: Html },
   script: { label: 'script', component: Script },
   category: { label: 'category', component: Category },
+  // hidden: renders existing binary nodes, but stays out of the type picker until there's an
+  // upload UI (you can't usefully create one from the dropdown yet).
+  binary: { label: 'binary', component: Binary, hidden: true },
 }
 
 const typeOptions = Object.entries(NODE_TYPES)

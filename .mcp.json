@@ -5,16 +5,6 @@
       "args": ["mcp-servers/telegram-mcp/server.js"],
       "cwd": "/Users/varcraft/projects/ocraft"
     },
-    "gcal": {
-      "command": "node",
-      "args": ["mcp-servers/gcal-mcp/server.js"],
-      "cwd": "/Users/varcraft/projects/ocraft"
-    },
-    "gmail": {
-      "command": "node",
-      "args": ["mcp-servers/gmail-mcp/server.js"],
-      "cwd": "/Users/varcraft/projects/ocraft"
-    },
     "digitalocean": {
       "command": "node",
       "args": ["mcp-servers/digitalocean-mcp/server.js"],

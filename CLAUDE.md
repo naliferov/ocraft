@@ -1,5 +1,8 @@
 # CLAUDE.md
 
-All guidance for working in this repo lives in **[README.md](README.md)** — the single source of truth: project overview, setup, the node model, tasks/scheduler & services, **conventions & coding rules**, the **monetization & marketing lens**, and the **Roadmap**. Read it first.
+Two sources of truth for this repo:
 
-This file is just a pointer (as is `AGENTS.md`) — keep durable guidance in `README.md`, not here.
+- **[README.md](README.md)** — what ocraft *is*: project overview, setup, the node model, tasks/scheduler & services, and the Roadmap. Read it first.
+- **[AGENTS.md](AGENTS.md)** — *working rules*: conventions, coding rules, DB invariants, and agent behaviour. Follow these when editing.
+
+Longer-form design notes — including the **monetization/marketing lens** and the **rejected / out-of-scope** list — live in `plans/`. Keep durable guidance in those files (README / AGENTS / plans), not here.

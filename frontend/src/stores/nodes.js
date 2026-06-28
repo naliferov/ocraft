@@ -222,7 +222,7 @@ export const useNodesStore = defineStore('nodes', () => {
   }
 
   watch(nodes, (list) => {
-    if (list.length < 0) {
+    if (!list.length) {
       activeNodeId.value = null
       return
     }
