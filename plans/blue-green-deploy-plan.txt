@@ -1,0 +1,41 @@
+BLUE/GREEN DEPLOYMENT — tiered plan
+===================================
+
+Goal: a bad deploy must never take prod (:80) down, and rollback must be one command.
+Setup: single DigitalOcean droplet, Cloudflare -> origin :80, one Node process, local Postgres.
+
+
+TIER 1 — pre-flight + rollback   [IMPLEMENTED 2026-06-29]
+--------------------------------------------------------
+No new infra. .github/workflows/ci.yml + scripts/deploy-cutover.sh:
+
+1. Fetch the new code onto the box (git reset --hard origin/main) + npm install + stage the
+   runner-built bundle at frontend/dist.new. The live :80 keeps serving the OLD code (loaded in
+   memory) + the OLD bundle the whole time — this step is invisible to users.
+2. Record the current sha (/tmp/ocraft_prev_sha) as the rollback target.
+3. Migrate (additive only — the old :80 still serves), then PRE-FLIGHT the new backend on a spare
+   port :3002.
+4. GREEN (boots + GET /api/session -> 200): swap frontend/dist.new -> frontend/dist, restart :80,
+   verify. RED: roll the code back to the previous sha + npm install; :80 untouched. Either way prod
+   never goes down, and the deploy fails loudly.
+
+Limits: ~1s restart blip on a successful cutover (not literally zero-downtime). Catches the common
+breakage ("doesn't boot" — fail-closed, crash on start, the empty-tree bug class) BEFORE :80 is
+touched; the recorded previous sha gives a one-command rollback for the rarer "boots but buggy" case
+  (git reset --hard <sha> && npm install && node runtime/cli.js service restart api).
+
+
+TIER 2 — true zero-downtime   [FUTURE — when traffic/uptime warrants]
+--------------------------------------------------------------------
+Add Caddy (simpler than nginx) as a local reverse proxy on :80 -> app on :3001/:3002. Deploy starts
+the new colour on the inactive port, health-checks it, flips Caddy's upstream (its admin API or a
+graceful reload — no blip), then drains + stops the old colour. Run api-blue / api-green via the
+service manager. Cloudflare already terminates TLS, so Caddy is purely the blue/green switch.
+
+
+CAVEAT (both tiers)
+-------------------
+Old + new share ONE Postgres, and the old version keeps serving while the new one starts, so
+migrations MUST stay backward-compatible: expand-then-contract (add the column now, remove its old
+use next deploy). ocraft's forward-only additive migrations already fit this — just don't drop or
+rename something the still-running old version reads.
