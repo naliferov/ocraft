@@ -3,7 +3,8 @@
 // execution record, ctx logging, and timeout — one automation model. See AGENTS.md.
 //
 // dump (custom format, via DATABASE_URL over TCP) -> verify archive -> offsite (if a remote
-// is configured) -> rotate (keep N) -> log. Throws on failure so the execution record = error.
+// is configured) -> rotate (drop dumps older than N days) -> log. Throws on failure so the
+// execution record = error.
 //
 // Restore a dump (on the box as root — reads /root, connects over TCP via DATABASE_URL):
 //   set -a; . /root/ocraft/.env; set +a
@@ -63,7 +64,7 @@ export const run = async (ctx) => {
   const url = new URL(databaseUrl)
   const dbName = url.pathname.replace(/^\//, '') || 'ocraft'
   const backupDir = ctx.env.OCRAFT_BACKUP_DIR || path.join(os.homedir(), 'ocraft-backups')
-  const keep = Number(ctx.env.OCRAFT_BACKUP_KEEP) || 14
+  const keepDays = Number(ctx.env.OCRAFT_BACKUP_KEEP_DAYS) || 30
   const rcloneRemote = ctx.env.OCRAFT_BACKUP_RCLONE_REMOTE || ''
 
   const pgEnv = { ...ctx.env, PGPASSWORD: decodeURIComponent(url.password) }
@@ -102,23 +103,34 @@ export const run = async (ctx) => {
     ctx.log('offsite disabled (set OCRAFT_BACKUP_RCLONE_REMOTE to enable)')
   }
 
-  // 4. rotate — keep the newest `keep` dumps
-  const dumps = (await fs.readdir(backupDir))
-    .filter((name) => name.startsWith(`${dbName}-`) && name.endsWith('.dump'))
-    .sort()
-    .reverse()
-  for (const name of dumps.slice(keep)) {
-    await fs.unlink(path.join(backupDir, name))
+  // 4. rotate — drop dumps older than `keepDays`. Age by mtime (format-agnostic). Rotation runs
+  // only AFTER a fresh dump exists (and never deletes the one just written), so it can never
+  // delete its way down to zero backups.
+  const cutoff = Date.now() - keepDays * 24 * 60 * 60 * 1000
+  const dumps = (await fs.readdir(backupDir)).filter(
+    (name) => name.startsWith(`${dbName}-`) && name.endsWith('.dump'),
+  )
+  let removed = 0
+  for (const name of dumps) {
+    const dumpPath = path.join(backupDir, name)
+    if (dumpPath === file) {
+      continue
+    }
+    const { mtimeMs } = await fs.stat(dumpPath)
+    if (mtimeMs < cutoff) {
+      await fs.unlink(dumpPath)
+      removed += 1
+    }
   }
-  const removed = Math.max(0, dumps.length - keep)
   ctx.log(
-    `done — ${sizeMb} MB, kept newest ${Math.min(dumps.length, keep)}${removed ? `, removed ${removed} old` : ''}`,
+    `done — ${sizeMb} MB, kept ${dumps.length - removed}, dropped ${removed} older than ${keepDays}d`,
   )
 
   return {
     file,
     sizeMb: Number(sizeMb),
     offsite: Boolean(rcloneRemote),
-    kept: Math.min(dumps.length, keep),
+    kept: dumps.length - removed,
+    removed,
   }
 }
