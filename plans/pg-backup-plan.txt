@@ -1,0 +1,54 @@
+DAILY POSTGRES BACKUP — prod (ocraft.dev)
+=========================================
+
+Goal: a daily, restorable, off-box backup of the prod `ocraft` database.
+
+Built with ocraft's OWN runtime instruments — a TASK on the SCHEDULER, not a system cron +
+shell script. Dogfoods the runtime, reuses the executor's scheduling / execution-record /
+ctx.log / timeout machinery, and keeps one automation model. See AGENTS.md ("automate through
+ocraft's own runtime instruments").
+
+
+PIECES
+------
+- runtime/tasks/pg-backup.js — the task: pg_dump -Fc (via DATABASE_URL over TCP) -> verify the
+  archive (pg_restore --list) -> offsite (if a remote is set) -> rotate (keep 14) -> log via
+  ctx.log. Throws on failure, so the execution record is marked `error`.
+- runtime/scheduler.js jobs[] — { id:'pg-backup', task:'pg-backup', schedule:{hour:3,minute:30} }
+  (daily 03:30 server-local; the prod box is UTC).
+- the `scheduler` SERVICE must be RUNNING on the box:  node runtime/cli.js service start scheduler
+
+DUMPS: <home>/ocraft-backups/<db>-<UTCstamp>.dump  (custom format; on prod root = /root/ocraft-backups).
+Override via OCRAFT_BACKUP_DIR / OCRAFT_BACKUP_KEEP (in the scheduler's env / .env).
+
+
+RESTORE  (on the box as root — reads /root, connects over TCP via DATABASE_URL)
+-------
+  set -a; . /root/ocraft/.env; set +a
+  pg_restore --clean --if-exists --no-owner -d "$DATABASE_URL" <file.dump>
+  # fresh db:  createdb -T template0 ocraft_restore && pg_restore --no-owner -d "<url for ocraft_restore>" <file.dump>
+
+
+OFFSITE  [decision pending — the part that protects against DROPLET LOSS]
+-------
+A local-only dump dies with the droplet. Enable by setting OCRAFT_BACKUP_RCLONE_REMOTE (an rclone
+Drive or S3/Spaces remote) in the scheduler's environment (prod: add it to the CI-written .env so
+it survives deploys). The task's offsite step is already wired, just disabled until the var is set.
+  (a) Google Drive via rclone — free, already used here (one-time `rclone authorize`).   <- recommended
+  (b) DigitalOcean Spaces — native, S3-compatible, ~$5/mo.
+  (c) Pull-to-Mac — a cron on the laptop rsyncs dumps down; box stays credential-free.
+
+
+CAVEAT — the scheduler must stay alive
+--------------------------------------
+Unlike a system cron (guaranteed by the OS across reboots), backups now depend on the `scheduler`
+SERVICE running. Services aren't auto-restarted on crash/reboot yet (README roadmap: `autoRestart`
+declared, not acted on). Follow-ups: (1) supervise the scheduler (a systemd unit, or act on
+autoRestart) so a reboot doesn't silently stop backups; (2) monitor that a fresh dump actually
+appears daily (e.g. an alert if the newest dump is > 25h old).
+
+
+VERIFY CADENCE
+--------------
+- Every run: verifies the archive is well-formed (pg_restore --list).
+- Monthly (manual): restore the newest dump into a throwaway db and count nodes / node_bodies.

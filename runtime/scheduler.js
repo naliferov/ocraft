@@ -24,11 +24,12 @@ const isActiveHour = (activeHours, date) => {
 // Each job fires a TASK (backend/tasks/<task>.js) on an interval or a cron-like
 // schedule. The scheduler itself runs as a SERVICE — see backend/services/scheduler.js.
 const jobs = [
+  // Daily Postgres backup — the runtime's own instruments (a task on the scheduler), not a
+  // system cron. See runtime/tasks/pg-backup.js. 03:30 server-local (UTC on prod).
   {
-    id: 'test',
-    task: 'test',
-    args: ['argument-of-test-function'],
-    intervalMs: minutes(1),
+    id: 'pg-backup',
+    task: 'pg-backup',
+    schedule: { hour: 3, minute: 30 },
   },
 ]
 
