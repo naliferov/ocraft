@@ -3,7 +3,6 @@ import path from 'node:path'
 import { getDirname } from './lib/path.js'
 import { readBody, readText, sendText, matchUrl, serveStatic, createServer } from './lib/http.js'
 import * as runManager from './runManager.js'
-// import * as aiRunner from './runners/ai.js' // DISABLED for prod — see registration below
 import * as taskSource from './runners/task.js'
 import * as serviceSource from './runners/service.js'
 import { attachWsServer } from './wsServer.js'
@@ -20,17 +19,12 @@ import {
   logout,
 } from './auth.js'
 
-// Register the run KINDS with the universal run manager (./runManager.js): 'ai' is an
-// owned/ephemeral runner (started + streamed + cancelled here); 'task' and 'service'
-// are read-only SOURCES surfacing taskExecutor executions and serviceManager daemons
-// in the one unified GET /api/runs view (they're started via the CLI / scheduler).
-//
-// ⚠️ SECURITY: the 'ai' runner executes the Claude Agent SDK with bypassPermissions
-// (arbitrary file edits + shell), cwd = repo root. DISABLED for the prod deploy — any
-// authed caller could otherwise run code on the box. Re-enable behind an explicit
-// off-by-default env gate (OCRAFT_ENABLE_AGENT) when sandboxed. With it unregistered,
-// POST /api/runs {kind:'ai'} returns "unknown kind", which is the intended refusal.
-// runManager.registerRunner('ai', aiRunner)
+// Register the run KINDS with the universal run manager (./runManager.js): 'task' and
+// 'service' are read-only SOURCES surfacing taskExecutor executions and serviceManager
+// daemons in the unified /api/runs view (started via the CLI / scheduler). NB the
+// /api/runs HTTP route itself is commented out below — this subsystem is dormant.
+// (An 'ai' runner was removed: it ran the Claude Agent SDK with bypassPermissions —
+// arbitrary edits + shell — unsafe on a networked/multi-user box; AI belongs on localhost.)
 runManager.registerRunner('task', taskSource)
 runManager.registerRunner('service', serviceSource)
 

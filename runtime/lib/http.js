@@ -83,24 +83,6 @@ export const matchUrl = (routes, method, url) => {
 }
 
 // --- Static files ----------------------------------------------------------
-// Serve a single read-only file by relative path under `dir`, guarded against ../ traversal.
-// 403 if the path escapes `dir`, 404 if it doesn't exist. `contentTypes` maps extension →
-// MIME (unknown → octet-stream).
-export const serveAsset = async (res, { dir, relPath, contentTypes }) => {
-  const full = path.resolve(dir, decodeURIComponent(relPath))
-  if (full !== dir && !full.startsWith(dir + path.sep)) {
-    res.writeHead(403).end('Forbidden')
-    return
-  }
-  try {
-    const data = await fs.readFile(full)
-    const type = contentTypes[path.extname(full).toLowerCase()] ?? 'application/octet-stream'
-    res.writeHead(200, { 'Content-Type': type }).end(data)
-  } catch {
-    res.writeHead(404).end('Not found')
-  }
-}
-
 // Serve a built SPA under `dir`: real files are returned (hashed `/assets/*` cached
 // forever, everything else no-cache); an extension-less path that isn't a file falls back
 // to index.html so client-side history routes resolve on direct load. Traversal-guarded.
