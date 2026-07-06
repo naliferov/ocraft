@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 // The terminal: a single input that drives the node OS by typed commands —
 // the MVP seed of the "command-first / terminal interface" direction. Mounted once,
 // app-level, pinned along the bottom of the window. A command is `name arg arg…`;
@@ -6,7 +6,7 @@
 // Adding a feature to the bar = one entry in COMMANDS — that registry is what lets
 // it grow into a feature switcher (open/new/run/search…) later.
 import { ref, computed, watch, nextTick } from 'vue'
-import { useNodesStore } from '../stores/nodes.js'
+import { useNodesStore } from '../stores/nodes'
 
 const store = useNodesStore()
 
@@ -54,7 +54,15 @@ const startResize = (event) => {
   window.addEventListener('mouseup', onUp)
 }
 
-const COMMANDS = {
+// A terminal command acting on the open node. `needs` gates it to one node type
+// (absent = global); `run` gets the parsed args and may be async.
+type Command = {
+  desc: string
+  needs?: string
+  run: (ctx: { args: string[] }) => void | Promise<void>
+}
+
+const COMMANDS: Record<string, Command> = {
   format: {
     desc: 'pretty-print the open html note (client-side)',
     needs: 'html',

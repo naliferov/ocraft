@@ -5,6 +5,7 @@ import js from '@eslint/js'
 import globals from 'globals'
 import pluginVue from 'eslint-plugin-vue'
 import prettier from 'eslint-config-prettier'
+import tseslint from 'typescript-eslint'
 
 export default [
   // Not project source: deps, build output, and the backend data plane (node
@@ -20,11 +21,18 @@ export default [
   },
 
   js.configs.recommended,
+  ...tseslint.configs.recommended, // parser + TS-aware rules for .ts (disables base no-unused-vars)
   ...pluginVue.configs['flat/recommended'],
 
-  // House rules — encode the repo conventions + ESM. Applies to all JS and Vue.
+  // <script lang="ts"> in .vue needs the TS parser under vue-eslint-parser.
   {
-    files: ['**/*.js', '**/*.vue'],
+    files: ['**/*.vue'],
+    languageOptions: { parserOptions: { parser: tseslint.parser } },
+  },
+
+  // House rules — encode the repo conventions + ESM. Applies to all JS/TS and Vue.
+  {
+    files: ['**/*.{js,ts}', '**/*.vue'],
     languageOptions: { ecmaVersion: 'latest', sourceType: 'module' },
     rules: {
       // README convention: no single-letter variable names, EXCEPT i/j/k as numeric
@@ -37,6 +45,12 @@ export default [
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none' },
       ],
+      // Use the one base no-unused-vars (above) for both js/ts — avoids double-firing
+      // with the typescript-eslint copy enabled by its recommended config.
+      '@typescript-eslint/no-unused-vars': 'off',
+      // The migration uses `any` deliberately for arbitrary JSON (readBody, res.json())
+      // and ad-hoc-field objects — minimal types, not exhaustive generics.
+      '@typescript-eslint/no-explicit-any': 'off',
       'prefer-const': 'error',
       'no-var': 'error',
       eqeqeq: ['error', 'smart'],
@@ -60,14 +74,14 @@ export default [
 
   // Node runtime: everything except the frontend app source.
   {
-    files: ['**/*.js'],
+    files: ['**/*.{js,ts}'],
     ignores: ['frontend/src/**'],
     languageOptions: { globals: globals.node },
   },
 
   // Browser runtime: the Vue editor.
   {
-    files: ['frontend/src/**/*.{js,vue}'],
+    files: ['frontend/src/**/*.{js,ts,vue}'],
     languageOptions: { globals: globals.browser },
   },
 
@@ -80,7 +94,7 @@ export default [
   // against only exists for the 'multi'/'multi-line' options, not 'all'). Placed
   // after the prettier block so last-wins keeps it on.
   {
-    files: ['**/*.js', '**/*.vue'],
+    files: ['**/*.{js,ts}', '**/*.vue'],
     rules: { curly: ['error', 'all'] },
   },
 ]

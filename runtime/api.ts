@@ -1,0 +1,453 @@
+import 'dotenv/config' // load <repo>/.env (DATABASE_URL, GOOGLE_CLIENT_ID/SECRET, PORT) — cwd = repo root
+import path from 'node:path'
+import fs from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { tmpdir, homedir } from 'node:os'
+import { getDirname } from './lib/path.ts'
+import type { IncomingMessage, ServerResponse } from 'node:http'
+import {
+  readBody,
+  readText,
+  sendText,
+  matchUrl,
+  serveStatic,
+  createServer,
+  type Handler,
+} from './lib/http.ts'
+import * as runManager from './runManager.ts'
+import * as taskSource from './runners/task.ts'
+import * as serviceSource from './runners/service.ts'
+import { attachWsServer } from './wsServer.ts'
+import * as pgStore from './store/pg.ts'
+import {
+  authConfigured,
+  googleConfigured,
+  emailAuthEnabled,
+  resolveUser,
+  signup,
+  login,
+  startGoogleLogin,
+  handleGoogleCallback,
+  logout,
+} from './auth.ts'
+
+// Register the run KINDS with the universal run manager (./runManager.js): 'task' and
+// 'service' are read-only SOURCES surfacing taskExecutor executions and serviceManager
+// daemons in the unified /api/runs view (started via the CLI / scheduler). NB the
+// /api/runs HTTP route itself is commented out below — this subsystem is dormant.
+// (An 'ai' runner was removed: it ran the Claude Agent SDK with bypassPermissions —
+// arbitrary edits + shell — unsafe on a networked/multi-user box; AI belongs on localhost.)
+runManager.registerRunner('task', taskSource)
+runManager.registerRunner('service', serviceSource)
+
+const currentDir = getDirname(import.meta.url) // runtime/
+const DIST_DIR = path.join(currentDir, '..', 'frontend/dist') // built Vue SPA — served in prod after `npm run build`
+
+// The node store is Postgres (runtime/store/pg.js). DATABASE_URL is required.
+const nodeStore = pgStore
+
+// --- Auth ------------------------------------------------------------------
+// Sessions + identity live in runtime/auth.js: email+password by default, Google OAuth optional.
+// Every request resolves to a user_id (threaded as req.userId) from a session cookie — there is NO
+// dev bypass, so auth needs a DB (users/sessions live in Postgres). Prod (NODE_ENV=production) is
+// Google-ONLY: the email+password routes are disabled and it requires Google fully configured,
+// failing closed otherwise — a public deploy must have its sign-in provider wired up. (Self-hosting
+// email-only? Skip NODE_ENV=production and set COOKIE_SECURE=true for TLS — email works, no Google.)
+const IS_PROD = process.env.NODE_ENV === 'production'
+if (IS_PROD && !googleConfigured) {
+  console.error(
+    '❌ FATAL: NODE_ENV=production but Google OAuth is not configured (need GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, DATABASE_URL) — refusing to start.',
+  )
+  process.exit(1)
+}
+if (!authConfigured) {
+  console.warn(
+    '⚠️  No DATABASE_URL — auth and the node store are unavailable; set it (see .env.example). Every request will 401.',
+  )
+}
+
+// Node ids are numeric; reject anything else so a `:id` can't smuggle a `..` into a path.
+const isNodeId = (id) => /^[0-9]+$/.test(id)
+
+// --- Binary registry (local-only) --------------------------------------------
+// BIN_REGISTRY_DIR points at a directory of media files served by bare name on
+// GET /api/bin/:name (vlang's `i<alias>` resolves here — `igos` → gos.jpg).
+// Unset (prod) = the route is never registered. Lookup compares :name against the
+// directory listing, so nothing from the request ever touches the filesystem.
+const BIN_DIR = process.env.BIN_REGISTRY_DIR
+const BIN_MIME = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mov': 'video/quicktime',
+  '.mp3': 'audio/mpeg',
+}
+
+// --- Frontend (built Vue SPA) -------------------------------------------------
+// In production this same process also serves frontend/dist (built by `npm run
+// build`), so the editor and the API share one origin — the SameSite=Strict session
+// cookie requires it. Served WITHOUT auth: the bundle holds no secrets (the token
+// isn't baked into the build) and the login page must load before a session exists.
+// In dev this is unused — Vite serves the SPA and proxies /api here.
+const STATIC_CONTENT_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.map': 'application/json',
+}
+
+// Node CRUD goes through nodeStore (file-backed today; Postgres + per-user isolation later —
+// see plans/multi-user-postgres-oauth-plan.txt). Handlers thread req.userId: unset in
+// single-user mode (the file store ignores it), populated from the session once OAuth lands.
+const routes: Record<string, Handler> = {
+  // Serve a registry file by bare name (extension resolved from the dir listing).
+  ...(BIN_DIR && {
+    'GET /api/bin/:name': async (req, res, { name }) => {
+      const entries = await fs.readdir(BIN_DIR)
+      const match = entries.find((entry) => path.parse(entry).name === name)
+      if (!match) {
+        res.writeHead(404).end('Not found')
+        return
+      }
+      const content = await fs.readFile(path.join(BIN_DIR, match))
+      const mime = BIN_MIME[path.extname(match).toLowerCase()] ?? 'application/octet-stream'
+      // Range support — <video> stalls without it (Chrome needs 206es to buffer/seek).
+      const range = req.headers.range?.match(/bytes=(\d*)-(\d*)/)
+      if (range) {
+        const start = range[1] ? Number(range[1]) : 0
+        const end = range[2] ? Number(range[2]) : content.length - 1
+        res
+          .writeHead(206, {
+            'Content-Type': mime,
+            'Content-Range': `bytes ${start}-${end}/${content.length}`,
+            'Accept-Ranges': 'bytes',
+            'Content-Length': end - start + 1,
+          })
+          .end(content.subarray(start, end + 1))
+        return
+      }
+      res
+        .writeHead(200, {
+          'Content-Type': mime,
+          'Content-Length': content.length,
+          'Accept-Ranges': 'bytes',
+        })
+        .end(content)
+    },
+  }),
+
+  'GET /api/nodes': async (req, res) => {
+    sendText(req, res, JSON.stringify(await nodeStore.listNodes(req.userId)), 'application/json')
+  },
+
+  'GET /api/nodes/:id': async (req, res, { id }) => {
+    const node = await nodeStore.getNode(req.userId, id)
+    if (!node) {
+      res.writeHead(404).end('Not found')
+      return
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(node))
+  },
+
+  // A node's body sidecar — a script node's script.js, an html node's content.html. The store
+  // resolves which file + content-type from the node's type. An existing node with no body yet
+  // returns an empty 200 (not a 404) so the editor loads cleanly; a missing node is a 404.
+  'GET /api/nodes/:id/body': async (req, res, { id }) => {
+    const body = await nodeStore.getBody(req.userId, id)
+    if (!body) {
+      res.writeHead(404).end('Not found')
+      return
+    }
+    // Binary bodies (image/audio/video/…) go out as raw bytes under their MIME; text bodies
+    // (html/script) keep the gzip-aware text path.
+    if (body.binary) {
+      res
+        .writeHead(200, { 'Content-Type': body.contentType, 'Content-Length': body.content.length })
+        .end(body.content)
+      return
+    }
+    sendText(req, res, body.content, body.contentType)
+  },
+
+  'POST /api/nodes/:id/body': async (req, res, { id }) => {
+    const result = await nodeStore.saveBody(req.userId, id, await readText(req))
+    if (result.error) {
+      res.writeHead(400).end('Node type has no body')
+      return
+    }
+    res.writeHead(200).end('Saved')
+  },
+
+  'POST /api/nodes/:id': async (req, res, { id }) => {
+    await nodeStore.saveNode(req.userId, id, await readBody(req))
+    res.writeHead(200).end('Saved')
+  },
+
+  // Minimal LLM endpoint for the harness node: one headless `claude -p` turn using this
+  // machine's Claude Code login. `--tools ""` keeps it a pure text call — no tool schemas
+  // sent, nothing executes. Deliberately stateless: no --resume, every call is a fresh
+  // session — whatever context the caller wants, the caller sends in the prompt. Returns
+  // one JSON: { text, usage, cost }. Localhost only — this must never ship to a networked
+  // box (same rule that removed the old 'ai' runner).
+  'POST /api/claude': async (req, res) => {
+    const { prompt, system, model, effort } = await readBody(req)
+    const args = [
+      '-p',
+      prompt,
+      '--output-format',
+      'json',
+      '--tools',
+      '',
+      '--exclude-dynamic-system-prompt-sections',
+      '--strict-mcp-config',
+      '--mcp-config',
+      '{"mcpServers":{}}',
+    ]
+    if (system) {
+      args.push('--system-prompt', system)
+    }
+    if (model) {
+      args.push('--model', model)
+    }
+    if (effort) {
+      args.push('--effort', effort)
+    }
+    const claudeBin = path.join(homedir(), '.local/bin/claude')
+    const stdout = await new Promise<string>((resolve, reject) => {
+      const options = { cwd: tmpdir(), timeout: 120_000, maxBuffer: 32 * 1024 * 1024 }
+      execFile(claudeBin, args, options, (error, out, errOut) =>
+        error ? reject(new Error(errOut || error.message)) : resolve(out),
+      )
+    })
+    const result = JSON.parse(stdout)
+    res
+      .writeHead(200, { 'Content-Type': 'application/json' })
+      .end(JSON.stringify({ text: result.result, usage: result.usage, cost: result.total_cost_usd }))
+  },
+
+  // Create a node with a server-minted id (the body carries no id — that's what distinguishes
+  // this from the upsert above). Returns the new node incl. its id.
+  'POST /api/nodes': async (req, res) => {
+    const node = await nodeStore.createNode(req.userId, await readBody(req))
+    res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(node))
+  },
+
+  // Delete a node. The store refuses with has-children if it still has children (no silent
+  // orphaning — reparent/delete them first), and forbidden if the id escapes the data store.
+  'DELETE /api/nodes/:id': async (req, res, { id }) => {
+    const result = await nodeStore.deleteNode(req.userId, id)
+    if (result.error === 'forbidden') {
+      res.writeHead(403).end('Forbidden')
+      return
+    }
+    if (result.error === 'has-children') {
+      res
+        .writeHead(409, { 'Content-Type': 'application/json' })
+        .end(JSON.stringify({ error: 'Node has children', children: result.children }))
+      return
+    }
+    res.writeHead(200).end('Deleted')
+  },
+
+  // --- Universal RUN manager — one view over everything that runs (see ./runManager.js) ---
+  // GET /api/runs lists AI runs (owned/ephemeral) + service daemons + task executions
+  // as one uniform record set. POST starts on-demand 'ai' runs (task/service are
+  // observe-only here). ⚠️ The 'ai' runner runs Claude with bypassPermissions —
+  // single-user / trusted only — never expose this server to a network without sandboxing.
+  // 'POST /api/runs': async (req, res) => {
+  //   try {
+  //     const { kind, input = {} } = await readBody(req)
+  //     if (!kind) {
+  //       throw new Error('kind (string) required')
+  //     }
+  //     const run = runManager.start(kind, input)
+  //     res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(run))
+  //   } catch (error) {
+  //     res
+  //       .writeHead(400, { 'Content-Type': 'application/json' })
+  //       .end(JSON.stringify({ error: error.message }))
+  //   }
+  // },
+
+  // 'GET /api/runs': async (req, res) => {
+  //   const kind = new URL(req.url, 'http://localhost').searchParams.get('kind') || undefined
+  //   res
+  //     .writeHead(200, { 'Content-Type': 'application/json' })
+  //     .end(JSON.stringify(await runManager.list(kind)))
+  // },
+
+  // 'GET /api/runs/:id': async (req, res, { id }) => {
+  //   const run = await runManager.get(id)
+  //   if (!run) {
+  //     res
+  //       .writeHead(404, { 'Content-Type': 'application/json' })
+  //       .end(JSON.stringify({ error: 'not found' }))
+  //     return
+  //   }
+  //   res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(run))
+  // },
+
+  // // Server-Sent Events: a snapshot, then live deltas until the run ends or the
+  // // client disconnects. The handler returns immediately; the socket stays open
+  // // (no res.end) and is fed by the controller's listener.
+  // 'GET /api/runs/:id/stream': async (req, res, { id }) => {
+  //   res.writeHead(200, {
+  //     'Content-Type': 'text/event-stream',
+  //     'Cache-Control': 'no-cache',
+  //     Connection: 'keep-alive',
+  //   })
+  //   // A client can vanish (ECONNRESET) between heartbeats. Writing to the dropped socket
+  //   // emits an 'error' on res that, with no listener, would crash the process — and a
+  //   // late write can fire before the 'close' cleanup below runs. Swallow the error event
+  //   // and guard every write so a gone client just stops receiving, it never takes us down.
+  //   res.on('error', () => {})
+  //   const safeWrite = (chunk) => {
+  //     if (res.writableEnded || res.destroyed) {
+  //       return
+  //     }
+  //     try {
+  //       res.write(chunk)
+  //     } catch {
+  //       // socket closed under us — the 'close' handler tears down the subscription
+  //     }
+  //   }
+  //   const send = (event) => safeWrite(`data: ${JSON.stringify(event)}\n\n`)
+  //   const unsubscribe = runManager.subscribe(id, send)
+  //   if (!unsubscribe) {
+  //     send({ type: 'error', error: 'not found' })
+  //     res.end()
+  //     return
+  //   }
+  //   const heartbeat = setInterval(() => safeWrite(': ping\n\n'), 15000)
+  //   req.on('close', () => {
+  //     clearInterval(heartbeat)
+  //     unsubscribe()
+  //   })
+  // },
+
+  // 'POST /api/runs/:id/cancel': async (req, res, { id }) => {
+  //   const ok = await runManager.cancel(id)
+  //   res
+  //     .writeHead(ok ? 200 : 404, { 'Content-Type': 'application/json' })
+  //     .end(JSON.stringify({ cancelled: ok }))
+  // },
+
+  // 'POST /api/runs/:id/resume': async (req, res, { id }) => {
+  //   try {
+  //     let input = {}
+  //     try {
+  //       input = await readBody(req)
+  //     } catch {
+  //       // empty body is fine — resume with no new input
+  //     }
+  //     const run = runManager.resume(id, input)
+  //     res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(run))
+  //   } catch (error) {
+  //     res
+  //       .writeHead(400, { 'Content-Type': 'application/json' })
+  //       .end(JSON.stringify({ error: error.message }))
+  //   }
+  // },
+}
+
+const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
+  // Prod is HTTPS-only (TLS terminated by the front proxy / Cloudflare): tell the browser
+  // to refuse http:// to this origin for a year. setHeader (not writeHead) so it merges
+  // into every route's response below.
+  if (IS_PROD) {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+  }
+  const path = req.url.split('?')[0]
+  // Auth endpoints — reachable WITHOUT a session (that's how you get one). Email+password by
+  // default; the Google OAuth dance is optional (only wired to a button when googleConfigured).
+  if (req.method === 'POST' && path === '/api/auth/signup') {
+    await signup(req, res)
+    return
+  }
+  if (req.method === 'POST' && path === '/api/auth/login') {
+    await login(req, res)
+    return
+  }
+  if (req.method === 'GET' && path === '/api/auth/google') {
+    startGoogleLogin(req, res)
+    return
+  }
+  if (req.method === 'GET' && path === '/api/auth/google/callback') {
+    await handleGoogleCallback(req, res)
+    return
+  }
+  // Serve the built frontend (frontend/dist) for any non-API GET — no auth (see serveStatic).
+  if (req.method === 'GET' && !path.startsWith('/api/')) {
+    await serveStatic(res, {
+      dir: DIST_DIR,
+      urlPath: path,
+      contentTypes: STATIC_CONTENT_TYPES,
+      notBuiltMessage: 'Frontend not built — run `npm run build` in frontend/',
+    })
+    return
+  }
+  // Who's calling? The session cookie's user, or null. Threaded into every node handler as
+  // req.userId (the per-user isolation in store/pg.js keys off it).
+  req.userId = await resolveUser(req)
+  // Logout clears the session — reachable even with an expired one.
+  if (req.method === 'POST' && path === '/api/logout') {
+    await logout(req, res)
+    return
+  }
+  // GET /api/session → the SPA asks once on load to decide app-vs-login. Ungated; reveals only
+  // booleans. googleConfigured tells it whether to show the "Sign in with Google" button.
+  if (req.method === 'GET' && path === '/api/session') {
+    res
+      .writeHead(200, { 'Content-Type': 'application/json' })
+      .end(JSON.stringify({ authorized: Boolean(req.userId), googleConfigured, emailAuthEnabled }))
+    return
+  }
+  // Everything else needs a signed-in user.
+  if (!req.userId) {
+    res
+      .writeHead(401, { 'Content-Type': 'application/json' })
+      .end(JSON.stringify({ error: 'unauthorized' }))
+    return
+  }
+  const route = matchUrl(routes, req.method, path)
+  if (route) {
+    // Node ids index folders on disk — reject a non-numeric `:id` (e.g. `..`) before it
+    // reaches a handler. (Run ids are UUIDs, so this guards only the node routes.)
+    if (route.key.includes('/api/nodes/:id') && !isNodeId(route.params.id)) {
+      res
+        .writeHead(400, { 'Content-Type': 'application/json' })
+        .end(JSON.stringify({ error: 'bad node id' }))
+      return
+    }
+    await route.handler(req, res, route.params)
+    return
+  }
+  res.writeHead(404).end('Not found')
+}
+
+// Build the hardened HTTP server (per-request error guards, dispatch try/catch with
+// 413/400/500 mapping, and uncaught/unhandledRejection process guards — all in lib/http)
+// around our request handler, attach the WS exchange on /ws, then bind. Bound to localhost
+// by default so the API is reachable ONLY through the front TLS proxy / Cloudflare; override
+// with BIND_HOST=0.0.0.0 for LAN/dev use.
+const server = createServer(handleRequest)
+attachWsServer(server, { resolveUser })
+
+const PORT = Number(process.env.PORT) || 3001
+const BIND_HOST = process.env.BIND_HOST || '127.0.0.1'
+server.listen(PORT, BIND_HOST, () => {
+  console.log(`API server running on http://${BIND_HOST}:${PORT}`)
+})

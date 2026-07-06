@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 // Editor for `html` nodes. The body lives in a content.html sidecar (fetched/saved
 // via /api/nodes/:id/body), NOT on the node — keeping it out of state.json is
 // what keeps the node-list endpoint tiny. Loaded on open, like a script node's
@@ -8,8 +8,8 @@
 import { ref, watch, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton } from 'naive-ui'
-import { useNodesStore } from '../../../stores/nodes.js'
-import { formatContent } from '../../../lib/formatContent.js'
+import { useNodesStore } from '../../../stores/nodes'
+import { formatContent } from '../../../lib/formatContent'
 
 const props = defineProps({
   node: { type: Object, required: true },

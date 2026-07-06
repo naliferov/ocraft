@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 // The /login screen — a shell-level (not a node) gate, shown when there's no session. Email+password
 // is the default: "Sign in" logs into an existing account, "Create account" makes a new one (sign-in
 // IS sign-up). The server reports what's available: emailAuthEnabled (off in prod, which is
@@ -7,7 +7,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton, NInput, NAlert } from 'naive-ui'
-import { login, signup, loginWithGoogle, getSession } from '../lib/apiAuth.js'
+import { login, signup, loginWithGoogle, getSession } from '../lib/apiAuth'
 
 const router = useRouter()
 const email = ref('')
@@ -31,8 +31,8 @@ const submit = async (action) => {
   try {
     await action(email.value.trim(), password.value)
     router.push('/')
-  } catch (e) {
-    error.value = e.message || 'Something went wrong'
+  } catch (err) {
+    error.value = err.message || 'Something went wrong'
   } finally {
     busy.value = false
   }

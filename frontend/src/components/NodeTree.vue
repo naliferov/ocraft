@@ -1,10 +1,12 @@
-<script setup>
+<script setup lang="ts">
 // Recursive sidebar tree. Renders a list of nodes (each carrying a `children`
 // array built by the store) and recurses into NodeTree for nested levels.
 import { ref, nextTick } from 'vue'
+import type { PropType } from 'vue'
+import type { TreeNode } from '../types'
 
 const props = defineProps({
-  nodes: { type: Array, required: true },
+  nodes: { type: Array as PropType<TreeNode[]>, required: true },
   activeId: { type: String, default: null },
   depth: { type: Number, default: 0 },
   // Active search needle (already trimmed). Highlights matching rows and, with

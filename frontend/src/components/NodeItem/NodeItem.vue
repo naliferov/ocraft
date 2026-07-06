@@ -1,11 +1,13 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, nextTick } from 'vue'
+import type { Component } from 'vue'
 import { NSelect, NButton } from 'naive-ui'
-import { useNodesStore } from '../../stores/nodes.js'
+import { useNodesStore } from '../../stores/nodes'
 import Script from './nodeTypes/Script.vue'
 import Html from './nodeTypes/Html.vue'
 import Category from './nodeTypes/Category.vue'
 import Binary from './nodeTypes/Binary.vue'
+import Text from './nodeTypes/Text.vue'
 
 const props = defineProps({
   node: { type: Object, required: true },
@@ -26,13 +28,14 @@ const save = async () => {
 // type picker and which component renders. Adding a node type = one entry here.
 // `hidden: true` keeps the mapping (so existing nodes of that type still render)
 // but drops it from the type picker — used to park a not-yet-ready type.
-const NODE_TYPES = {
+const NODE_TYPES: Record<string, { label: string; component: Component; hidden?: boolean }> = {
+  text: { label: 'text', component: Text },
   html: { label: 'html', component: Html },
+  binary: { label: 'binary', component: Binary, hidden: true },
   script: { label: 'script', component: Script },
   category: { label: 'category', component: Category },
   // hidden: renders existing binary nodes, but stays out of the type picker until there's an
   // upload UI (you can't usefully create one from the dropdown yet).
-  binary: { label: 'binary', component: Binary, hidden: true },
 }
 
 const typeOptions = Object.entries(NODE_TYPES)
@@ -130,11 +133,13 @@ const commitName = () => {
 .wrap {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  /* min-height, not height: fill the viewport when content is short (so html/canvas
+     editors still stretch), but grow past it when a node's panel is tall — the
+     scroll then happens in n-layout-content instead of clipping here. */
+  min-height: 100%;
   padding: 8px 12px;
   box-sizing: border-box;
   gap: 12px;
-  overflow: hidden;
 }
 
 .info {

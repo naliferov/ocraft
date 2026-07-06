@@ -1,7 +1,7 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { useNodesStore } from '../../../stores/nodes.js'
+import { useNodesStore } from '../../../stores/nodes'
 
 // A category node is a folder: it has no scene/script of its own, it just holds
 // child nodes. This panel lists those children and lets you open them.

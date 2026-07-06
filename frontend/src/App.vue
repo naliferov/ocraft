@@ -1,13 +1,13 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { NConfigProvider, NLayout, NLayoutSider, NLayoutContent } from 'naive-ui'
-import { useNodesStore } from './stores/nodes.js'
+import { useNodesStore } from './stores/nodes'
 import NodeItem from './components/NodeItem/NodeItem.vue'
 import NodeTree from './components/NodeTree.vue'
 import Terminal from './components/Terminal.vue'
 import Login from './components/Login.vue'
-import { logout } from './lib/apiAuth.js'
+import { logout } from './lib/apiAuth'
 
 const store = useNodesStore()
 const router = useRouter()
@@ -17,7 +17,7 @@ watch(
   () => route.params.id,
   (id) => {
     if (id) {
-      store.activeNodeId = id
+      store.activeNodeId = id as string // `/node/:id` is a single, non-repeatable param
     }
   },
   { immediate: true },
@@ -160,7 +160,7 @@ const reparentNode = async ({ id, parentId }) => {
           />
         </n-layout-sider>
 
-        <n-layout-content content-style="height: 100%; overflow: hidden;">
+        <n-layout-content content-style="height: 100%; overflow: auto;">
           <NodeItem
             v-if="route.params.id && store.activeNode"
             :key="store.activeNode.id"

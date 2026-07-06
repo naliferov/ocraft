@@ -9,6 +9,10 @@
 set -u
 cd /root/ocraft || exit 1
 
+# The runtime is TypeScript, run via Node's native type stripping (no build step). Requires
+# Node >= 22.6 on the box. The service configs (runtime/services/*.ts) spawn with these same flags.
+NODE_TS="node --experimental-strip-types --disable-warning=ExperimentalWarning"
+
 OLD_SHA="$(cat /tmp/ocraft_prev_sha 2>/dev/null || git rev-parse HEAD)"
 NEW_SHA="$(git rev-parse --short HEAD)"
 
@@ -18,7 +22,7 @@ rollback_code() {
 }
 
 # 1. Migrate (forward-only + additive, so the still-running old :80 tolerates the new schema).
-if ! node runtime/cli.js migrate; then
+if ! $NODE_TS runtime/cli.ts migrate; then
   echo "MIGRATE FAILED — :80 untouched"
   rollback_code
   rm -rf frontend/dist.new
@@ -27,7 +31,7 @@ fi
 
 # 2. Pre-flight the NEW backend on :3002 — :80 stays on the old code the whole time.
 echo "pre-flighting $NEW_SHA on :3002 ..."
-PORT=3002 BIND_HOST=127.0.0.1 NODE_ENV=production node runtime/api.js > /tmp/ocraft-preflight.log 2>&1 &
+PORT=3002 BIND_HOST=127.0.0.1 NODE_ENV=production $NODE_TS runtime/api.ts > /tmp/ocraft-preflight.log 2>&1 &
 PRE=$!
 ok=0
 for _ in $(seq 1 12); do
@@ -50,13 +54,13 @@ fi
 # 3. Green: swap the bundle in + restart :80 (new backend + new bundle together), then verify.
 echo "pre-flight green — cutting :80 over to $NEW_SHA"
 rm -rf frontend/dist && mv frontend/dist.new frontend/dist
-node runtime/cli.js service restart api
+$NODE_TS runtime/cli.ts service restart api
 sleep 3
 if ! curl -fsS -m 10 http://127.0.0.1/api/session > /dev/null 2>&1; then
   echo "CUTOVER CHECK FAILED — rolling back to $OLD_SHA"
   rollback_code
-  node runtime/cli.js service restart api
+  $NODE_TS runtime/cli.ts service restart api
   exit 1
 fi
 
-echo "deployed $NEW_SHA  (previous $OLD_SHA — rollback: git reset --hard $OLD_SHA && npm install && node runtime/cli.js service restart api)"
+echo "deployed $NEW_SHA  (previous $OLD_SHA — rollback: git reset --hard $OLD_SHA && npm install && $NODE_TS runtime/cli.ts service restart api)"

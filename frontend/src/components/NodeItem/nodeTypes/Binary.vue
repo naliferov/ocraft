@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 // Renderer for `binary` nodes — a node whose body is raw bytes (image / audio / video / …) rather
 // than text. Fetches /api/nodes/:id/body as a blob (the API serves it under the stored MIME), wraps
 // it in an object URL, and branches on the MIME: image/* → <img>, audio/* → <audio>, video/* →
