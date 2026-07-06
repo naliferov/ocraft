@@ -76,7 +76,7 @@ export const attachWsServer = (
 
   server.on('upgrade', async (req, socket, head) => {
     const path = req.url.split('?')[0]
-    if (path !== '/api/ws' && path !== '/ws') {
+    if (path !== '/api/ws') {
       socket.destroy() // not our endpoint, and there's no other upgrade handler — drop it
       return
     }
