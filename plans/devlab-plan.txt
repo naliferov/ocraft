@@ -1,0 +1,149 @@
+DEVLAB — offline Vue-component playground (projects/devlab)
+==========================================================
+
+Goal: a tiny offline app for fast dev experiments. Each "script" is a self-contained Vue COMPONENT
+(a full little app) living as a .vue FILE on disk. Sidebar lists them; click one -> it mounts. No
+backend, auth, DB, or editor. Lives in-repo at projects/devlab/. Additive and reversible — can fold
+back into ocraft later.
+
+STATUS: planned (not started).
+
+THE MODEL (simplified)
+----------------------
+A script = a plain Vue single-file component. Vite compiles the .vue files normally (via
+@vitejs/plugin-vue), so there is NO runtime engine: no `x` context, no blob-import, no runtime SFC
+compiler, no vendored composables. Clicking a script mounts its component in the main pane. One
+script using another = a normal `import` of that .vue.
+
+This is the whole thing:
+  - sidebar list of scripts (from the .vue files)
+  - open a script -> <component :is="thatScript" /> in the main pane
+  - each script is a full app (its own template + <script setup> + <style scoped>)
+
+The `x` API is GONE entirely — no x.ui, x.log, x.x, x.args. A script builds its UI from ordinary
+template elements, logs with console.log, and reuses another script via a normal import. Nothing to
+learn beyond standard Vue.
+
+Styling: Tailwind + daisyUI (see STYLING). Scripts use daisyUI component classes (btn, card, modal…)
+on plain elements. A script needing a heavy interactive widget can import a Vue component lib (Naive
+UI / PrimeVue) in that one .vue — daisyUI stays the baseline.
+
+DECISIONS (locked)
+------------------
+- Name: devlab -> projects/devlab/.
+- Static, offline: just a Vite SPA; `npm run build` -> static dist; no server, no /api.
+- Scripts are name-based .vue files. Cross-script use = ES import.
+- UI kit: Tailwind CSS v4 + daisyUI v5 (CSS classes on plain elements; not a Vue component lib).
+- Seed via a best-effort importer from ocraft (see caveat below).
+
+TRADEOFF (accepted)
+-------------------
+Existing ocraft scripts use the `x` API (x.ui, x.log, x.x, x.args). Pure .vue components have no
+`x`, so legacy scripts don't run unchanged: vue-sfc ones convert easily (x.log -> console.log, x.x
+-> import, drop x.args); imperative x.ui / plain-js ones need hand-porting into a component. Devlab
+is therefore a "write experiments as Vue apps" tool; faithful legacy execution is out of scope
+(that stays in ocraft).
+
+
+LAYOUT
+------
+  projects/devlab/
+    index.html
+    vite.config.ts         # @vitejs/plugin-vue + @tailwindcss/vite
+    package.json           # deps: vue ; devDeps: vite, @vitejs/plugin-vue, vue-tsc,
+                           #        tailwindcss, @tailwindcss/vite, daisyui
+    tsconfig.json
+    src/
+      main.ts
+      style.css            # @import "tailwindcss"; @plugin "daisyui";
+      App.vue              # sidebar list + <component :is> — the only UI file
+    scripts/               # the experiments, each a full Vue app
+      weather.vue
+      clock.vue
+    import-from-ocraft.js  # one-off, best-effort migration (plain JS)
+    README.md
+
+Vite root = projects/devlab/ (index.html here). Standalone project; run via
+`npm --prefix projects/devlab ...`.
+
+
+THE APP (App.vue — the only real code)
+--------------------------------------
+- Discover scripts: `const scripts = import.meta.glob('./scripts/*.vue')` (lazy dynamic imports).
+  Sidebar list = the glob keys, prettified to names. (Optional scripts/manifest.json only if you
+  want custom display names / ordering — otherwise derive from filenames.)
+- Open: on click, `<component :is="defineAsyncComponent(scripts[path])" />` into the main pane.
+  Switching swaps the component; Vue handles mount/unmount. Auto-mounts on select.
+- daisyUI-styled chrome — no Vue component lib, no router (selection is a local ref; optional #hash
+  for deep-links). ~1 small component.
+
+That's the entire frontend: main.ts + style.css + App.vue + the .vue scripts. Vite compiles
+everything; nothing is fetched or compiled at runtime.
+
+
+STYLING — Tailwind + daisyUI
+----------------------------
+Baseline UI kit = Tailwind CSS (v4) + daisyUI (v5). Scripts build UI from plain template elements +
+classes: daisyUI component classes (btn, card, modal, input, tabs, badge, …) plus Tailwind utilities
+for layout. No component imports, no API to learn — matches the "UI from template elements" model.
+
+Setup (build-time only; the generated CSS ships in the bundle):
+  - devDeps: tailwindcss, @tailwindcss/vite, daisyui.
+  - vite.config.ts: add the @tailwindcss/vite plugin (alongside @vitejs/plugin-vue).
+  - src/style.css (imported from main.ts):
+        @import "tailwindcss";
+        @plugin "daisyui";
+  - dark mode: daisyUI themes via data-theme on <html> (e.g. light/dark) — free toggle, no JS.
+
+Per-script escape hatch: any single script that needs a heavy interactive widget (data table, date
+picker, autocomplete) can import a Vue component lib (Naive UI / PrimeVue) in THAT .vue only. daisyUI
+stays the default; you're not locked in.
+
+
+IMPORTER (import-from-ocraft.js, plain JS, run with node) — best-effort
+-----------------------------------------------------------------------
+One-off. Hits a running ocraft API with a pasted session cookie (endpoints are user-scoped +
+auth-gated):
+  OCRAFT_URL=https://ocraft.dev OCRAFT_COOKIE='ocraft_session=…' \
+    node projects/devlab/import-from-ocraft.js
+  (default OCRAFT_URL=http://127.0.0.1:3001; cookie from devtools -> Application -> Cookies.)
+Steps:
+  1. GET /api/nodes -> filter type==='script'; GET each /body.
+  2. scriptType 'vue-sfc' -> write scripts/<name>.vue, with light rewrites: x.log(...) ->
+     console.log(...), drop x.args, rewrite x.x("<id>") -> import of <name>.vue where statically
+     resolvable, else FLAG for manual fix.
+  3. 'js' / 'vue-esm' (x-dependent, not a component) -> DON'T fake a conversion; dump raw source to
+     scripts/_legacy/<name>.txt and list as "needs manual port".
+  4. Print summary: converted, flagged x.x, legacy-dumped. Node built-ins only (global fetch >= 22).
+Honest and lossy by design — output is a starting point, not a finished port.
+
+
+VERIFY
+------
+1. Hand-write 2-3 scripts: clock.vue (ticking clock), a component that imports another script
+   (proves cross-script import), one using daisyUI classes (btn/card) + a scoped style.
+2. npm --prefix projects/devlab install && run dev -> open in Chrome: sidebar lists them, clicking
+   each mounts and runs it, daisyUI styles apply, dark theme toggles. Screenshot.
+3. run build -> npx vite preview -> same, fully offline (empty network tab beyond the bundle).
+4. run typecheck (vue-tsc) clean.
+5. Importer against local/prod ocraft -> vue-sfc land as .vue, x.x flags + legacy dumps accurate.
+
+
+REUSED / REFERENCE
+------------------
+- Existing Vite + Vue setup to mirror: frontend/vite.config.ts, frontend/index.html,
+  frontend/tsconfig.json, frontend/src/main.ts.
+- What a script looks like today (for the importer's conversion): a vue-sfc node body is real .vue
+  source; see frontend/src/composables/useVueSfc.ts and Script.vue for how `x` is used inside
+  <script setup>.
+- NOTE: none of the run-engine composables (useNodeScripts/useScriptTypes/useScriptUi/useVueMount/
+  useVueSfc) are copied under this model — Vite replaces them.
+
+
+NOTES
+-----
+- No editor (edit .vue files in your IDE; dev HMR reloads on change). No auth, DB, or runtime server.
+- Adding a script in prod needs a rebuild; in dev, drop a .vue file and it appears. Fine for a
+  playground.
+- No changes to ocraft or its script nodes — devlab is additive and reversible.
+- Deferred: a manifest for custom names/ordering; a shared component lib between devlab and ocraft.
