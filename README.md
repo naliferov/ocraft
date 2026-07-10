@@ -1,6 +1,6 @@
 # ocraft
 
-A personal **node OS**: one addressable tree where a node can be **anything from a note to a running program**. Everything is a node (`/node/:id`) — `html` nodes hold notes/data, `script` nodes are programs that call each other (and can render — a canvas "collage" is just a script), `category` nodes are folders — and the visual editor, the scheduler, and the MCP servers are all just **clients of one node store**. The decisive part, and the real difference from a notes app: *data and behavior live in the same tree* — a page can also run.
+A personal **node OS**: one addressable tree of typed nodes. Everything is a node (`/node/:id`) — `html` nodes hold notes/data, `text` nodes hold plain textual sources, `category` nodes are folders — and the visual editor, the scheduler, and the MCP servers are all just **clients of one node store**. (Runnable *scripts* used to be a node type; they now live as plain `.vue` files in the [devlab](projects/devlab/) playground — ocraft keeps the data plane.)
 
 Built framework-free on plain Node.js in **TypeScript** (ESM, run via Node's native type stripping — no build step), with a Vue 3 editor on top. A single-user local environment — and the substrate for a longer-term personal life-management system (see [Direction](#direction)).
 
@@ -11,7 +11,7 @@ Built framework-free on plain Node.js in **TypeScript** (ESM, run via Node's nat
 Everything in ocraft is a **node**. On disk a node is a small folder, `data/nodes/<id>/`, holding:
 
 - **metadata** in `state.json` (`name`, `type`, `parentId`, …), and
-- an optional **body** sidecar — the "file contents" — resolved by type: `script.js` for a `script` node, `content.html` for an `html` node. Bodies are kept out of the node-list payload and fetched on open.
+- an optional **body** sidecar — the "file contents" — resolved by type: `content.html` for an `html` node, plain text for a `text` node. Bodies are kept out of the node-list payload and fetched on open.
 
 Four properties make this a small OS-like substrate rather than just a document store:
 
@@ -21,33 +21,22 @@ Four properties make this a small OS-like substrate rather than just a document 
   | type | what it's for | body |
   |------|---------------|------|
   | `html` | documents / notes — the knowledge base | `content.html` |
-  | `script` | a **program** — JavaScript, run on demand (visual/creative things — a canvas "collage", etc. — are just scripts) | `script.js` |
+  | `text` | plain textual sources (vlang programs, csv, notes) | plain text |
   | `category` | a folder that just holds children | — |
+  | `binary` | media (images/video); hidden from the type picker for now | raw bytes + mime |
 
-- **Nodes are addressable.** Each node has a stable numeric id and is reachable at `/node/:id`. Notes link to each other by `/node/:id`; scripts call each other by id. The id is the address; `name` is only a label.
-- **Data and code share one tree.** A folder can hold a note next to a runnable script next to a canvas "app" — no separate "files" vs "programs" worlds.
+- **Nodes are addressable.** Each node has a stable numeric id and is reachable at `/node/:id`. Notes link to each other by `/node/:id`. The id is the address; `name` is only a label.
 
 ```
 notes/                 (category — a folder)
   daily/               (category)
     2026-06-17         (html — a note)
   tech-ideas           (html — links to → /node/100)
-scripts/
-  websocket-tester     (script — a program with its own UI)
-  collage              (script — renders + animates SVG clipart on a canvas)
 ```
 
 *(Shape is real; names are illustrative.)*
 
-## Running nodes
-
-A `script` node is a module: `export default async (x) => { … }`. When you Run it, it executes — in the browser, via blob import — and is handed a small **context `x`**, effectively the node's syscalls:
-
-- **`x.x(id, args)`** — call another node by its id and get its result back. This is composition: programs built from programs. Re-entry is caught as a cycle, not infinite recursion.
-- **`x.ui`** — mount real DOM controls (inputs, buttons, a canvas, a live log) above the editor, so a script node can be a little **app** (the WebSocket tester and the `collage` are ones).
-- **`x.args`, `x.log`** — invocation arguments and labelled logging.
-
-> **Scope, honestly:** node scripts run in the **browser** today, with no sandbox and no resource limits — composition and a UI surface exist; isolation does not. A headless runner (so the scheduler can execute nodes) and sandboxed, resource-capped execution are on the [Roadmap](#roadmap), not built. The `x` context is kept deliberately small so it can be re-implemented backend-side later.
+> **Scripts moved out.** The runnable `script` node type (browser-run JS with the `x` context — `x.x` composition, `x.ui` controls) was removed in favor of **[devlab](projects/devlab/)**: a standalone offline Vue playground where every script is a plain `.vue` file — Vite compiles them, one script imports another, no runtime engine. ocraft stays the data substrate; devlab is the behavior sandbox.
 
 ## The system around the nodes
 
@@ -194,6 +183,7 @@ Working rules for editing this repo — conventions, coding rules, DB invariants
 - **No single-letter variable names — except `i`/`j`/`k` as numeric loop counters.** Use a descriptive name for every binding — including callback parameters, `.map`/`.filter`/`.find` args, and regex matches. Write `const droplet = await getDroplet(id)`, not `const d = …`; `images.filter((image) => …)`, not `(i) => …`. The name should say what the value *is*. The one allowed exception: a classic numeric loop index may be `i` (nested loops: `j`, `k`), e.g. `for (let i = 0; i < count; i++)` — ESLint's `id-length` exempts `i`/`j`/`k`. Still prefer a descriptive name when iterating a *named* collection: `for (const droplet of droplets)`, not `for (const d of droplets)`.
 - **No boolean flag parameters.** A `fn(…, true)` call site is opaque — the reader can't tell what `true` selects. When a flag would switch between two behaviours, prefer the most minimal split that removes the boolean: usually **two intention-named functions**, otherwise a named mode/strategy (e.g. a string `'rich'`/`'source'`, a passed-in handler, or a small factory). Write `editRich()` / `editSource()`, not `enterEdit(true)` / `enterEdit(false)`. This applies to new code and to flags you touch while editing.
 - **Write the simplest condition that reads plainly — don't over-guard.** Destructure up front, then test the fields: `const { width, height } = obj ?? {}; if (!width || !height) …`, not `if (!obj || !(obj.width > 0) || !(obj.height > 0))`. Prefer `!value`, `value < n`, or `!list.length` over negated comparisons like `!(a > b)`. Guard the failure that can *actually* occur (missing / zero / empty), not theoretical inputs that can't (a negative or `NaN` dimension that nothing produces). Keep thrown messages short — name the thing and the bad value, skip the lecture. If you deviate from the obvious form for a real reason (e.g. `!width` to also catch `undefined`), say why in a one-line comment rather than silently complicating it.
+- **No chained ternaries — one `?:` max, and only for a simple value pick.** A nested ternary (`a ? x : b ? y : z ? …`) is a soap opera: every branch drags in the next and nobody can tell who did what. The moment there's a second condition, switch to plain `if` branches (reset defaults first, early-return the miss, then one `if` per case) or a lookup map keyed by the discriminant. A single flat ternary for a trivial pick (`entry ? entry.name : 'devlab'`) is fine.
 - **Use the shared naive-ui `<n-button size="small">` for action buttons — don't hand-roll a plain `<button>`.** Save / Run / Edit / Refresh / Send-style actions in node editors and views go through the one button component (see `NodeItem.vue`'s Save, `Script.vue`'s Run, `Html.vue`'s Edit/Add link) so every action button looks the same. A plain styled `<button>` is reserved for compact **chrome / transport / icon** controls that intentionally have their own look — the tree's rename/delete (`NodeTree.vue`), the sidebar's `+ node` (`App.vue`), the html editor's rich-text toolbar (`Html.vue`'s `.tool` buttons). Default a new button to `n-button`; only drop to a plain element for those icon/chrome cases, and say why.
 - **Never `DELETE` rows in `users` or `accounts` — deactivate, never delete.** Both anchor identity: `users` is referenced by `nodes` / `accounts` / `sessions` (FK `user_id`), and `accounts` maps each provider login (google / email) to its user. A hard delete cascade-wipes or orphans that data and leaves id gaps — it breaks DB consistency. To remove someone, soft-delete (a `deleted_at` / `status` flag) and keep the row. Don't spin up throwaway placeholder users to delete later either — import/reassign onto a real user. Holds in every environment, prod and local.
 - **"Show / list the rows" is read-only — just show them.** When asked to display rows from a DB table, run **one plain `SELECT … ORDER BY … LIMIT …`** and present the result — nothing else. Don't join in extra tables, add computed/analysis columns, or editorialize; **never `UPDATE` or "fix" data on a show request**. For `bytea`/large columns show `octet_length(…)` instead of dumping the blob (offer the raw bytes if asked); use `psql -x` for wide rows. Put the rows in the reply so they're actually visible — don't make the user re-ask.

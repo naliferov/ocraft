@@ -1,0 +1,141 @@
+<p><a href="/doc/node-js-event-loop" class="wikilink">event loop (node)</a></p>
+<p>
+  threads vs cluster
+  <code>node:cluster</code>
+  — a poor way to scale beyond &gt; 6–8 processes: all connections go through the parent process via
+  IPC, the master process is at 100% while the children are underloaded
+</p>
+<p>
+  <strong>Better</strong>
+  : 1 port per thread, with load balancing in a separate Auth service. On first contact the client
+  receives a token and several
+  <code>host:port</code>
+  connection points, then connects to its own thread using the token. On disconnect — parallel
+  attempts to the primary and the backup points. Not all traffic goes through a single balancer —
+  distribution happens only when sessions are created
+</p>
+<p>
+  Handing off CPU-heavy operations to a worker is cheaper than to another instance: via
+  <code>SharedArrayBuffer</code>
+  and
+  <code>MessagePort</code>
+  , with CAS — through shared memory.
+</p>
+<h2>ECONNRESET — handling</h2>
+<pre><code class="language-js">process.on(&#39;uncaughtException&#39;, (error, origin) =&gt; {
+  if (error?.code === &#39;ECONNRESET&#39;) return;
+  console.error(&#39;UNCAUGHT EXCEPTION&#39;);
+  console.error(error);
+  console.error(origin);
+  process.exit(1);
+});
+</code></pre>
+<h2>Memory leak — pattern (eval + closure)</h2>
+<p>
+  A leak through a closure over the old object during hot reload via
+  <code>eval(main.toString())</code>
+  :
+</p>
+<pre><code class="language-js">const main = async () =&gt; {
+    globalThis.s ??= {};
+    s.test ??= {};
+    const test = s.test; // &lt;- holds the old object
+    s.test = JSON.parse(await nodeFS.readFile(&#39;test.json&#39;, &#39;utf8&#39;));
+    s.test.testProp = () =&gt; { }; // &lt;- adds a reference to main via the closure
+    // ...
+    const fn = eval(main.toString()); // &lt;- fn captures test → leak
+    await fn();
+};
+</code></pre>
+<p>Standarts implementation:</p>
+<ul>
+  <li>
+    <strong>Node.js 0.x – 4.x</strong>
+    → mainly
+    <strong>ECMAScript 5 (ES5)</strong>
+    , but some ES6 features could be enabled via
+    <code>--harmony</code>
+    .
+  </li>
+  <li>
+    <strong>Node.js 6.x</strong>
+    → partial support for
+    <strong>ECMAScript 6 (ES6)</strong>
+    appeared, things like
+    <code>let</code>
+    ,
+    <code>const</code>
+    , arrow functions,
+    <code>Map</code>
+    ,
+    <code>Set</code>
+    ,
+    <code>Promise</code>
+    .
+  </li>
+  <li>
+    <strong>Node.js 8.x</strong>
+    →
+    <strong>async/await</strong>
+    (from ECMAScript 2017).
+  </li>
+  <li>
+    <strong>Node.js 10.x</strong>
+    → almost full ES6+ and new features like
+    <strong>optional catch binding</strong>
+    (from ES2019).
+  </li>
+  <li>
+    <strong>Node.js 12.x</strong>
+    → experimental support for
+    <strong>
+      ESModules (
+      <code>import/export</code>
+      )
+    </strong>
+    .
+  </li>
+  <li>
+    <strong>Node.js 14.x</strong>
+    → ESModules became
+    <strong>stable</strong>
+    , and support for
+    <strong>ECMAScript 2020</strong>
+    was added (
+    <code>?.</code>
+    ,
+    <code>??</code>
+    ,
+    <code>BigInt</code>
+    ).
+  </li>
+  <li>
+    <strong>Node.js 16.x</strong>
+    → new ES2021 capabilities (
+    <code>String.prototype.replaceAll</code>
+    ,
+    <code>??=</code>
+    ,
+    <code>||=</code>
+    ,
+    <code>&amp;&amp;=</code>
+    ).
+  </li>
+  <li>
+    <strong>Node.js 18.x</strong>
+    → support for ES2022 (
+    <code>Array.prototype.at</code>
+    ,
+    <code>Error.cause</code>
+    ).
+  </li>
+  <li>
+    <strong>Node.js 20.x+</strong>
+    → already includes ES2023 and partially ES2024.
+  </li>
+</ul>
+<p>
+  <strong>node debug</strong>
+  npx nodemon --watch ./node --ext ts,js,json --exec &#39;bash -lc &quot;NODE_PATH=./node
+  ./node_modules/.bin/ts-node -r ./node/localConfig.js ./node/api/index.ts&quot;&#39;
+</p>

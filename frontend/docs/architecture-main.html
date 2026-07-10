@@ -1,0 +1,17 @@
+<b>clean code</b> <a href="https://gist.github.com/wojteklu/73c6914cc446146b8b533c0988cf8d29">rules (wojteklu)</a><br>
+low coupling · high cohesion · modularity · IoC<br><br>
+<b>arch types</b>: layered/onion · hexagonal (ports & adapters) · monolith/microservice · n-tier<br>
+<a href="https://simonbrown.je/">simonbrown</a> · <a href="https://herbertograca.com/2017/07/03/the-software-architecture-chronicles/">graca chronicles</a> · <a href="https://gtoolkit.com/">gtoolkit</a><br>
+CQRS · clean · layered · hexagonal<br><br>
+hexagonal = ports & adapters (cockburn; freeman & pryce, «growing OO software with tests»)<br>
+DCI (coplien & reenskaug) · BCE (jacobson, «OO software engineering: use-case driven»)<br>
+usage interface = implementation detail<br>
+GoF · PoEAA · SOLID · GRASP · KISS · DRY · YAGNI · law of demeter<br><br>
+<b>service</b> = loose coupling: must not depend on the app; exposes a concrete, stable interface; is versioned.<br>
+<b>domain = model</b> (not the DB-entity/schema). owns business processes; knows nothing of storage, source, or presentation.<br>
+always a <b>mediator</b> between model & view; the model knows neither — it only emits events (observers/listeners/message-passing).<br>
+templates: no imperative logic, no conditionals — only data-insertion points. VM/controller/view never do I/O directly (→ mediator services); no network from the view. carve layers, but no architecture-astronautics.<br>
+bind late & dynamically; controller sanitizes, model validates.<br>
+<h2>system design — patterns</h2>
+slow down · circuit breaker · bulkhead · exponential backoff · adaptive throttling<br><br>
+<b>systems theory</b>: bertalanffy «general system theory» · wiener «cybernetics» · forrester «principles of systems» · beer «brain of the firm» · simon «the sciences of the artificial»

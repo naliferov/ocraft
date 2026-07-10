@@ -1,0 +1,4 @@
+[
+  { "name": "disco elysium dialogs", "file": "disco-elysium-dialogs.txt.gzip", "type": "gz-text" },
+  { "name": "music artists list", "file": "music-artists-list.txt", "type": "txt" }
+]

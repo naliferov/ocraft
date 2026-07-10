@@ -23,9 +23,8 @@ const split = (node) => {
   return { name: name ?? 'new node', type: type ?? 'html', parentId, data: rest }
 }
 
-// html/script/text carry a text body sidecar; content-type by type. (binary will store its own mime.)
+// html/text carry a text body sidecar; content-type by type. (binary will store its own mime.)
 const BODY_CONTENT_TYPE = {
-  script: 'text/javascript',
   html: 'text/html; charset=utf-8',
   text: 'text/plain; charset=utf-8',
 }

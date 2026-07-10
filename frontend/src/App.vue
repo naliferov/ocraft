@@ -1,381 +1,430 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { NConfigProvider, NLayout, NLayoutSider, NLayoutContent } from 'naive-ui'
-import { useNodesStore } from './stores/nodes'
-import NodeItem from './components/NodeItem/NodeItem.vue'
-import NodeTree from './components/NodeTree.vue'
-import Terminal from './components/Terminal.vue'
-import Login from './components/Login.vue'
-import { logout } from './lib/apiAuth'
+import {
+  ref,
+  computed,
+  shallowRef,
+  defineAsyncComponent,
+  defineComponent,
+  h,
+  onMounted,
+  onBeforeUnmount,
+  type Component,
+  type PropType,
+} from 'vue'
+import AssetView from './AssetView.vue'
 
-const store = useNodesStore()
-const router = useRouter()
-const route = useRoute()
+const vueModules = import.meta.glob<{ default: Component }>('../scripts/*.vue')
+const vanillaModules = import.meta.glob('../scripts/*.{js,ts}')
+const solidModules = import.meta.glob('../scripts/*.{jsx,tsx}')
+const docModules = import.meta.glob('../docs/*.html', { query: '?raw', import: 'default' })
 
-watch(
-  () => route.params.id,
-  (id) => {
-    if (id) {
-      store.activeNodeId = id as string // `/node/:id` is a single, non-repeatable param
-    }
+const toName = (path: string) =>
+  path
+    .split('/')
+    .pop()!
+    .replace(/\.\w+$/, '')
+
+type ScriptKind = 'vue' | 'vanilla' | 'solid'
+const scripts = [
+  ...Object.keys(vueModules).map((path) => ({ path, kind: 'vue' as ScriptKind })),
+  ...Object.keys(vanillaModules).map((path) => ({ path, kind: 'vanilla' as ScriptKind })),
+  ...Object.keys(solidModules).map((path) => ({ path, kind: 'solid' as ScriptKind })),
+]
+  .map((s) => ({ ...s, name: toName(s.path) }))
+  .sort((a, b) => a.name.localeCompare(b.name))
+
+const docs = Object.keys(docModules)
+  .map((path) => ({ path, name: toName(path) }))
+  .sort((a, b) => a.name.localeCompare(b.name))
+
+const filter = ref('')
+const matches = (name: string) => name.toLowerCase().includes(filter.value.trim().toLowerCase())
+const visibleScripts = computed(() => scripts.filter((s) => matches(s.name)))
+const visibleDocs = computed(() => docs.filter((d) => matches(d.name)))
+
+// bins (public/bins, served as-is / not bundled) are listed from a manifest and opened by
+// a type-aware viewer (AssetView) — gz-text inflated in-browser, images/media as elements.
+type Bin = { name: string; file: string; type: string }
+const bins = ref<Bin[]>([])
+const visibleBins = computed(() => bins.value.filter((a) => matches(a.name)))
+
+// --- script mounting (non-Vue kinds get a host <div> + cleanup lifecycle) ---
+type MountFn = (host: HTMLElement) => Promise<(() => void) | undefined>
+
+const HostMount = defineComponent({
+  props: { mount: { type: Function as PropType<MountFn>, required: true } },
+  setup(props) {
+    const host = ref<HTMLElement>()
+    let cleanup: (() => void) | undefined
+    onMounted(async () => {
+      cleanup = await props.mount(host.value!)
+    })
+    onBeforeUnmount(() => cleanup?.())
+    return () => h('div', { ref: host })
   },
-  { immediate: true },
-)
-
-const navigate = (id) => router.push(`/node/${id}`)
-
-// Sign out: clear the server session, then HARD-navigate to /login. A full reload (not router.push)
-// drops the Pinia store too, so the next sign-in can never see the previous user's tree.
-const signOut = async () => {
-  await logout()
-  window.location.href = '/login'
-}
-
-// Search the tree by node name. Prune to branches that contain a match (keeping
-// ancestors so the path stays visible); while searching, NodeTree force-expands
-// and highlights matches. Case-insensitive; localeCompare-free `includes` handles
-// unicode (Cyrillic) fine.
-const searchQuery = ref('')
-const pruneBySearch = (nodes, needle) => {
-  const kept = []
-  for (const node of nodes) {
-    const children = pruneBySearch(node.children, needle)
-    const selfMatches = (node.name || '').toLowerCase().includes(needle)
-    if (selfMatches || children.length) {
-      kept.push({ ...node, children })
-    }
-  }
-  return kept
-}
-const displayTree = computed(() => {
-  const needle = searchQuery.value.trim().toLowerCase()
-  return needle ? pruneBySearch(store.tree, needle) : store.tree
 })
 
-// Create a node (root-level when no parentId), select it so the user lands on it.
-const createNode = async (parentId = null) => {
-  const node = await store.create({ parentId })
-  navigate(node.id)
-}
+const mountVanilla =
+  (path: string): MountFn =>
+  async (host) => {
+    const mod = (await vanillaModules[path]()) as { default: (host: HTMLElement) => unknown }
+    const result = await mod.default(host)
+    return typeof result === 'function' ? (result as () => void) : undefined
+  }
 
-// Delete surfaces the server's 409 ("has children") as a banner instead of failing
-// silently; otherwise selection has already moved off the deleted node in the store.
-const deleteError = ref('')
-const removeNode = async (id) => {
-  deleteError.value = ''
-  try {
-    await store.remove(id)
-    if (store.activeNodeId) {
-      navigate(store.activeNodeId)
+const mountSolid =
+  (path: string): MountFn =>
+  async (host) => {
+    const [{ render }, mod] = await Promise.all([import('solid-js/web'), solidModules[path]()])
+    return render((mod as { default: () => any }).default, host)
+  }
+
+// --- selection: /script/<name> or /doc/<name> ---
+const activeUrl = ref<string | null>(null) // '/script/x' | '/doc/x'
+const activeComponent = shallowRef<Component | null>(null)
+const activeMount = shallowRef<MountFn | null>(null)
+const activeHtml = ref('')
+const activeBin = shallowRef<Bin | null>(null)
+const missing = ref<string | null>(null)
+
+// --- doc editing (dev only: backed by the /__save-doc vite middleware) ---
+const canEdit = import.meta.env.DEV
+const editing = ref(false)
+const draft = ref('')
+const saving = ref(false)
+const saveError = ref<string | null>(null)
+const docEdits = new Map<string, string>() // fresh content pushed over HMR, by doc name
+
+const show = async (url: string | null) => {
+  activeUrl.value = null
+  activeComponent.value = null
+  activeMount.value = null
+  activeHtml.value = ''
+  activeBin.value = null
+  missing.value = null
+  editing.value = false
+  document.title = 'ocraft'
+  if (!url) {
+    return
+  }
+
+  const [, kind, rawName] = url.match(/^\/(script|doc|bin)\/(.+)$/) ?? []
+  const name = rawName && decodeURIComponent(rawName)
+
+  if (kind === 'bin') {
+    const asset = bins.value.find((candidate) => candidate.name === name)
+    if (!asset) {
+      missing.value = url
+      return
     }
-  } catch (err) {
-    deleteError.value = err.message
+    activeUrl.value = url
+    document.title = `ocraft · ${asset.name}`
+    activeBin.value = asset
+    return
+  }
+
+  if (kind === 'doc') {
+    const doc = docs.find((candidate) => candidate.name === name)
+    if (!doc) {
+      missing.value = url
+      return
+    }
+    activeUrl.value = url
+    document.title = `ocraft · ${doc.name}`
+    activeHtml.value = docEdits.get(name) ?? ((await docModules[doc.path]()) as string)
+    return
+  }
+
+  const script = scripts.find((candidate) => candidate.name === name)
+  if (!script) {
+    missing.value = url
+    return
+  }
+  activeUrl.value = url
+  document.title = `ocraft · ${script.name}`
+  if (script.kind === 'vue') {
+    activeComponent.value = defineAsyncComponent(vueModules[script.path])
+  }
+  if (script.kind === 'vanilla') {
+    activeMount.value = mountVanilla(script.path)
+  }
+  if (script.kind === 'solid') {
+    activeMount.value = mountSolid(script.path)
   }
 }
 
-// Switch a deleted node back in from the undo pool and land on it.
-const restoreNode = async (id) => {
-  const node = await store.restore(id)
-  if (node) {
-    navigate(node.id)
-  }
+const urlFromLocation = () =>
+  location.pathname.match(/^\/(script|doc|bin)\/.+$/) ? location.pathname : null
+
+const open = (kind: 'script' | 'doc' | 'bin', name: string) => {
+  const url = `/${kind}/${encodeURIComponent(name)}`
+  history.pushState(null, '', url)
+  show(url)
 }
 
-const renameNode = ({ id, name }) => store.rename(id, name)
+const activeDocName = computed(() => {
+  const match = activeUrl.value?.match(/^\/doc\/(.+)$/)
+  return match ? decodeURIComponent(match[1]) : null
+})
 
-// Reparent surfaces the cycle-guard error ("into its own descendant") in the banner.
-const reparentNode = async ({ id, parentId }) => {
-  deleteError.value = ''
+const startEdit = () => {
+  draft.value = activeHtml.value
+  saveError.value = null
+  editing.value = true
+}
+
+const cancelEdit = () => {
+  editing.value = false
+}
+
+const saveEdit = async () => {
+  if (!activeDocName.value) {
+    return
+  }
+  saving.value = true
+  saveError.value = null
   try {
-    await store.reparent(id, parentId)
-  } catch (err) {
-    deleteError.value = err.message
+    const res = await fetch(`/__save-doc?name=${encodeURIComponent(activeDocName.value)}`, {
+      method: 'POST',
+      body: draft.value,
+    })
+    if (!res.ok) {
+      throw new Error((await res.text()) || `save failed (${res.status})`)
+    }
+    activeHtml.value = draft.value
+    editing.value = false
+  } catch (error) {
+    saveError.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    saving.value = false
   }
+}
+
+// In-doc navigation without reload: docs link to /doc/<name> (and may link /script/<name>).
+// Intercept those; external links behave normally.
+const onContentClick = (event: MouseEvent) => {
+  const link = (event.target as HTMLElement).closest('a')
+  if (!link) {
+    return
+  }
+  const match = link.getAttribute('href')?.match(/^\/(script|doc|bin)\/(.+)$/)
+  if (!match) {
+    return
+  }
+  event.preventDefault()
+  open(match[1] as 'script' | 'doc' | 'bin', decodeURIComponent(match[2]))
+}
+
+window.addEventListener('popstate', () => show(urlFromLocation()))
+show(urlFromLocation())
+
+// load the bins manifest, then (re-)resolve if the page deep-linked straight to an asset
+fetch('/bins/manifest.json')
+  .then((response) => (response.ok ? response.json() : []))
+  .then((list: Bin[]) => {
+    bins.value = list
+    const current = urlFromLocation()
+    if (current?.startsWith('/bin/')) show(current)
+  })
+  .catch(() => {})
+
+const theme = ref<'dark' | 'light'>(
+  (localStorage.getItem('ocraft.theme') as 'dark' | 'light') ?? 'light',
+)
+const applyTheme = () => (document.documentElement.dataset.theme = theme.value)
+const toggleTheme = () => {
+  theme.value = theme.value === 'dark' ? 'light' : 'dark'
+  localStorage.setItem('ocraft.theme', theme.value)
+  applyTheme()
+}
+applyTheme()
+
+// A changed doc file arrives here (not as a full App re-render) — patch the open doc in place.
+if (import.meta.hot) {
+  import.meta.hot.on('ocraft:doc', ({ name, html }: { name: string; html: string }) => {
+    docEdits.set(name, html)
+    if (!editing.value && activeDocName.value === name) {
+      activeHtml.value = html
+    }
+  })
 }
 </script>
 
 <template>
-  <n-config-provider>
-    <Login v-if="route.path === '/login'" />
-    <div v-else class="app-col">
-      <n-layout class="main-row" has-sider content-style="height: 100%;">
-        <n-layout-sider :width="240" bordered content-style="padding: 10px 8px 0 8px;">
-          <div class="tree-toolbar">
-            <div class="tree-brand">
-              <span
-                class="tree-logo"
-                title="Home"
-                role="link"
-                tabindex="0"
-                @click="router.push('/')"
-                @keydown.enter="router.push('/')"
-                >ocraft</span
-              >
-              <span class="tree-title">Nodes</span>
-            </div>
-            <div class="tree-actions">
-              <button class="new-node" title="New root node" @click="createNode()">+ node</button>
-              <button class="logout-btn" title="Sign out" @click="signOut">log out</button>
-            </div>
-          </div>
-          <div class="tree-search">
-            <input
-              v-model="searchQuery"
-              class="tree-search-input"
-              type="search"
-              placeholder="Search nodes…"
-            />
-            <button
-              v-if="searchQuery"
-              class="tree-search-clear"
-              title="Clear search"
-              @click="searchQuery = ''"
+  <div class="flex h-screen bg-base-100 text-base-content">
+    <aside class="flex w-72 shrink-0 flex-col border-r border-base-300">
+      <div class="flex items-center justify-between border-b border-base-300 p-4">
+        <span class="text-lg font-bold">ocraft</span>
+        <button class="btn btn-ghost btn-xs" @click="toggleTheme">
+          {{ theme === 'dark' ? '☀' : '☾' }}
+        </button>
+      </div>
+      <div class="border-b border-base-300 p-2">
+        <input
+          v-model="filter"
+          class="input input-sm input-bordered w-full"
+          placeholder="filter…"
+        />
+      </div>
+      <div class="flex-1 overflow-y-auto">
+        <div class="px-4 pt-3 pb-1 text-xs font-semibold uppercase opacity-50">
+          scripts ({{ visibleScripts.length }})
+        </div>
+        <ul class="menu w-full py-0">
+          <li v-for="s in visibleScripts" :key="s.path">
+            <a
+              :class="{ active: activeUrl === `/script/${s.name}` }"
+              @click="open('script', s.name)"
             >
-              ×
-            </button>
+              <span class="truncate">{{ s.name }}</span>
+              <span v-if="s.kind !== 'vue'" class="badge badge-ghost badge-xs">{{ s.kind }}</span>
+            </a>
+          </li>
+        </ul>
+        <div class="px-4 pt-3 pb-1 text-xs font-semibold uppercase opacity-50">
+          docs ({{ visibleDocs.length }})
+        </div>
+        <ul class="menu w-full py-0">
+          <li v-for="d in visibleDocs" :key="d.path">
+            <a :class="{ active: activeUrl === `/doc/${d.name}` }" @click="open('doc', d.name)">
+              <span class="truncate">{{ d.name }}</span>
+            </a>
+          </li>
+        </ul>
+        <template v-if="visibleBins.length">
+          <div class="px-4 pt-3 pb-1 text-xs font-semibold uppercase opacity-50">
+            bins ({{ visibleBins.length }})
           </div>
-          <div v-if="deleteError" class="tree-error" @click="deleteError = ''">{{ deleteError }}</div>
-          <div v-if="store.deletedNodes.length" class="trash-pool">
-            <div class="trash-pool-title">Recently deleted</div>
-            <div v-for="entry in store.deletedNodes" :key="entry.id" class="trash-item">
-              <span class="trash-name" :title="entry.name">{{ entry.name }}</span>
-              <button class="trash-restore" title="Restore" @click="restoreNode(entry.id)">↩</button>
-            </div>
-          </div>
-          <div v-if="searchQuery.trim() && !displayTree.length" class="tree-empty">
-            No nodes match “{{ searchQuery.trim() }}”.
-          </div>
-          <NodeTree
-            :nodes="displayTree"
-            :active-id="store.activeNodeId"
-            :query="searchQuery.trim()"
-            :expand-all="!!searchQuery.trim()"
-            @select="navigate"
-            @toggle="store.toggleCollapsed"
-            @create="createNode"
-            @rename="renameNode"
-            @remove="removeNode"
-            @reparent="reparentNode"
-          />
-        </n-layout-sider>
+          <ul class="menu w-full py-0">
+            <li v-for="a in visibleBins" :key="a.file">
+              <a :class="{ active: activeBin?.name === a.name }" @click="open('bin', a.name)">
+                <span class="truncate">{{ a.name }}</span>
+                <span class="badge badge-ghost badge-xs">{{ a.type }}</span>
+              </a>
+            </li>
+          </ul>
+        </template>
+        <div
+          v-if="!visibleScripts.length && !visibleDocs.length && !visibleBins.length"
+          class="p-4 text-xs opacity-50"
+        >
+          no matches
+        </div>
+      </div>
+      <div class="border-t border-base-300 p-3 text-xs opacity-50">
+        {{ scripts.length }} scripts · {{ docs.length }} docs · {{ bins.length }} bins
+      </div>
+    </aside>
 
-        <n-layout-content content-style="height: 100%; overflow: auto;">
-          <NodeItem
-            v-if="route.params.id && store.activeNode"
-            :key="store.activeNode.id"
-            :node="store.activeNode"
-          />
-          <!-- Explicit not-found state: an id that resolves to no node (deleted, or a
-              bad address). Guarded by store.nodes.length so it doesn't flash before
-              the tree has loaded. Mirrors NodeItem's "no handler for type" card. -->
-          <div v-else-if="route.params.id && store.nodes.length" class="node-missing">
-            <p>
-              No node <code>#{{ route.params.id }}</code>.
-            </p>
-            <p>
-              This address doesn't resolve to a node in the store — it may have been deleted, or the id
-              is wrong. Pick a node from the tree, or
-              <a href="#" @click.prevent="router.push('/')">go home</a>.
-            </p>
-          </div>
-        </n-layout-content>
-      </n-layout>
-      <Terminal />
-    </div>
-  </n-config-provider>
+    <main class="flex-1 overflow-auto">
+      <div v-if="missing" class="grid h-full place-items-center opacity-40">
+        <p>nothing at {{ missing }}</p>
+      </div>
+      <div v-else-if="activeHtml" :key="activeUrl!" class="max-w-3xl p-8">
+        <div v-if="canEdit" class="mb-3 flex items-center gap-2">
+          <template v-if="editing">
+            <button class="btn btn-primary btn-xs" :disabled="saving" @click="saveEdit">
+              {{ saving ? 'saving…' : 'save' }}
+            </button>
+            <button class="btn btn-ghost btn-xs" :disabled="saving" @click="cancelEdit">
+              cancel
+            </button>
+            <span v-if="saveError" class="text-xs text-error">{{ saveError }}</span>
+          </template>
+          <button v-else class="btn btn-primary btn-xs" @click="startEdit">edit</button>
+        </div>
+        <textarea
+          v-if="editing"
+          v-model="draft"
+          spellcheck="false"
+          class="textarea textarea-bordered h-[70vh] w-full font-mono text-sm leading-normal"
+        ></textarea>
+        <article v-else class="doc" @click="onContentClick" v-html="activeHtml"></article>
+      </div>
+      <div v-else-if="activeComponent || activeMount" :key="'run:' + activeUrl" class="p-6">
+        <component :is="activeComponent" v-if="activeComponent" />
+        <HostMount v-else :mount="activeMount!" />
+      </div>
+      <div v-else-if="activeBin" :key="'bin:' + activeUrl" class="max-w-3xl p-8">
+        <AssetView :asset="activeBin" />
+      </div>
+      <div v-else class="grid h-full place-items-center opacity-40">
+        <p>select a script, doc, or bin</p>
+      </div>
+    </main>
+  </div>
 </template>
 
-<style scoped>
-/* The app is a vertical column: the sider+content row on top, the global terminal
-   bar pinned full-width along the bottom. The row flexes to fill the height; the
-   bar takes a drag-controlled height beneath it. */
-.app-col {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
+<style>
+/* Readable defaults for the raw doc html (rendered via v-html, so not scoped). */
+.doc {
+  line-height: 1.65;
 }
-.main-row {
-  flex: 1;
-  min-height: 0;
-}
-
-/* Shown for /node/:id when the id resolves to no node — the explicit not-found
-   card (was a blank content pane). Mirrors NodeItem's .no-handler styling. */
-.node-missing {
-  max-width: 460px;
-  margin: 18vh auto 0;
-  padding: 20px 24px;
-  border: 1px dashed #555;
-  border-radius: 8px;
-  color: #bbb;
-  font-size: 0.9em;
-  line-height: 1.5;
-  text-align: center;
-}
-.node-missing code {
-  color: #ffd56b;
-}
-.node-missing a {
-  color: #3d7eff;
-}
-.tree-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 4px 6px 6px;
-}
-.tree-brand {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-.tree-logo {
-  flex: none;
+.doc h1,
+.doc h2,
+.doc h3 {
   font-weight: 700;
-  font-size: 0.95em;
-  letter-spacing: -0.02em;
-  cursor: pointer;
+  margin: 1.2em 0 0.5em;
 }
-.tree-logo:hover {
-  opacity: 0.7;
+.doc h1 {
+  font-size: 1.5rem;
 }
-.tree-title {
-  font-size: 0.8em;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  opacity: 0.5;
+.doc h2 {
+  font-size: 1.25rem;
 }
-.tree-search {
-  position: relative;
-  margin: 0 4px 8px 6px;
+.doc h3 {
+  font-size: 1.1rem;
 }
-.tree-search-input {
-  width: 100%;
-  box-sizing: border-box;
-  height: 26px;
-  padding: 0 22px 0 8px;
-  font: inherit;
-  font-size: 0.85em;
-  color: inherit;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 4px;
-  outline: none;
+.doc p {
+  margin: 0.6em 0;
 }
-.tree-search-input:focus {
-  border-color: #3d7eff;
+.doc ul,
+.doc ol {
+  margin: 0.6em 0;
+  padding-left: 1.4em;
 }
-/* Hide the browser's native search clear (×) — we render our own .tree-search-clear. */
-.tree-search-input::-webkit-search-cancel-button {
-  -webkit-appearance: none;
-  appearance: none;
+.doc ul {
+  list-style: disc;
 }
-.tree-search-clear {
-  position: absolute;
-  right: 4px;
-  top: 50%;
-  transform: translateY(-50%);
-  background: none;
-  border: none;
-  color: inherit;
-  opacity: 0.5;
-  cursor: pointer;
-  font-size: 1.1em;
-  line-height: 1;
-  padding: 0 4px;
+.doc ol {
+  list-style: decimal;
 }
-.tree-search-clear:hover {
-  opacity: 1;
+.doc li {
+  margin: 0.25em 0;
 }
-.tree-empty {
-  font-size: 0.8em;
-  opacity: 0.5;
-  padding: 4px 8px;
+.doc a {
+  color: var(--color-primary, #3d7eff);
+  text-decoration: underline;
 }
-.new-node {
-  background: none;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  color: inherit;
-  opacity: 0.8;
-  cursor: pointer;
-  font-size: 0.8em;
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-.new-node:hover {
-  opacity: 1;
-  background: rgba(255, 255, 255, 0.08);
-}
-.tree-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.logout-btn {
-  background: none;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  color: inherit;
-  opacity: 0.7;
-  cursor: pointer;
-  font-size: 0.8em;
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-.logout-btn:hover {
-  opacity: 1;
-  background: rgba(255, 255, 255, 0.08);
-}
-.tree-error {
-  font-size: 0.8em;
-  color: #ff8080;
-  background: rgba(255, 80, 80, 0.12);
-  border-radius: 4px;
-  padding: 4px 8px;
-  margin-bottom: 6px;
-  cursor: pointer;
-}
-.trash-pool {
-  margin-bottom: 8px;
-  padding: 4px 4px 6px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-}
-.trash-pool-title {
-  font-size: 0.7em;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  opacity: 0.45;
-  padding: 0 4px 4px;
-}
-.trash-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 1px 4px;
-}
-.trash-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  opacity: 0.6;
+.doc pre,
+.doc code {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 0.9em;
 }
-.trash-restore {
-  background: none;
-  border: none;
-  color: inherit;
-  opacity: 0.6;
-  cursor: pointer;
-  font-size: 0.9em;
-  line-height: 1;
-  padding: 2px 4px;
-  border-radius: 3px;
-  flex-shrink: 0;
+.doc pre {
+  background: color-mix(in oklab, currentColor 8%, transparent);
+  padding: 10px 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 0.8em 0;
 }
-.trash-restore:hover {
-  opacity: 1;
-  background: rgba(255, 255, 255, 0.1);
+.doc blockquote {
+  border-left: 3px solid color-mix(in oklab, currentColor 25%, transparent);
+  padding-left: 1em;
+  margin: 0.8em 0;
+  opacity: 0.85;
+}
+.doc img,
+.doc video {
+  max-width: 100%;
+}
+.doc table {
+  border-collapse: collapse;
+  margin: 0.8em 0;
+}
+.doc th,
+.doc td {
+  border: 1px solid color-mix(in oklab, currentColor 20%, transparent);
+  padding: 4px 10px;
 }
 </style>

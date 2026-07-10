@@ -1,17 +1,28 @@
-// wsServer.js — the local WebSocket EXCHANGE on /ws.
+// wsServer.ts — the local WebSocket EXCHANGE on /api/ws.
 //
 // A dumb meeting point, NOT a feed of server state. It does not know or care about the
 // node store; it only:
-//   - gives each client a unique funny name on connect (its address for direct messages),
-//   - tells everyone when a client joins or leaves,
-//   - routes a direct message from one client to another by name.
+//   - puts each client in a ROOM chosen by the token it presents on connect,
+//   - gives each client a unique funny name within that room (its address for direct messages),
+//   - tells everyone in the room when a client joins or leaves,
+//   - routes a direct message from one client to another by name, within the same room.
 //
-// Same origin as /api, gated by the same session auth, attached to the existing
-// http.Server via its 'upgrade' event (no separate port, no second deploy).
+// Rooms (channels): the token the client sends IS the room key — there is no token registry on
+// the server. Clients that present the same token share a room; clients in different rooms can't
+// see or message each other. This isolates client groups (e.g. one site, or your own network of
+// chrome tabs) so an unrelated connection can't join or snoop. A room is created on first join
+// and its Map key is deleted when the last client leaves. A connection with no token is refused.
+//
+// The token is read from (first present): the Sec-WebSocket-Protocol header — the only "header" a
+// browser can set, via `new WebSocket(url, [token])`, which we echo back so the handshake succeeds
+// — then an `x-ws-channel` header (non-browser clients), then a `?channel=` query param.
+//
+// Same origin as /api, gated by the same session auth, attached to the existing http.Server via
+// its 'upgrade' event (no separate port, no second deploy).
 //
 // Protocol (JSON text frames):
-//   server → you  (on connect): { type: 'welcome', name, clients: [names] }
-//   server → others:            { type: 'join', name }
+//   server → you  (on connect): { type: 'welcome', name, channel, clients: [names] }
+//   server → others in room:    { type: 'join', name }
 //                               { type: 'leave', name }
 //   you → server:               { type: 'message', to, data }   DM another client by name
 //                               { type: 'ping' }                → { type: 'pong' }
@@ -23,8 +34,17 @@ import { uniqueName } from './lib/nameGenerator.ts'
 
 const HEARTBEAT_MS = 30_000
 
-// name -> socket. Each socket also carries `name` and `isAlive`.
-const clients = new Map()
+// channel(token) -> (name -> socket). Each socket carries `channel`, `name`, `isAlive`.
+const rooms = new Map()
+
+// The room a client belongs to, from its connect token. First present wins; none -> undefined
+// (a connection without a token is refused — there is no default room).
+const channelOf = (req: IncomingMessage) => {
+  const first = (v: string | string[] | undefined) =>
+    (Array.isArray(v) ? v[0] : v)?.split(',')[0].trim() || undefined
+  const query = new URL(req.url ?? '', 'http://x').searchParams.get('channel') || undefined
+  return first(req.headers['sec-websocket-protocol']) || first(req.headers['x-ws-channel']) || query
+}
 
 const send = (socket, message) => {
   if (socket.readyState === socket.OPEN) {
@@ -32,9 +52,11 @@ const send = (socket, message) => {
   }
 }
 
-// Tell every client except `selfName` (used for join/leave presence).
-const announce = (selfName, message) => {
-  for (const [name, socket] of clients) {
+// Tell every client in `channel` except `selfName` (used for join/leave presence).
+const announce = (channel, selfName, message) => {
+  const room = rooms.get(channel)
+  if (!room) return
+  for (const [name, socket] of room) {
     if (name !== selfName) {
       send(socket, message)
     }
@@ -53,7 +75,7 @@ const handleMessage = (socket, raw) => {
     return
   }
   if (message.type === 'message') {
-    const target = clients.get(message.to)
+    const target = rooms.get(socket.channel)?.get(message.to)
     if (!target) {
       send(socket, { type: 'error', error: 'no such client', to: message.to })
       return
@@ -64,15 +86,18 @@ const handleMessage = (socket, raw) => {
   send(socket, { type: 'error', error: 'unknown type', received: message.type })
 }
 
-// Attach the exchange to an existing http.Server. Upgrades on /api/ws (canonical — one proxied
-// prefix with the rest of the API; /ws still accepted for old script-node bodies that hardcode
-// it), behind the same auth as /api (resolveUser reads the session cookie off the upgrade
-// request; null = reject).
+// Attach the exchange to an existing http.Server. Upgrades on /api/ws, behind the same auth as
+// /api (resolveUser reads the session cookie off the upgrade request; null = reject).
 export const attachWsServer = (
   server: Server,
   { resolveUser }: { resolveUser: (req: IncomingMessage) => Promise<string | undefined> },
 ) => {
-  const wss = new WebSocketServer({ noServer: true })
+  // Echo the client's offered subprotocol (browsers close the connection unless the server
+  // selects one) so the room token can travel as the Sec-WebSocket-Protocol "header".
+  const wss = new WebSocketServer({
+    noServer: true,
+    handleProtocols: (protocols) => protocols.values().next().value ?? false,
+  })
 
   server.on('upgrade', async (req, socket, head) => {
     const path = req.url.split('?')[0]
@@ -85,23 +110,40 @@ export const attachWsServer = (
       socket.destroy()
       return
     }
-    wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req))
+    const channel = channelOf(req)
+    if (!channel) {
+      socket.write('HTTP/1.1 400 Bad Request\r\n\r\n') // no room token -> refuse (no default room)
+      socket.destroy()
+      return
+    }
+    wss.handleUpgrade(req, socket, head, (ws: any) => {
+      ws.channel = channel
+      wss.emit('connection', ws, req)
+    })
   })
 
   wss.on('connection', (ws: any) => {
-    // ws gets ad-hoc fields (name, isAlive) tracked per socket
-    const name = uniqueName((candidate) => clients.has(candidate))
+    // ws gets ad-hoc fields (channel, name, isAlive) tracked per socket
+    const room = rooms.get(ws.channel) ?? new Map()
+    rooms.set(ws.channel, room)
+    const name = uniqueName((candidate) => room.has(candidate))
     ws.name = name
     ws.isAlive = true
-    // Welcome the newcomer with its name + who's already here, then announce it to the rest.
-    send(ws, { type: 'welcome', name, clients: [...clients.keys()] })
-    announce(name, { type: 'join', name })
-    clients.set(name, ws)
+    // Welcome the newcomer with its name + who's already in the room, then announce it to the rest.
+    send(ws, { type: 'welcome', name, channel: ws.channel, clients: [...room.keys()] })
+    announce(ws.channel, name, { type: 'join', name })
+    room.set(name, ws)
 
-    // Remove on disconnect and tell the others. Guarded so close+error don't double-fire.
+    // Remove on disconnect; drop the room once empty, else tell the others. Guarded so
+    // close+error don't double-fire.
     const drop = () => {
-      if (clients.delete(ws.name)) {
-        announce(ws.name, { type: 'leave', name: ws.name })
+      const r = rooms.get(ws.channel)
+      if (r?.delete(ws.name)) {
+        if (r.size === 0) {
+          rooms.delete(ws.channel)
+        } else {
+          announce(ws.channel, ws.name, { type: 'leave', name: ws.name })
+        }
       }
     }
 
@@ -113,18 +155,24 @@ export const attachWsServer = (
     ws.on('error', drop) // a single socket erroring must not sink the exchange
   })
 
-  // Heartbeat: drop sockets that stop answering pings (half-open) so `clients` doesn't leak.
+  // Heartbeat: drop sockets that stop answering pings (half-open) so rooms don't leak.
   const heartbeat = setInterval(() => {
-    for (const [name, ws] of clients) {
-      if (!ws.isAlive) {
-        ws.terminate()
-        if (clients.delete(name)) {
-          announce(name, { type: 'leave', name })
+    for (const [channel, room] of rooms) {
+      for (const [name, ws] of room) {
+        if (!ws.isAlive) {
+          ws.terminate()
+          if (room.delete(name)) {
+            if (room.size === 0) {
+              rooms.delete(channel)
+            } else {
+              announce(channel, name, { type: 'leave', name })
+            }
+          }
+          continue
         }
-        continue
+        ws.isAlive = false
+        ws.ping()
       }
-      ws.isAlive = false
-      ws.ping()
     }
   }, HEARTBEAT_MS)
   heartbeat.unref?.() // never keep the process alive just for the heartbeat

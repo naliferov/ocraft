@@ -1,0 +1,309 @@
+<p>
+  <a href="https://nodejs.org/en/learn/asynchronous-work/event-loop-timers-and-nexttick">
+    event-loop-timers-and-nexttick
+  </a>
+</p>
+<h3>Eventloop cycle</h3>
+<p>
+  When Node.js starts, it initializes the event loop, processes the provided input script (or drops
+  into the REPL). It may make async API calls, schedule timers, or call 
+  <code>process.nextTick()</code>
+  , then begins processing the event loop.
+</p>
+<h2>Event Loop (libuv, 4 threads by default)</h2>
+<h4>Phases</h4>
+<p>
+  <strong>timers</strong>
+  (this phase executes callbacks scheduled by 
+  <code>setTimeout()</code>
+   and 
+  <code>setInterval()</code>
+  )
+  <strong>pending callbacks</strong>
+  (executes I/O callbacks deferred to the next loop iteration, executes callbacks for system
+  operations such as types of TCP errors. For example if a TCP socket receives 
+  <code>ECONNREFUSED</code>
+   when attempting to connect)
+  <strong>idle, prepare</strong>
+  (only used internally)
+  <strong>poll</strong>
+  (incoming connections, data, etc.)
+  <strong>check</strong>
+  (
+  <code>setImmediate()</code>
+  callbacks are invoked here)
+  <strong>close callbacks</strong>
+  (some close callbacks, e.g. 
+  <code>socket.on(&#39;close&#39;, ...)</code>
+  )
+</p>
+<p>Each box will be referred to as a &quot;phase&quot; of the event loop.</p>
+<p>
+  Each phase has a FIFO queue of callbacks to execute. When the event loop enters a given phase, it
+  perform operations specific to that phase, then execute callbacks in that phase&#39;s queue until
+  the queue has been exhausted or the maximum number of callbacks has executed. After exhausted or
+  callback limit is reached, event loop move to the next phase
+</p>
+<p>
+  Any of operations may schedule more operations and new events processed in the 
+  <strong>poll</strong>
+   phase are queued by the kernel, poll events can be queued while polling events are being
+  processed
+</p>
+<h3>timers</h3>
+<p>
+  A timer specifies the 
+  <strong>threshold</strong>
+   
+  <em>after which</em>
+   a provided callback 
+  <em>may be executed</em>
+   rather than the 
+  <strong>exact</strong>
+   time a person 
+  <em>wants it to be executed</em>
+  . Timers callbacks will run as early as they can be scheduled after the specified amount of time
+  has passed; however, Operating System scheduling or the running of other callbacks may delay them.
+</p>
+<p>
+  Technically, the 
+  <strong>poll</strong>
+   phase controls when timers are executed.
+</p>
+<p>
+  For example, say you schedule a timeout to execute after a 100 ms threshold, then your script
+  starts asynchronously reading a file which takes 95 ms.
+</p>
+<p>
+  When the event loop enters the 
+  <strong>poll</strong>
+   phase, it has an empty queue (
+  <code>fs.readFile()</code>
+   has not completed), so it will wait for the number of ms remaining until the soonest timer&#39;s
+  threshold is reached. While it is waiting 95 ms pass, 
+  <code>fs.readFile()</code>
+   finishes reading the file and its callback which takes 10 ms to complete is added to the 
+  <strong>poll</strong>
+   queue and executed. When the callback finishes, there are no more callbacks in the queue, so the
+  event loop will see that the threshold of the soonest timer has been reached then wrap back to
+  the 
+  <strong>timers</strong>
+   phase to execute the timer&#39;s callback. In this example, you will see that the total delay
+  between the timer being scheduled and its callback being executed will be 105ms.
+</p>
+<p>
+  To prevent the 
+  <strong>poll</strong>
+   phase from starving the event loop, 
+  <a href="https://libuv.org/">libuv</a>
+   (the C library that implements the Node.js event loop and all of the asynchronous behaviors of
+  the platform) also has a hard maximum (system dependent) before it stops polling for more events.
+</p>
+<h3>pending callbacks</h3>
+<p>
+  This phase executes callbacks for some system operations such as types of TCP errors. For example
+  if a TCP socket receives 
+  <code>ECONNREFUSED</code>
+   when attempting to connect, some *nix systems want to wait to report the error. This will be
+  queued to execute in the 
+  <strong>pending callbacks</strong>
+   phase.
+</p>
+<h3>poll</h3>
+<p>
+  The 
+  <strong>poll</strong>
+   phase has two main functions:
+</p>
+<ol>
+  <li>Calculating how long it should block and poll for I/O, then</li>
+  <li>
+    Processing events in the 
+    <strong>poll</strong>
+     queue.
+  </li>
+</ol>
+<p>
+  When the event loop enters the 
+  <strong>poll</strong>
+   phase 
+  <em>and there are no timers scheduled</em>
+  , one of two things will happen:
+</p>
+<ul>
+  <li>
+    <p>
+      <em>
+        If the 
+        <strong>poll</strong>
+         queue 
+        <strong>is not empty</strong>
+      </em>
+      , the event loop will iterate through its queue of callbacks executing them synchronously
+      until either the queue has been exhausted, or the system-dependent hard limit is reached.
+    </p>
+  </li>
+  <li>
+    <p>
+      <em>
+        If the 
+        <strong>poll</strong>
+         queue 
+        <strong>is empty</strong>
+      </em>
+      , one of two more things will happen:
+    </p>
+    <ul>
+      <li>
+        <p>
+          If scripts have been scheduled by 
+          <code>setImmediate()</code>
+          , the event loop will end the 
+          <strong>poll</strong>
+           phase and continue to the 
+          <strong>check</strong>
+           phase to execute those scheduled scripts.
+        </p>
+      </li>
+      <li>
+        <p>
+          If scripts 
+          <strong>have not</strong>
+           been scheduled by 
+          <code>setImmediate()</code>
+          , the event loop will wait for callbacks to be added to the queue, then execute them
+          immediately.
+        </p>
+      </li>
+    </ul>
+  </li>
+</ul>
+<p>
+  Once the 
+  <strong>poll</strong>
+   queue is empty the event loop will check for timers 
+  <em>whose time thresholds have been reached</em>
+  . If one or more timers are ready, the event loop will wrap back to the 
+  <strong>timers</strong>
+   phase to execute those timers&#39; callbacks.
+</p>
+<h3>check</h3>
+<p>
+  This phase allows the event loop to execute callbacks immediately after the 
+  <strong>poll</strong>
+   phase has completed. If the 
+  <strong>poll</strong>
+   phase becomes idle and scripts have been queued with 
+  <code>setImmediate()</code>
+  , the event loop may continue to the 
+  <strong>check</strong>
+   phase rather than waiting.
+</p>
+<p>
+  <code>setImmediate()</code>
+   is actually a special timer that runs in a separate phase of the event loop. It uses a libuv API
+  that schedules callbacks to execute after the 
+  <strong>poll</strong>
+   phase has completed.
+</p>
+<p>
+  Generally, as the code is executed, the event loop will eventually hit the 
+  <strong>poll</strong>
+   phase where it will wait for an incoming connection, request, etc. However, if a callback has
+  been scheduled with 
+  <code>setImmediate()</code>
+   and the 
+  <strong>poll</strong>
+   phase becomes idle, it will end and continue to the 
+  <strong>check</strong>
+   phase rather than waiting for 
+  <strong>poll</strong>
+   events.
+</p>
+<h3>close callbacks</h3>
+<p>
+  If a socket or handle is closed abruptly (e.g. 
+  <code>socket.destroy()</code>
+  ), the 
+  <code>&#39;close&#39;</code>
+   event will be emitted in this phase. Otherwise it will be emitted via 
+  <code>process.nextTick()</code>
+  .
+</p>
+<h4>
+  setImmediate()
+  <code> vs </code>
+  setTimeout()
+</h4>
+<ul>
+  <li>
+    <code>setImmediate()</code>
+     is designed to execute a script once the current 
+    <strong>poll</strong>
+     phase completes.
+  </li>
+  <li>
+    <code>setTimeout()</code>
+     schedules a script to be run after a minimum threshold in ms has elapsed.
+  </li>
+</ul>
+<p>
+  The order in which the timers are executed will vary depending on the context in which they are
+  called. If both are called from within the main module, then timing will be bound by the
+  performance of the process (which can be impacted by other applications running on the machine).
+  The main advantage to using 
+  <code>setImmediate()</code>
+   over 
+  <code>setTimeout()</code>
+   is 
+  <code>setImmediate()</code>
+   will always be executed before any timers if scheduled within an I/O cycle, independently of how
+  many timers are present.
+</p>
+<h4>process.nextTick()</h4>
+<p>
+  You may have noticed that 
+  <code>process.nextTick()</code>
+   was not displayed in the diagram, even though it&#39;s a part of the asynchronous API. This is
+  because 
+  <code>process.nextTick()</code>
+   is not technically part of the event loop. Instead, the 
+  <code>nextTickQueue</code>
+   will be processed after the current operation is completed, regardless of the current phase of
+  the event loop. Here, an 
+  <em>operation</em>
+   is defined as a transition from the underlying C/C++ handler, and handling the JavaScript that
+  needs to be executed.
+</p>
+<p>
+  Looking back at our diagram, any time you call 
+  <code>process.nextTick()</code>
+   in a given phase, all callbacks passed to 
+  <code>process.nextTick()</code>
+   will be resolved before the event loop continues. This can create some bad situations because 
+  <strong>
+    it allows you to &quot;starve&quot; your I/O by making recursive 
+    <code>process.nextTick()</code>
+     calls
+  </strong>
+  , which prevents the event loop from reaching the 
+  <strong>poll</strong>
+   phase.
+</p>
+<p>
+  Why would something like this be included in Node.js? Part of it is a design philosophy where an
+  API should always be asynchronous even where it doesn&#39;t have to be.
+</p>
+<ul>
+  <li>
+    <code>process.nextTick()</code>
+     fires immediately on the same phase
+  </li>
+  <li>
+    <code>setImmediate()</code>
+     fires on the following iteration or &#39;tick&#39; of the event loop We recommend developers
+    use 
+    <code>setImmediate()</code>
+     in all cases because it&#39;s easier to reason about.
+  </li>
+</ul>
