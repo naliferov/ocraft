@@ -21,13 +21,9 @@ rollback_code() {
   git reset --hard "$OLD_SHA" && npm install
 }
 
-# 1. Migrate (forward-only + additive, so the still-running old :80 tolerates the new schema).
-if ! $NODE_TS runtime/cli.ts migrate; then
-  echo "MIGRATE FAILED — :80 untouched"
-  rollback_code
-  rm -rf frontend/dist.new
-  exit 1
-fi
+# 1. Migrate (forward-only + additive). Postgres is paused/legacy now — a failure here (no DB, or a
+#    torn-down DB) must NOT block deploying the static frontend, so warn and continue.
+$NODE_TS runtime/cli.ts migrate || echo "migrate skipped/failed (pg paused?) — continuing"
 
 # 2. Pre-flight the NEW backend on :3002 — :80 stays on the old code the whole time.
 echo "pre-flighting $NEW_SHA on :3002 ..."
@@ -54,6 +50,11 @@ fi
 # 3. Green: swap the bundle in + restart :80 (new backend + new bundle together), then verify.
 echo "pre-flight green — cutting :80 over to $NEW_SHA"
 rm -rf frontend/dist && mv frontend/dist.new frontend/dist
+# Free :80 first: after a droplet reboot the live api can be a stray *manual* process (started
+# outside serviceManager, e.g. via setsid) that `service restart` won't stop — the new instance
+# would then EADDRINUSE. Kill whatever holds the api so the managed service binds cleanly.
+pkill -f 'runtime/api.ts' 2>/dev/null || true
+sleep 1
 $NODE_TS runtime/cli.ts service restart api
 sleep 3
 if ! curl -fsS -m 10 http://127.0.0.1/api/session > /dev/null 2>&1; then

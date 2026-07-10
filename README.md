@@ -1,208 +1,97 @@
 # ocraft
 
-A personal **node OS**: one addressable tree of typed nodes. Everything is a node (`/node/:id`) — `html` nodes hold notes/data, `text` nodes hold plain textual sources, `category` nodes are folders — and the visual editor, the scheduler, and the MCP servers are all just **clients of one node store**. (Runnable *scripts* used to be a node type; they now live as plain `.vue` files in the [devlab](projects/devlab/) playground — ocraft keeps the data plane.)
+A personal **offline knowledge + scripts app**: a flat, link-based set of HTML **docs** (the knowledge base), runnable **scripts** (Vue / Solid / vanilla experiments), and **bins** (downloadable binary assets) — all discovered from disk and served by a tiny, framework-free Node.js backend. Navigation is **hyperlinks, not folders**; docs are editable in place.
 
-Built framework-free on plain Node.js in **TypeScript** (ESM, run via Node's native type stripping — no build step), with a Vue 3 editor on top. A single-user local environment — and the substrate for a longer-term personal life-management system (see [Direction](#direction)).
+A Vue 3 + Vite + Tailwind/daisyUI frontend on top of a plain Node.js runtime written in **TypeScript** (ESM, run via Node's native type stripping — no build step for the backend). Single-user, local-first.
 
-> **Where it honestly stands:** ocraft is **open in its data plane** — any node, any `type`, created live — but **closed in its behavior plane**: the node *types* are a fixed set of built-in handlers compiled into the app, so adding a genuinely new type still means a source edit, not an in-app action. Making a handler *itself a node* — so you can craft new types from inside — is the keystone item on the [Roadmap](#roadmap).
+> **Lineage.** ocraft began as a multi-user *node-OS* — a typed-node store (Postgres) with a visual tree editor, Google/email auth, and a tasks/scheduler layer. That backend still lives in `runtime/` (node CRUD, auth, pg), but it's **paused**: prod Postgres is deleted and the current frontend doesn't use it. Today ocraft *is* the offline app; the node-store is legacy, kept for reference / possible revival.
 
-## The idea — a filesystem of typed nodes
+## The app (`frontend/`)
 
-Everything in ocraft is a **node**. On disk a node is a small folder, `data/nodes/<id>/`, holding:
+A Vite single-page app. The sidebar lists three kinds of thing under one filter; the right pane runs or renders the selection. In-app links (`/doc/<name>`, `/script/<name>`, `/bin/<name>`) navigate without a reload and work as deep links. Nothing here needs a login.
 
-- **metadata** in `state.json` (`name`, `type`, `parentId`, …), and
-- an optional **body** sidecar — the "file contents" — resolved by type: `content.html` for an `html` node, plain text for a `text` node. Bodies are kept out of the node-list payload and fetched on open.
+- **docs** (`frontend/docs/*.html`) — the knowledge base: plain, hand-authored HTML fragments, discovered by `import.meta.glob`. **Flat namespace, no folders** — you organize by **hyperlinks** (`/doc/<name>` wikilinks) and hand-curated *index / hub* docs (Maps of Content), so one doc can sit under many indexes. Rendered read-only, but **editable in place in dev**: an *edit* button swaps the doc for a raw-HTML textarea, and *save* writes back to the file (via a Vite middleware — see below). The deployed static build stays read-only.
+- **scripts** (`frontend/scripts/*.{vue,js,ts,jsx,tsx}`) — runnable experiments, told apart by extension: `.vue` = a Vue component; `.js`/`.ts` = vanilla (`export default (host) => cleanup?`, handed a host `<div>`); `.jsx`/`.tsx` = a Solid component. Vite compiles them; cross-script reuse is plain ES `import`. Some talk to the live backend (a harness → `/api/claude`, the ws testers → `/api/ws`).
+- **bins** (`frontend/public/bins/` + `manifest.json`) — binary / large / downloadable assets, listed from a manifest and opened by a type-aware viewer: **gz-text** is inflated in the browser via `DecompressionStream` (no server round-trip), **txt** shown as-is, images/audio/video get a native element, anything else is a download link. Served as static files (not bundled), fetched on open. Gzip assets use a **`.gzip`** extension (not `.gz`) so servers don't force `Content-Encoding` — we inflate them ourselves.
 
-Four properties make this a small OS-like substrate rather than just a document store:
+Styling is Tailwind v4 + daisyUI v5, with a light/dark theme toggle.
 
-- **It nests like a filesystem.** Each node points to its parent via `parentId`; `category` nodes are folders. The editor gives you the whole tree: create, rename, delete (with an undo pool), and drag-to-reparent (cycle-guarded).
-- **Types are handlers** — a node's `type` decides how it's interpreted and rendered, like a file association:
+## The backend (`runtime/`)
 
-  | type | what it's for | body |
-  |------|---------------|------|
-  | `html` | documents / notes — the knowledge base | `content.html` |
-  | `text` | plain textual sources (vlang programs, csv, notes) | plain text |
-  | `category` | a folder that just holds children | — |
-  | `binary` | media (images/video); hidden from the type picker for now | raw bytes + mime |
+A tiny, framework-free Node.js server in **TypeScript** — ESM, run directly via native type stripping (`--experimental-strip-types`, no build step), typechecked with **TypeScript 7**.
 
-- **Nodes are addressable.** Each node has a stable numeric id and is reachable at `/node/:id`. Notes link to each other by `/node/:id`. The id is the address; `name` is only a label.
+- **serves app + API on one origin.** In prod the same process serves the built frontend (`frontend/dist`) for every non-`/api` GET plus the `/api/*` routes on one port (`PORT`/`BIND_HOST` configurable; prod binds `0.0.0.0:80` behind Cloudflare for TLS). The static bundle is served without auth.
+- **`/api/ws` — the WebSocket exchange.** A dumb meeting point: each client joins a **room** chosen by the **token** it presents on connect — the token *is* the room key, there's no server-side registry. Same-room clients get join/leave presence and DM each other by a unique auto-assigned name; different rooms are mutually invisible; **a connection with no token is refused**; a room is freed when its last client leaves. The token rides in the `Sec-WebSocket-Protocol` header (`new WebSocket(url, [token])`), an `x-ws-channel` header, or `?channel=`.
+- **tasks, scheduler & services** — the automation layer, split by lifecycle: **tasks** are finite (run to completion via the executor; the scheduler fires them on a cadence), **services** are long-running processes the service manager supervises. Route recurring work through these, not a system cron / `nohup`.
+- **legacy node-store + auth (paused)** — the old multi-user backend: typed-node CRUD (`/api/nodes*`), a Postgres store (`runtime/store/pg.ts`), and email/Google sessions (`runtime/auth.ts`). Still compiled in, but prod pg is deleted and the frontend doesn't call it — don't build on it without reviving Postgres first.
 
-```
-notes/                 (category — a folder)
-  daily/               (category)
-    2026-06-17         (html — a note)
-  tech-ideas           (html — links to → /node/100)
-```
+## MCP servers (`mcp-servers/`)
 
-*(Shape is real; names are illustrative.)*
+Standalone Model Context Protocol servers for an AI assistant's external I/O — **telegram** (read/search a TG account over MTProto), **gmail**, **gcal** (read-only), **digitalocean** (manage droplets). Each has its own `README.md` + `.env.example`; registered in [`.mcp.json`](.mcp.json).
 
-> **Scripts moved out.** The runnable `script` node type (browser-run JS with the `x` context — `x.x` composition, `x.ui` controls) was removed in favor of **[devlab](projects/devlab/)**: a standalone offline Vue playground where every script is a plain `.vue` file — Vite compiles them, one script imports another, no runtime engine. ocraft stays the data substrate; devlab is the behavior sandbox.
+> **Secrets** live only in git-ignored `.env` files (plus TG session strings / Google service-account keys) — never committed. The `.env.example` files are placeholders.
 
-## The system around the nodes
-
-Four surfaces, one node store. They're independent; the editor reaches the store over `/api/*` (HTTP, port 3001), while runtime tasks can also touch the node files directly:
-
-- **Node store + API** (`runtime/api.js` + `data/`) — the source of truth: a tiny, framework-free HTTP server doing CRUD on the node folders. Everything else is a client of it.
-- **Visual editor** (`frontend/`) — *one* client: a Vue 3 tree browser plus a per-type editor/preview (a code editor for scripts, rich text for html), with a node-aware **command terminal** (`Terminal.vue`) docked full-width along the bottom. The app is literally a node router — just `/` and `/node/:id`.
-- **Tasks, scheduler & services** (`runtime/cli.js` + `runtime/`) — the automation layer, split by lifecycle: **tasks** are finite (run to completion via the executor; the scheduler fires them on a cadence), **services** are long-running processes the service manager supervises (start/stop/restart/status/logs). A task *must terminate*; a service *stays up*.
-- **MCP servers** (`mcp-servers/`) — external I/O for an AI assistant: Telegram, Gmail, Google Calendar, DigitalOcean. Registered in `.mcp.json`, unrelated to the scheduler.
-
-### Layout
+## Layout
 
 ```
 ocraft/
-  data/             # the node store — nodes/ (each a folder), assets/, concept-db.json (source of truth)
-  runtime/          # API server (api.js) + WebSocket hub (wsServer.js, /ws) + CLI entrypoint (cli.js) + automation engine — runners (AI), task executor/scheduler, service supervisor, tasks/, services/, state/
-  frontend/         # Vue 3 visual editor — one client of the node store
-  mcp-servers/      # Standalone MCP servers
-    telegram-mcp/   #   read/search a Telegram account (GramJS / MTProto)
-    gmail-mcp/      #   read/search Gmail
-    gcal-mcp/       #   read Google Calendar (service account, read-only)
-    digitalocean-mcp/ # manage DigitalOcean droplets / infra
-  .claude/skills/   # Reusable agent skills (daily-report, youtube-transcribe, …)
-  plans/            # Longer-form design notes
-  CLAUDE.md         # Guidance for AI coding agents (roadmap lives in plans/roadmap.txt)
+  frontend/           # the app (Vite + Vue 3 + Tailwind/daisyUI)
+    docs/             #   knowledge base — *.html, cross-linked by /doc/<name>
+    scripts/          #   runnable experiments — *.vue / *.ts / *.jsx (Vue / vanilla / Solid)
+    public/bins/      #   binary assets + manifest.json (served as-is, not bundled)
+    src/              #   App.vue (router + sidebar) + AssetView.vue (bin viewer)
+    vite.config.ts    #   incl. the dev-only /__save-doc middleware for in-app doc editing
+  runtime/            # Node/TS backend — api.ts (serves app + /api) + wsServer.ts (/api/ws rooms)
+                      #   + cli.ts + tasks/ + services/ + scheduler + store/ (legacy pg) + auth.ts
+  mcp-servers/        # Telegram / Gmail / GCal / DigitalOcean MCP servers
+  plans/              # longer-form design notes, roadmap, rejected/out-of-scope
+  CLAUDE.md           # pointer to this README (working rules live below)
 ```
 
 ## Quick start
 
-### Requirements
-
-- Node.js 22.6+ (native ESM + `node:` built-ins + `--experimental-strip-types` for the TS runtime; the npm scripts pass the flag, so Node 22.18+ / 23.6+ — where type stripping is on by default — can also run the `.ts` entrypoints directly)
-- A `.env` file at the repo root (loaded via `dotenv`)
-
-### Setup
+Requirements: Node 22.18+ / 23.6+ (native type stripping is on by default; the npm scripts pass `--experimental-strip-types` regardless), and a `.env` at the repo root.
 
 ```bash
-npm install                 # root deps — API server, tasks (sharp), MCP SDK, lint
-cd frontend && npm install  # editor deps
+npm install                        # root deps (backend, tasks, MCP SDK, prettier, TS)
+npm --prefix frontend install      # frontend deps
+
+# dev
+npm --prefix frontend run dev      # Vite on :5173, proxies /api → :3001
+npm run cli -- service start api   # (optional) backend on :3001 — needed for /api/ws + /api/claude
+
+# build + prod
+npm --prefix frontend run build    # → frontend/dist (static; docs bundled as lazy chunks)
+node --experimental-strip-types runtime/api.ts   # one process serves dist + /api
 ```
 
-### Run the editor
+Typecheck: `npm run typecheck` (runtime `tsc` + frontend `vue-tsc`). Format: `npm run format` (Prettier; the frontend has its own `npm run format` scoped to docs/src).
 
-```bash
-node runtime/cli.js service start api   # node API server (runtime/api.js) on :3001
-cd frontend && npm run dev          # Vite dev server; proxies /api to :3001
-npm run build
-```
-
-The node API server (`runtime/api.js`) reads/writes node JSON under `data/nodes/` and can also run standalone with `node runtime/api.js`. It runs as a managed service (`api`); Vite only proxies `/api` to it.
-
-**In production there's no Vite.** Build the editor once (`cd frontend && npm run build` → `frontend/dist/`), and the same `api` process serves that static bundle for every non-`/api` request — hashed assets cached immutably, an `index.html` history-fallback so `/node/:id` resolves on refresh — alongside the `/api` routes on one port. So prod is a **single process** serving app + API from **one origin** (which the `SameSite=Strict` session cookie requires); front it with Cloudflare/Caddy for HTTPS and set `COOKIE_SECURE=true`. The static bundle is served *without* auth (it holds no secrets — nothing sensitive is baked into the build, and the login page must load first); only `/api/*` is gated. The CI deploy (`.github/workflows/ci.yml`) runs `npm run build` in `frontend/` on the box as part of each deploy.
-
-### Multi-user — Postgres + Google sign-in
-
-The store moved from local files to **Postgres**, with sign-in by **email + password** (the default —
-Node `scrypt`, no deps) or **Google** (optional, shown only when configured). Sign-in *is* sign-up:
-the first time creates your account. The node store is swappable — set `DATABASE_URL` and the api
-uses Postgres, unset it and it falls back to the local file store (`runtime/store/`).
-
-**1 · Postgres (local dev).** Quickest is Docker — local dev only; **prod uses a native
-`apt install postgresql`** on the box, not Docker:
-
-```bash
-docker run -d --name ocraft-pg -e POSTGRES_PASSWORD=ocraft -e POSTGRES_DB=ocraft -p 5432:5432 postgres:16
-```
-
-Then add `DATABASE_URL` to `.env`, create the schema, and (optionally) import your existing file tree:
-
-```bash
-# .env
-DATABASE_URL=postgresql://postgres:ocraft@localhost:5432/ocraft
-
-node runtime/cli.js migrate        # apply runtime/store/migrations/*.sql
-node runtime/cli.js import-nodes   # one-off: copy data/nodes/* into pg under your account
-```
-
-**2 · Google sign-in (optional).** Set the two `GOOGLE_*` vars and the "Sign in with Google" button
-appears — same flow locally as in prod, just a localhost redirect URI:
-
-- **Google Cloud Console** → a project → *APIs & Services → OAuth consent screen*: **External**,
-  app name + your email, and add yourself as a **Test user** (so you can sign in while it's in testing).
-- *Credentials → Create credentials → OAuth client ID → Web application* → **Authorized redirect URIs**:
-  - local: `http://localhost:5173/api/auth/google/callback`  (the Vite dev server proxies `/api`)
-  - prod:  `https://<your-domain>/api/auth/google/callback`
-- Put the client id/secret in `.env`:
-
-  ```
-  GOOGLE_CLIENT_ID=...
-  GOOGLE_CLIENT_SECRET=...
-  ```
-
-- Open the app → **Sign in with Google** → consent → you're in. A `users` + `accounts` + `sessions`
-  row is created and a session cookie keeps you logged in. No passwords are stored, and Google gates
-  bots/spam, so no reCAPTCHA is needed.
-
-Prod (`NODE_ENV=production`) is **Google-only** — the email routes are disabled there and it fails
-closed without Google. The old single-user `API_TOKEN` is gone.
-
-## Reference
-
-### Tasks vs services
-
-The automation layer splits cleanly by **lifecycle**:
-
-- A **task** is **finite** — it runs to completion and exits. It lives in `runtime/tasks/<name>.js` (exports `run(ctx)`), is run by the executor (which writes a record to `runtime/state/taskExecutions/` and enforces a timeout — *a task must terminate*), and the **scheduler** (`runtime/scheduler.js`) fires it on an interval / cron-like schedule via `jobs[]`.
-- A **service** is **long-running** — it stays up until stopped. It lives in `runtime/services/<id>.js` (a `{ cmd, args, cwd, env }` config) and is supervised by the service manager; runtime state + logs live in `runtime/state/services/`.
-
-```bash
-# tasks (finite)
-node runtime/cli.js run <task-name> [args...]    # run one task to completion
-node runtime/cli.js start-scheduler              # run all due tasks once (call from cron)
-node runtime/cli.js scheduler-loop               # run the scheduler as a daemon (the `scheduler` service)
-node runtime/cli.js list-executions              # print recent task executions
-
-# services (long-running)
-node runtime/cli.js service list                 # configured services + status
-node runtime/cli.js service <start|stop|restart|status> <id>
-node runtime/cli.js service logs <id> [lines]    # tail the service log
-node runtime/cli.js service clear-logs <id>
-```
-
-Each task receives a `ctx`: `args`, `env`, `log(msg)`, persistent `state.load()/save()`, and `time.now()` (and may export `timeoutMs` to widen its budget). Existing tasks: `telegram-reminder`, `telegram-poll`, `img-optimize[-dir]`, `do-droplet-up` / `do-droplet-down`, `deploy`, `every-hour`, `test`. Configured services: `api` (the node API server), `frontend` (Vite), `scheduler` (the daemon), `ticker`.
-
-### MCP servers
-
-Standalone Model Context Protocol servers in `mcp-servers/`, registered in [`.mcp.json`](.mcp.json). Each has its own `README.md` and `.env.example`; copy that to `.env` and fill in credentials.
-
-- **telegram-mcp** — read/search a Telegram user account over MTProto (GramJS). Run `npm run login` once to create a session string.
-- **gmail-mcp** — read/search a Gmail account.
-- **gcal-mcp** — read-only Google Calendar access via a Google Cloud **service account**. Share the target calendar with the service account email, then point `GOOGLE_APPLICATION_CREDENTIALS` at the JSON key.
-- **digitalocean-mcp** — manage DigitalOcean droplets and infrastructure via the DO API (token in `.env`).
-
-> **Secrets:** `.env` files, Telegram session strings, and the Google service-account JSON key are git-ignored and must never be committed. The `.env.example` files are placeholders only. The AI run path (`POST /api/runs` with `kind: 'ai'`, and the terminal's `ai` / `minimal-txt` commands) runs the Claude Agent SDK with **bypassed permissions** — full Read/Write/Edit/Bash, cwd = repo root — so it can edit files and run shell commands on this machine. Because of that the `'ai'` runner is **disabled by default**: it's left unregistered in `runtime/api.js`, so `POST /api/runs {kind:'ai'}` returns *"unknown kind"* (the intended refusal). Re-enable it only behind an explicit, off-by-default env gate (`OCRAFT_ENABLE_AGENT`) and only on a sandboxed host (see the Roadmap's *sandboxed execution*); it stays **single-user / trusted only** and must never face a network.
->
-> **Auth:** every `/api` request needs a session — sign in at **`/login`** with **email + password** (hashed with Node `scrypt`, no deps) or **Google** (when `GOOGLE_CLIENT_ID/SECRET` are set). The session id rides in an **HttpOnly, `SameSite=Lax`** cookie (JS never holds anything secret); sessions are stored in Postgres. In prod set `COOKIE_SECURE=true` (implied by `NODE_ENV=production`), which also makes prod **Google-only** and fails closed without Google. See `runtime/auth.js`. (The old `API_TOKEN` is gone.)
+**Editing docs.** In dev, *edit* on any doc opens its raw HTML; *save* POSTs to a `/__save-doc` Vite middleware that writes `frontend/docs/<name>.html` (name confined to that folder, `apply: 'serve'` so it's dev-only). The deployed build has no such endpoint and stays read-only.
 
 ## Working in this repo
 
-Working rules for editing this repo — conventions, coding rules, DB invariants, and agent behaviour. Follow these when writing or editing code here (it's `.js` everywhere — every package is ESM):
+Working rules — follow them when editing here. Everything is **TypeScript** now (ESM; the backend runs via native type stripping, the frontend via Vite):
 
-- **Never use the `.mjs` extension.** Every package here is ESM already (`"type": "module"` in package.json), so plain `.js` is ESM. Use `.js` for all JavaScript files — scripts, helpers, one-offs, everything.
-- **Develop on `main` — don't create feature branches.** Build features directly on `main`; do not `git checkout -b` a feature/topic branch for development. (This overrides the generic "branch before committing on the default branch" default for this repo.)
-- **No single-letter variable names — except `i`/`j`/`k` as numeric loop counters.** Use a descriptive name for every binding — including callback parameters, `.map`/`.filter`/`.find` args, and regex matches. Write `const droplet = await getDroplet(id)`, not `const d = …`; `images.filter((image) => …)`, not `(i) => …`. The name should say what the value *is*. The one allowed exception: a classic numeric loop index may be `i` (nested loops: `j`, `k`), e.g. `for (let i = 0; i < count; i++)` — ESLint's `id-length` exempts `i`/`j`/`k`. Still prefer a descriptive name when iterating a *named* collection: `for (const droplet of droplets)`, not `for (const d of droplets)`.
-- **No boolean flag parameters.** A `fn(…, true)` call site is opaque — the reader can't tell what `true` selects. When a flag would switch between two behaviours, prefer the most minimal split that removes the boolean: usually **two intention-named functions**, otherwise a named mode/strategy (e.g. a string `'rich'`/`'source'`, a passed-in handler, or a small factory). Write `editRich()` / `editSource()`, not `enterEdit(true)` / `enterEdit(false)`. This applies to new code and to flags you touch while editing.
-- **Write the simplest condition that reads plainly — don't over-guard.** Destructure up front, then test the fields: `const { width, height } = obj ?? {}; if (!width || !height) …`, not `if (!obj || !(obj.width > 0) || !(obj.height > 0))`. Prefer `!value`, `value < n`, or `!list.length` over negated comparisons like `!(a > b)`. Guard the failure that can *actually* occur (missing / zero / empty), not theoretical inputs that can't (a negative or `NaN` dimension that nothing produces). Keep thrown messages short — name the thing and the bad value, skip the lecture. If you deviate from the obvious form for a real reason (e.g. `!width` to also catch `undefined`), say why in a one-line comment rather than silently complicating it.
-- **No chained ternaries — one `?:` max, and only for a simple value pick.** A nested ternary (`a ? x : b ? y : z ? …`) is a soap opera: every branch drags in the next and nobody can tell who did what. The moment there's a second condition, switch to plain `if` branches (reset defaults first, early-return the miss, then one `if` per case) or a lookup map keyed by the discriminant. A single flat ternary for a trivial pick (`entry ? entry.name : 'devlab'`) is fine.
-- **Use the shared naive-ui `<n-button size="small">` for action buttons — don't hand-roll a plain `<button>`.** Save / Run / Edit / Refresh / Send-style actions in node editors and views go through the one button component (see `NodeItem.vue`'s Save, `Script.vue`'s Run, `Html.vue`'s Edit/Add link) so every action button looks the same. A plain styled `<button>` is reserved for compact **chrome / transport / icon** controls that intentionally have their own look — the tree's rename/delete (`NodeTree.vue`), the sidebar's `+ node` (`App.vue`), the html editor's rich-text toolbar (`Html.vue`'s `.tool` buttons). Default a new button to `n-button`; only drop to a plain element for those icon/chrome cases, and say why.
-- **Never `DELETE` rows in `users` or `accounts` — deactivate, never delete.** Both anchor identity: `users` is referenced by `nodes` / `accounts` / `sessions` (FK `user_id`), and `accounts` maps each provider login (google / email) to its user. A hard delete cascade-wipes or orphans that data and leaves id gaps — it breaks DB consistency. To remove someone, soft-delete (a `deleted_at` / `status` flag) and keep the row. Don't spin up throwaway placeholder users to delete later either — import/reassign onto a real user. Holds in every environment, prod and local.
-- **"Show / list the rows" is read-only — just show them.** When asked to display rows from a DB table, run **one plain `SELECT … ORDER BY … LIMIT …`** and present the result — nothing else. Don't join in extra tables, add computed/analysis columns, or editorialize; **never `UPDATE` or "fix" data on a show request**. For `bytea`/large columns show `octet_length(…)` instead of dumping the blob (offer the raw bytes if asked); use `psql -x` for wide rows. Put the rows in the reply so they're actually visible — don't make the user re-ask.
-- **Automate through ocraft's own runtime instruments — don't bolt on a parallel mechanism.** Recurring / scheduled work (backups, polls, cleanups) is a **task** (`runtime/tasks/<name>.js`) wired into the **scheduler** (`runtime/scheduler.js` `jobs[]`) — *not* a system `cron` line calling a standalone shell script. A long-running process is a **service** under `serviceManager` (`runtime/services/`), not a hand-rolled `nohup`/systemd unit. A one-off is a task run via `node runtime/cli.js run <name>`, not an ad-hoc script. A task reuses the executor's scheduling, execution records, `ctx.log`, persistent `ctx.state`, and timeout — a foreign cron/shell reinvents all of that and forks the system into two drifting worlds. ocraft *is* the automation substrate; route automation through it so it stays observable, versioned, and consistent. The one exception is genuine pre-app **bootstrap** that must run before the runtime exists (e.g. `scripts/deploy-cutover.sh`, which CI runs on the box to ship + pre-flight the app itself).
-
-Longer-form design notes are in `plans/` — including the **monetization & marketing lens** (`plans/monetization-marketing-lens.txt`), a habit to apply whenever you propose or build a feature.
+- **TypeScript `.ts` / `.vue`, never `.mjs`.** Every package is ESM (`"type": "module"`). The backend + tooling are `.ts` (no build step — type stripping); the frontend is `.vue`/`.ts` (built by Vite).
+- **Develop on `main` — no feature branches.** Build features directly on `main`; don't `git checkout -b`. (Overrides the generic "branch before committing on the default branch" default for this repo.)
+- **No single-letter names** except `i`/`j`/`k` as numeric loop counters. Every binding — including `.map`/`.filter`/`.find` args and regex matches — gets a name that says what it *is*.
+- **No boolean flag parameters.** `fn(…, true)` is opaque — split into two intention-named functions (`editRich()` / `editSource()`) or a named mode, not `enterEdit(true)`.
+- **Simplest condition that reads plainly — don't over-guard.** Destructure up front, then test the fields (`const { width, height } = obj ?? {}; if (!width || !height) …`). Prefer `!value` / `value < n` / `!list.length` over negated comparisons. Guard the failure that can *actually* occur (missing / zero / empty), not impossible inputs; keep thrown messages short. If you deviate for a real reason, say why in one line.
+- **No chained ternaries** — one flat `?:` max, and only for a trivial value pick.
+- **No unsolicited comments in doc bodies** — content only, no explanatory headers unless asked; pull the current body before patching it.
+- **Frontend UI = Tailwind v4 + daisyUI v5 classes.** Action buttons use daisyUI `btn` classes (`btn btn-sm`, `btn-primary`, `btn-ghost`); no hand-rolled button styling, and no naive-ui (that was the old, retired editor).
+- **Legacy pg store (only if you revive it):** never `DELETE` from `users`/`accounts` — soft-delete only (they anchor FK identity); "show / list the rows" is one read-only `SELECT … ORDER BY … LIMIT`, shown plainly — never an `UPDATE` on a show request.
+- **Automate through ocraft's own runtime** — recurring work is a scheduler **task** (`runtime/tasks/<name>.ts` wired into `runtime/scheduler.ts`), a long-running process is a **service** (`runtime/services/`), a one-off is `npm run cli -- run <name>`. Not a system cron line, `nohup`, or a hand-rolled systemd unit — so it stays observable, versioned, and consistent.
 
 ## Direction
 
-The node store is the substrate; the long-term goal is a **personal life-management system** built on it: the node tree is the durable memory (notes, plans, logs), the scheduler decides *when/what*, the MCP servers are the I/O channels, and an assistant supplies the language/judgment step. This is a direction, not a spec — see the [Roadmap](#roadmap) below (a parking lot), `plans/` for longer-form design notes (TypeScript/lint adoption, YouTube content, the multi-user pivot), and the **UI-UX & usage research** note (in the `analytics` category) for competitive/positioning research.
+ocraft is a **local-first personal knowledge + scripts workspace**: docs are the durable, link-organized memory; scripts are runnable tools beside them; bins hold data. The runtime supplies the WS exchange, automation (tasks/scheduler), and MCP I/O; an assistant supplies the language/judgment step. The multi-user node-store is a paused lineage that may revive. Longer-form notes live in `plans/`.
 
 ## License
 
 [MIT](LICENSE) © 2026 Nick Aliferov.
 
-## Roadmap
+## Roadmap · Rejected / out-of-scope
 
-The roadmap — a parking lot of things to explore, learn, or build later, plus the recently-shipped log — lives in **[plans/roadmap.txt](plans/roadmap.txt)**.
-
-## Rejected / out-of-scope
-
-Cut and parked ideas (with the *why* for each) live in **[plans/rejected-out-of-scope.txt](plans/rejected-out-of-scope.txt)** — check it before proposing features so they don't get resurfaced.
+The roadmap (a parking lot + recently-shipped log) and the cut/parked ideas (with the *why* for each — check it before proposing features) live in **[plans/](plans/)** (`roadmap.txt`, `rejected-out-of-scope.txt`).
