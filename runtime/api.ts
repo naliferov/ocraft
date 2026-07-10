@@ -444,7 +444,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
 // by default so the API is reachable ONLY through the front TLS proxy / Cloudflare; override
 // with BIND_HOST=0.0.0.0 for LAN/dev use.
 const server = createServer(handleRequest)
-attachWsServer(server, { resolveUser })
+attachWsServer(server) // token-gated (room token on connect); NOT session-gated
 
 const PORT = Number(process.env.PORT) || 3001
 const BIND_HOST = process.env.BIND_HOST || '127.0.0.1'

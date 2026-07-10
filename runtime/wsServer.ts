@@ -17,8 +17,9 @@
 // browser can set, via `new WebSocket(url, [token])`, which we echo back so the handshake succeeds
 // — then an `x-ws-channel` header (non-browser clients), then a `?channel=` query param.
 //
-// Same origin as /api, gated by the same session auth, attached to the existing http.Server via
-// its 'upgrade' event (no separate port, no second deploy).
+// Same origin as /api, attached to the existing http.Server via its 'upgrade' event (no separate
+// port, no second deploy). NOT session-gated — the room token the client presents IS the access
+// control (see channelOf); a connection with no token is refused.
 //
 // Protocol (JSON text frames):
 //   server → you  (on connect): { type: 'welcome', name, channel, clients: [names] }
@@ -86,12 +87,9 @@ const handleMessage = (socket, raw) => {
   send(socket, { type: 'error', error: 'unknown type', received: message.type })
 }
 
-// Attach the exchange to an existing http.Server. Upgrades on /api/ws, behind the same auth as
-// /api (resolveUser reads the session cookie off the upgrade request; null = reject).
-export const attachWsServer = (
-  server: Server,
-  { resolveUser }: { resolveUser: (req: IncomingMessage) => Promise<string | undefined> },
-) => {
+// Attach the exchange to an existing http.Server. Upgrades on /api/ws; access is the room token
+// (no session gate) — a connection with no token is refused in the handler below.
+export const attachWsServer = (server: Server) => {
   // Echo the client's offered subprotocol (browsers close the connection unless the server
   // selects one) so the room token can travel as the Sec-WebSocket-Protocol "header".
   const wss = new WebSocketServer({
@@ -99,15 +97,10 @@ export const attachWsServer = (
     handleProtocols: (protocols) => protocols.values().next().value ?? false,
   })
 
-  server.on('upgrade', async (req, socket, head) => {
+  server.on('upgrade', (req, socket, head) => {
     const path = req.url.split('?')[0]
     if (path !== '/api/ws') {
       socket.destroy() // not our endpoint, and there's no other upgrade handler — drop it
-      return
-    }
-    if (!(await resolveUser(req))) {
-      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
-      socket.destroy()
       return
     }
     const channel = channelOf(req)
