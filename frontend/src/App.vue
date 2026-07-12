@@ -11,12 +11,17 @@ import {
   type Component,
   type PropType,
 } from 'vue'
+import { marked } from 'marked'
 import AssetView from './AssetView.vue'
 
 const vueModules = import.meta.glob<{ default: Component }>('../scripts/*.vue')
 const vanillaModules = import.meta.glob('../scripts/*.{js,ts}')
 const solidModules = import.meta.glob('../scripts/*.{jsx,tsx}')
-const docModules = import.meta.glob('../docs/*.html', { query: '?raw', import: 'default' })
+// Docs come in two source formats: hand-authored .html fragments and .md. Both render through the
+// same doc pane — md is compiled to html on load (see renderDoc), so wikilinks, styling, and the
+// edit/save path are shared.
+const docHtmlModules = import.meta.glob('../docs/*.html', { query: '?raw', import: 'default' })
+const docMdModules = import.meta.glob('../docs/*.md', { query: '?raw', import: 'default' })
 
 const toName = (path: string) =>
   path
@@ -33,9 +38,26 @@ const scripts = [
   .map((s) => ({ ...s, name: toName(s.path) }))
   .sort((a, b) => a.name.localeCompare(b.name))
 
-const docs = Object.keys(docModules)
-  .map((path) => ({ path, name: toName(path) }))
-  .sort((a, b) => a.name.localeCompare(b.name))
+type DocFormat = 'html' | 'md'
+type Doc = { path: string; name: string; format: DocFormat; load: () => Promise<unknown> }
+const docs: Doc[] = [
+  ...Object.keys(docHtmlModules).map((path) => ({
+    path,
+    name: toName(path),
+    format: 'html' as DocFormat,
+    load: docHtmlModules[path],
+  })),
+  ...Object.keys(docMdModules).map((path) => ({
+    path,
+    name: toName(path),
+    format: 'md' as DocFormat,
+    load: docMdModules[path],
+  })),
+].sort((a, b) => a.name.localeCompare(b.name))
+
+// md docs compile to html and render through the same doc pane; html docs pass through untouched.
+const renderDoc = (source: string, format: DocFormat) =>
+  format === 'md' ? (marked.parse(source) as string) : source
 
 const filter = ref('')
 const matches = (name: string) => name.toLowerCase().includes(filter.value.trim().toLowerCase())
@@ -83,7 +105,9 @@ const mountSolid =
 const activeUrl = ref<string | null>(null) // '/script/x' | '/doc/x'
 const activeComponent = shallowRef<Component | null>(null)
 const activeMount = shallowRef<MountFn | null>(null)
-const activeHtml = ref('')
+const activeHtml = ref('') // compiled html for v-html
+const activeSource = ref('') // raw file source (what the editor edits + saves)
+const activeDocFormat = ref<DocFormat>('html')
 const activeBin = shallowRef<Bin | null>(null)
 const missing = ref<string | null>(null)
 
@@ -93,13 +117,14 @@ const editing = ref(false)
 const draft = ref('')
 const saving = ref(false)
 const saveError = ref<string | null>(null)
-const docEdits = new Map<string, string>() // fresh content pushed over HMR, by doc name
+const docEdits = new Map<string, string>() // raw source pushed over HMR, by doc name
 
 const show = async (url: string | null) => {
   activeUrl.value = null
   activeComponent.value = null
   activeMount.value = null
   activeHtml.value = ''
+  activeSource.value = ''
   activeBin.value = null
   missing.value = null
   editing.value = false
@@ -131,7 +156,10 @@ const show = async (url: string | null) => {
     }
     activeUrl.value = url
     document.title = `ocraft · ${doc.name}`
-    activeHtml.value = docEdits.get(name) ?? ((await docModules[doc.path]()) as string)
+    const source = docEdits.get(name) ?? ((await doc.load()) as string)
+    activeDocFormat.value = doc.format
+    activeSource.value = source
+    activeHtml.value = renderDoc(source, doc.format)
     return
   }
 
@@ -168,7 +196,7 @@ const activeDocName = computed(() => {
 })
 
 const startEdit = () => {
-  draft.value = activeHtml.value
+  draft.value = activeSource.value
   saveError.value = null
   editing.value = true
 }
@@ -184,14 +212,15 @@ const saveEdit = async () => {
   saving.value = true
   saveError.value = null
   try {
-    const res = await fetch(`/__save-doc?name=${encodeURIComponent(activeDocName.value)}`, {
-      method: 'POST',
-      body: draft.value,
-    })
+    const res = await fetch(
+      `/__save-doc?name=${encodeURIComponent(activeDocName.value)}&ext=${activeDocFormat.value}`,
+      { method: 'POST', body: draft.value },
+    )
     if (!res.ok) {
       throw new Error((await res.text()) || `save failed (${res.status})`)
     }
-    activeHtml.value = draft.value
+    activeSource.value = draft.value
+    activeHtml.value = renderDoc(draft.value, activeDocFormat.value)
     editing.value = false
   } catch (error) {
     saveError.value = error instanceof Error ? error.message : String(error)
@@ -241,12 +270,16 @@ applyTheme()
 
 // A changed doc file arrives here (not as a full App re-render) — patch the open doc in place.
 if (import.meta.hot) {
-  import.meta.hot.on('ocraft:doc', ({ name, html }: { name: string; html: string }) => {
-    docEdits.set(name, html)
-    if (!editing.value && activeDocName.value === name) {
-      activeHtml.value = html
-    }
-  })
+  import.meta.hot.on(
+    'ocraft:doc',
+    ({ name, source, format }: { name: string; source: string; format: DocFormat }) => {
+      docEdits.set(name, source)
+      if (!editing.value && activeDocName.value === name) {
+        activeSource.value = source
+        activeHtml.value = renderDoc(source, format)
+      }
+    },
+  )
 }
 </script>
 
@@ -288,6 +321,7 @@ if (import.meta.hot) {
           <li v-for="d in visibleDocs" :key="d.path">
             <a :class="{ active: activeUrl === `/doc/${d.name}` }" @click="open('doc', d.name)">
               <span class="truncate">{{ d.name }}</span>
+              <span class="badge badge-ghost badge-xs">{{ d.format }}</span>
             </a>
           </li>
         </ul>
@@ -320,8 +354,13 @@ if (import.meta.hot) {
       <div v-if="missing" class="grid h-full place-items-center opacity-40">
         <p>nothing at {{ missing }}</p>
       </div>
-      <div v-else-if="activeHtml" :key="activeUrl!" class="max-w-3xl p-8">
-        <div v-if="canEdit" class="mb-3 flex items-center gap-2">
+      <div
+        v-else-if="activeHtml"
+        :key="activeUrl!"
+        class="max-w-3xl p-8"
+        :class="{ 'flex h-full flex-col': editing }"
+      >
+        <div v-if="canEdit" class="mb-3 flex shrink-0 items-center gap-2">
           <template v-if="editing">
             <button class="btn btn-primary btn-xs" :disabled="saving" @click="saveEdit">
               {{ saving ? 'saving…' : 'save' }}
@@ -337,7 +376,7 @@ if (import.meta.hot) {
           v-if="editing"
           v-model="draft"
           spellcheck="false"
-          class="textarea textarea-bordered h-[70vh] w-full font-mono text-sm leading-normal"
+          class="textarea textarea-bordered min-h-0 w-full flex-1 font-mono text-sm leading-normal"
         ></textarea>
         <article v-else class="doc" @click="onContentClick" v-html="activeHtml"></article>
       </div>

@@ -1,0 +1,7 @@
+-   How does the work process happen and what technologies are used?
+-   What is the review and mentoring process?
+-   Bonuses, English courses, and others?
+-   Why do you enjoy working here?
+-   Remote, office? Relocation?
+-   Can I see the potential workplace and how everything is set up there? In particular, the air conditioning and zoning system?
+-   The history of how the company was founded?

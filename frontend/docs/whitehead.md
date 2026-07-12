@@ -1,0 +1,1 @@
+Events strive toward the complication and ordering of their own experience. Creativity propels events. Eros and risk - events take risks. Toward the unknown. God is understood as yet another event. God carries potentialities. God is the organ of novelty. Deep ecology. Influenced: Graham Harman, Deleuze

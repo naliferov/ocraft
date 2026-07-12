@@ -1,0 +1,41 @@
+-   **Amp** — guitar-amplifier emulation, 7 classic models.
+-   **Auto Filter** — filter driven by envelope follower, LFO or sidechain.
+-   **Auto Pan** — LFO panning, tremolo and rhythmic chopping.
+-   **Auto Shift** — real-time pitch & formant shifter / pitch corrector _(Live 12.2)_ .
+-   **Beat Repeat** — rhythmic glitch, stutter and repeat effects.
+-   **Cabinet** — guitar speaker-cabinet emulation (pairs with Amp).
+-   **Channel EQ** — quick, musical 3-band EQ with a visual response curve.
+-   **Chorus-Ensemble** — chorus, ensemble and vibrato thickening.
+-   **Compressor** — versatile dynamics compressor (peak/RMS, sidechain).
+-   **Corpus** — physical-modelling resonator (beam, plate, pipe, membrane…).
+-   **Delay** — one delay device: digital / analog / fade modes, sync, ping-pong.
+-   **Drum Buss** — all-in-one drum processor: drive, transients, boom, compression.
+-   **Dynamic Tube** — tube/triode saturation shaped by an envelope.
+-   **Echo** — characterful echo with modulation, filtering, reverb and noise.
+-   **EQ Eight** — 8-band parametric EQ with spectrum and mid/side.
+-   **EQ Three** — DJ-style 3-band EQ with kill switches.
+-   **Erosion** — degrades the signal with modulated noise or a sine.
+-   **External Audio Effect** — sends/returns audio to outboard gear or a plug-in.
+-   **Gate** — noise gate with sidechain and lookahead.
+-   **Glue Compressor** — analog-modelled bus "glue" compressor.
+-   **Grain Delay** — granular delay with pitch and frequency spray.
+-   **Hybrid Reverb** — blendable convolution + algorithmic reverb.
+-   **Limiter** — transparent brick-wall limiter for the master.
+-   **Looper** — live looping: overdub, multiply, reverse.
+-   **Multiband Dynamics** — up/down compression across three bands.
+-   **Overdrive** — band-focused overdrive / distortion.
+-   **Pedal** — guitar-pedal Overdrive / Distortion / Fuzz.
+-   **Phaser-Flanger** — combined phaser and flanger modulation.
+-   **Redux** — bit-depth and sample-rate reduction (lo-fi / digital crunch).
+-   **Resonators** — adds tuned, chordal/metallic resonances.
+-   **Reverb** — classic algorithmic reverb.
+-   **Roar** — multi-stage saturation/distortion with modulation & feedback _(new in Live 12)_ .
+-   **Saturator** — waveshaping warmth, drive and distortion.
+-   **Shifter** — pitch, frequency and ring modulation in one device (MPE).
+-   **Spectral Resonator** — spectral pitched resonance and freeze (MPE).
+-   **Spectral Time** — spectral freeze plus frequency-based delay.
+-   **Spectrum** — real-time spectrum analyser (metering only).
+-   **Tuner** — instrument tuner (metering only).
+-   **Utility** — gain, width, mono, DC filter — the essential mixing tool.
+-   **Vinyl Distortion** — vinyl crackle and harmonic distortion.
+-   **Vocoder** — classic vocoder (carrier + modulator).
