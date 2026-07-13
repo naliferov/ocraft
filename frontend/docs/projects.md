@@ -6,5 +6,5 @@
 [reelmaker](/doc/reelmaker)  
 [unsystem-art](/doc/unsystem-art)  
 [art constructor](/doc/art-constructor)  
-[yolang](/doc/yolang)  
+[terse](/doc/terse)  
 [vlang](/doc/vlang)

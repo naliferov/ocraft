@@ -2,31 +2,31 @@
 
 The code sibling of [super-terse](/doc/super-terse). Where super-terse squeezes _prose_ to a telegraphic skeleton, super-terse-code squeezes _code_: replace each language keyword with a 1-char **sigil**, drop the boilerplate punctuation, keep the semantic structure. You trade legibility-at-a-glance for density — so it needs a **legend** (or a compiler) to read back.
 
-We already have a working instance: **yolang** (run it in [/script/yo-to-js](/script/yo-to-js)). It doesn't interpret — it _compiles_ to plain JS, so the sigils map 1:1 onto real language constructs.
+We already have a working instance: **terse** (run it in [/script/terse](/script/terse)). It doesn't interpret — it _compiles_ to plain JS, so the sigils map 1:1 onto real language constructs.
 
-## yolang sigils
+## terse sigils
 
-| yo          | JS               | meaning     |
-| ----------- | ---------------- | ----------- |
-| `name = e`  | `let name = e`   | bind        |
-| `@a -> …`   | `async () => …`  | async fn    |
-| `@f -> …`   | `() => …`        | sync fn     |
-| `@w e`      | `await e`        | wait        |
-| `@r e`      | `return e`       | return      |
-| `@l(e)`     | `log(e)`         | print       |
+| terse         | JS              | meaning  |
+| ------------- | --------------- | -------- |
+| `name = e`    | `let name = e`  | bind     |
+| `@ -> …`      | `async () => …` | fn                 |
+| `f(x)`        | `(await f(x))`  | call (auto-awaited) |
+| `@p f(x)`     | `f(x)`          | promise (no await) |
+| `@r e`        | `return e`      | return             |
+| `@l(e)`       | `log(e)`        | print              |
 
-Keywords become `@`-mentions; `=`, `+ - * /`, `( )`, `{ }` stay. The async model _is_ JS's async model (`@a`/`@w` → `async`/`await`), so nothing is faked.
+Keywords become `@`-mentions; `=`, `+ - * /`, `( )`, `{ }` stay. Every `@` fn is `async` and **calls auto-`await`** (`@p` keeps the raw promise), so nothing is faked. Params go in `@(a, b) -> …`.
 
 ## Worked example
 
-yo:
+terse:
 
 ```
-onePlusOne = @a -> {
+onePlusOne = @ -> {
     sum = 1 + 1
     @r sum
 }
-result = @w onePlusOne()
+result = onePlusOne()
 @l(result)
 ```
 

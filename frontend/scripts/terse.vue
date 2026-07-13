@@ -1,17 +1,17 @@
 <script setup lang="ts">
-// yo → js — the "yo" toy language, compiled (not interpreted) to JS.
+// terse → js — the "terse" toy language, compiled (not interpreted) to JS.
 //
-// yo is a tiny async-first language; its keywords are @-mentions:
+// terse is a tiny async-only language; its keywords are @-mentions. Calls auto-await:
 //   name = expr            bind a variable
-//   @a(params?) -> expr | { … }  async function  (calling it yields a pending value)
-//   @f(params?) -> expr | { … }  sync  function  (calling it yields the value directly)
-//   @w expr                wait/await the pending value an @a call produced
+//   @(params?) -> expr | { … }   a function — always async
+//   f(args)                call a function — automatically awaited
+//   @p expr                get the raw promise (opt out of the auto-await)
 //   @r expr                return out of a function
 //   @l(expr)               builtin: print
 //   numbers, + - * /, ( )
 //
 // STRATEGY: don't interpret — COMPILE. The lexer + parser feed a code generator that emits plain
-// JavaScript, which the browser then runs. @a / @f / @w ARE JS's async fn / plain fn / await.
+// JavaScript, which the browser then runs. @ = async fn; every call auto-awaits (@p opts out).
 // Edit the source → Compile to see the emitted JS → Run to execute it.
 import { ref, onMounted } from 'vue'
 import LogPanel from './lib/LogPanel.vue'
@@ -46,11 +46,8 @@ const tokenize = (src: string) => {
       while (j < src.length && isAlnum(src[j])) {
         j++
       }
-      const name = src.slice(i + 1, j)
-      if (name.length === 0) {
-        throw new SyntaxError(`'@' must be followed by a name at position ${i}`)
-      }
-      tokens.push({ type: 'AT', name })
+      // bare '@' (name '') is the function marker (always async); '@p'/'@r'/'@l' are promise/return/log.
+      tokens.push({ type: 'AT', name: src.slice(i + 1, j) })
       i = j
       continue
     }
@@ -149,12 +146,12 @@ const parse = (tokens: any[]) => {
     return { type: 'ExprStmt', expr: parseExpression() }
   }
   const parseExpression = (): any => {
-    if (peek().type === 'AT' && (peek().name === 'a' || peek().name === 'f')) {
+    if (peek().type === 'AT' && peek().name === '') {
       return parseFn()
     }
     return parseAdditive()
   }
-  // Optional param list between the @a/@f and the arrow: @f(a, b) -> …
+  // Optional param list between @ and the arrow: @(a, b) -> …
   const parseParams = () => {
     const params: string[] = []
     expect('LPAREN')
@@ -169,12 +166,11 @@ const parse = (tokens: any[]) => {
     return params
   }
   const parseFn = () => {
-    const at = next() // AT 'a' (async) or 'f' (sync)
-    const isAsync = at.name === 'a'
+    next() // consume the '@'
     const params = peek().type === 'LPAREN' ? parseParams() : []
     expect('ARROW')
     const body = peek().type === 'LBRACE' ? parseBlock() : parseExpression()
-    return { type: 'Fn', async: isAsync, params, body }
+    return { type: 'Fn', params, body }
   }
   const parseAdditive = () => {
     let node = parseMultiplicative()
@@ -193,9 +189,12 @@ const parse = (tokens: any[]) => {
     return node
   }
   const parseUnary = (): any => {
-    if (peek().type === 'AT' && peek().name === 'w') {
+    // '@p' opts out of the automatic await on the call that follows — you get the raw promise.
+    if (peek().type === 'AT' && peek().name === 'p') {
       next()
-      return { type: 'Await', expr: parseUnary() }
+      const expr = parseUnary()
+      if (expr.type === 'Call') expr.promise = true
+      return expr
     }
     return parseCall()
   }
@@ -227,7 +226,7 @@ const parse = (tokens: any[]) => {
       return { type: 'Var', name: token.name }
     }
     if (token.type === 'AT') {
-      if (token.name === 'a' || token.name === 'f') {
+      if (token.name === '') {
         return parseFn()
       }
       next()
@@ -245,13 +244,12 @@ const parse = (tokens: any[]) => {
 }
 
 /* ── 3. CODEGEN  (AST → JavaScript source) ──
-   yo's async model is JS's async model, so the mapping is direct:
-     @a(a,b) -> …  →  async (a, b) => …  (call returns a Promise; params optional)
-     @f(a,b) -> …  →  (a, b) => …        (call returns the value; params optional)
-     @w e      →  (await e)
+   terse's async model is JS's async model, so the mapping is direct:
+     @(a,b) -> …   →  async (a, b) => …  (every fn is async; params optional)
+     f(x)          →  (await f(x))       (calls auto-await; '@p f(x)' keeps the raw promise)
      @r e      →  return e
-     @l        →  log  (the print builtin, injected at run time)
-   yo binds per-scope (set always writes the current scope), so each block tracks its own
+     @l        →  log  (the print builtin — sync, not auto-awaited)
+   terse binds per-scope (set always writes the current scope), so each block tracks its own
    declared names: first binding → `let`, a re-binding in the same block → bare assign. */
 const compileToJs = (ast: any) => {
   const genExpr = (node: any): string => {
@@ -264,13 +262,14 @@ const compileToJs = (ast: any) => {
         return node.name === 'l' ? 'log' : node.name
       case 'BinaryOp':
         return `(${genExpr(node.left)} ${node.op} ${genExpr(node.right)})`
-      case 'Await':
-        return `(await ${genExpr(node.expr)})`
-      case 'Call':
-        return `${genExpr(node.callee)}(${node.args.map(genExpr).join(', ')})`
+      case 'Call': {
+        const call = `${genExpr(node.callee)}(${node.args.map(genExpr).join(', ')})`
+        // every terse fn is async → calls auto-await; builtins (log) stay sync; '@p' keeps the promise.
+        return node.callee.type === 'Builtin' || node.promise ? call : `(await ${call})`
+      }
       case 'Fn': {
         const params = node.params.join(', ')
-        const head = node.async ? `async (${params}) => ` : `(${params}) => `
+        const head = `async (${params}) => ` // every terse fn is async
         const body = node.body.type === 'Block' ? genBlock(node.body.body, 1) : genExpr(node.body)
         return head + body
       }
@@ -307,15 +306,10 @@ const compile = (src: string) => compileToJs(parse(tokenize(src)))
 
 /* ── 4. UI  (source → Compile → JS → Run) ── */
 const SAMPLE = [
-  'add = @f(a, b) -> {',
-  '    @r a + b',
-  '}',
+  'add = @(a, b) -> a + b',
+  'double = @(n) -> add(n, n)',
   '',
-  'compute = @a(x) -> {',
-  '    @r add(x, 10)',
-  '}',
-  '',
-  'result = @w compute(5)',
+  'result = double(5)',
   '@l(result)',
 ].join('\n')
 
@@ -345,8 +339,8 @@ const run = async () => {
     return args[0]
   }
   try {
-    // Wrap the emitted top-level statements in an async IIFE so a top-level `@w` (→ await)
-    // is valid; new Function keeps the generated code out of this module's scope.
+    // Wrap the emitted top-level statements in an async IIFE so a top-level await (from an
+    // auto-awaited call) is valid; new Function keeps the generated code out of this module's scope.
     const program = new Function('log', `return (async () => {\n${output.value}\n})()`)
     await program(log)
     panel.value?.push('done ✓', 'sys')
@@ -373,7 +367,7 @@ onMounted(showJs)
     </div>
     <textarea
       v-model="source"
-      name="yo-source"
+      name="terse-source"
       spellcheck="false"
       class="textarea textarea-bordered w-full resize-y overflow-auto font-mono text-[13px] leading-normal whitespace-pre-wrap"
       rows="8"

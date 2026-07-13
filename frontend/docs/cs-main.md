@@ -67,7 +67,7 @@ takeaway: each popular repo owns ONE axis; the ocraft combo (folder-per-node on 
 [js frameworks](/doc/javascript-frameworks)  
 [modules](/doc/modules-type)  
 [vlang](/doc/vlang)  
-[yolang](/doc/yolang)  
+[terse](/doc/terse)  
 [yhelper](/doc/yhelper)  
 [php upgrade audit](/doc/php-upgrade-audit)
 
