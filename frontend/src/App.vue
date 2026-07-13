@@ -64,11 +64,37 @@ const matches = (name: string) => name.toLowerCase().includes(filter.value.trim(
 const visibleScripts = computed(() => scripts.filter((s) => matches(s.name)))
 const visibleDocs = computed(() => docs.filter((d) => matches(d.name)))
 
-// bins (public/bins, served as-is / not bundled) are listed from a manifest and opened by
-// a type-aware viewer (AssetView) — gz-text inflated in-browser, images/media as elements.
-type Bin = { name: string; file: string; type: string }
-const bins = ref<Bin[]>([])
-const visibleBins = computed(() => bins.value.filter((a) => matches(a.name)))
+// bins (frontend/bins/*) are discovered exactly like docs/scripts — import.meta.glob imports each
+// file as a URL (?url), giving us the list + fingerprinted URLs at build time (no manifest). Type
+// is inferred from the content extension; the type-aware viewer (AssetView) renders it (txt, fb2 as
+// a book, images/media as elements, else a download link).
+const binModules = import.meta.glob('../bins/*', {
+  query: '?url',
+  import: 'default',
+  eager: true,
+}) as Record<string, string>
+// Type by CONTENT. A trailing .gz/.gzip is a transparent compression layer — stripped here, inflated
+// on load (see AssetView) — NOT part of the type. So foo.txt.gzip is 'txt', foo.fb2.gzip is 'fb2'.
+const binType = (path: string) => {
+  const name = path.toLowerCase().replace(/\.(gz|gzip)$/, '')
+  if (/\.(txt|md|csv|log|json)$/.test(name)) return 'txt'
+  if (name.endsWith('.fb2')) return 'fb2'
+  if (/\.(png|jpe?g|gif|webp|avif|svg)$/.test(name)) return 'image'
+  if (/\.(opus|mp3|ogg|wav|m4a|flac|aac)$/.test(name)) return 'audio'
+  if (/\.(mp4|webm|mov|mkv)$/.test(name)) return 'video'
+  return 'file'
+}
+const binName = (path: string) =>
+  path
+    .split('/')
+    .pop()!
+    .replace(/\.(gz|gzip)$/i, '')
+    .replace(/\.[^.]+$/, '')
+type Bin = { name: string; url: string; type: string }
+const bins: Bin[] = Object.entries(binModules)
+  .map(([path, url]) => ({ name: binName(path), url, type: binType(path) }))
+  .sort((a, b) => a.name.localeCompare(b.name))
+const visibleBins = computed(() => bins.filter((a) => matches(a.name)))
 
 // --- script mounting (non-Vue kinds get a host <div> + cleanup lifecycle) ---
 type MountFn = (host: HTMLElement) => Promise<(() => void) | undefined>
@@ -137,7 +163,7 @@ const show = async (url: string | null) => {
   const name = rawName && decodeURIComponent(rawName)
 
   if (kind === 'bin') {
-    const asset = bins.value.find((candidate) => candidate.name === name)
+    const asset = bins.find((candidate) => candidate.name === name)
     if (!asset) {
       missing.value = url
       return
@@ -247,16 +273,6 @@ const onContentClick = (event: MouseEvent) => {
 window.addEventListener('popstate', () => show(urlFromLocation()))
 show(urlFromLocation())
 
-// load the bins manifest, then (re-)resolve if the page deep-linked straight to an asset
-fetch('/bins/manifest.json')
-  .then((response) => (response.ok ? response.json() : []))
-  .then((list: Bin[]) => {
-    bins.value = list
-    const current = urlFromLocation()
-    if (current?.startsWith('/bin/')) show(current)
-  })
-  .catch(() => {})
-
 const theme = ref<'dark' | 'light'>(
   (localStorage.getItem('ocraft.theme') as 'dark' | 'light') ?? 'light',
 )
@@ -295,6 +311,7 @@ if (import.meta.hot) {
       <div class="border-b border-base-300 p-2">
         <input
           v-model="filter"
+          name="sidebar-filter"
           class="input input-sm input-bordered w-full"
           placeholder="filter…"
         />
@@ -330,7 +347,7 @@ if (import.meta.hot) {
             bins ({{ visibleBins.length }})
           </div>
           <ul class="menu w-full py-0">
-            <li v-for="a in visibleBins" :key="a.file">
+            <li v-for="a in visibleBins" :key="a.url">
               <a :class="{ active: activeBin?.name === a.name }" @click="open('bin', a.name)">
                 <span class="truncate">{{ a.name }}</span>
                 <span class="badge badge-ghost badge-xs">{{ a.type }}</span>
@@ -375,6 +392,7 @@ if (import.meta.hot) {
         <textarea
           v-if="editing"
           v-model="draft"
+          name="doc-source"
           spellcheck="false"
           class="textarea textarea-bordered min-h-0 w-full flex-1 font-mono text-sm leading-normal"
         ></textarea>
@@ -384,7 +402,12 @@ if (import.meta.hot) {
         <component :is="activeComponent" v-if="activeComponent" />
         <HostMount v-else :mount="activeMount!" />
       </div>
-      <div v-else-if="activeBin" :key="'bin:' + activeUrl" class="max-w-3xl p-8">
+      <div
+        v-else-if="activeBin"
+        :key="'bin:' + activeUrl"
+        class="max-w-3xl p-8"
+        :class="{ 'flex h-full flex-col': activeBin.type === 'fb2' }"
+      >
         <AssetView :asset="activeBin" />
       </div>
       <div v-else class="grid h-full place-items-center opacity-40">

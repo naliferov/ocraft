@@ -178,9 +178,7 @@ const createStage = (host: HTMLElement, src: string) => {
     try {
       if (keyword === 'p') page(pageParams(tokens))
       else if (keyword === 'tx') text({ ...textParams(tokens), text: quote ? quote[1] : '' })
-      else if (/^i\d+$/.test(keyword)) image(`/api/nodes/${keyword.slice(1)}/body`, plainParams(tokens))
       else if (/^i[\w-]+$/.test(keyword)) image(`/api/bin/${keyword.slice(1)}`, plainParams(tokens))
-      else if (/^v\d+$/.test(keyword)) video(`/api/nodes/${keyword.slice(1)}/body`, videoParams(tokens))
       else if (/^v[\w-]+$/.test(keyword)) video(`/api/bin/${keyword.slice(1)}`, videoParams(tokens))
       else if (/^o\d*$/.test(keyword)) object(plainParams(tokens))
       else throw new Error('unknown instruction')
@@ -478,6 +476,7 @@ onUnmounted(() => {
     <div class="flex items-center gap-2">
       <input
         v-model="nameField"
+        name="vlang-source-name"
         list="vlang-sources"
         class="input input-sm input-bordered w-64"
         placeholder="data file name — Enter to load"
@@ -495,6 +494,7 @@ onUnmounted(() => {
       <div class="flex min-w-[220px] flex-1 flex-col gap-2">
         <textarea
           v-model="source"
+          name="vlang-source"
           spellcheck="false"
           class="textarea textarea-bordered min-h-[180px] flex-1 resize-y font-mono text-[12.5px] leading-relaxed whitespace-pre"
           placeholder="load a source…"

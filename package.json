@@ -4,7 +4,6 @@
   "scripts": {
     "cli": "node --experimental-strip-types --disable-warning=ExperimentalWarning runtime/cli.ts",
     "service": "node --experimental-strip-types --disable-warning=ExperimentalWarning runtime/cli.ts service",
-    "migrate": "node --experimental-strip-types --disable-warning=ExperimentalWarning runtime/cli.ts migrate",
     "typecheck": "tsc -p tsconfig.json && npm --prefix frontend run typecheck",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -15,7 +14,6 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "dotenv": "^17.4.1",
     "marked": "^18.0.5",
-    "postgres": "^3.4.9",
     "sharp": "^0.34.5",
     "ws": "^8.21.0"
   },

@@ -49,11 +49,6 @@ const commands = {
       console.log(`${formatted}  ${execution.name}  (${execution.id})`)
     }
   },
-  // Apply pending Postgres migrations (runtime/store/migrations/*.sql). Needs DATABASE_URL.
-  migrate: async () => {
-    const { migrate } = await import('./store/migrate.ts')
-    await migrate()
-  },
   // Manage SERVICES — long-running processes. See runtime/services/.
   service: async () => {
     const [sub, id, ...rest] = args

@@ -1,9 +1,11 @@
-In garbage-collected runtimes, the heap is managed by the garbage collector. In runtimes with manual memory management, the heap is managed by the programmer.  
-  
-Why is the stack faster than the heap?  
-  
-It is faster in the general case for several reasons - it has a contiguous, fixed size rather than being made up of several chunks of pages. It is allocated when the program starts and lives until the process ends. There is no need to track it, clean, load, or unload it in any special way - the OS process manager takes care of that.  
-  
-It is accessed sequentially rather than randomly - things are only pushed onto it and popped off of it. The address of the top of the current thread's stack is always loaded in a CPU register. It almost always ends up in the cache, because it is accessed most frequently.  
-  
-Stack sizes in modern operating systems are not that large, and usually range from 1 to 10MB. This can be controlled both at the level of the OS itself and at the level of individual processes, but it is not recommended, for all the reasons stated above. (if you set the stack size to a gigabyte, it will never fit in the cache). In general, a programmer should not think about these things at all, unless you are a systems programmer.
+**heap** - managed by the GC (GC'd runtimes) or by the programmer (manual runtimes).
+
+**Why the stack is faster:**
+
+- contiguous, fixed size, not chunks of pages
+- allocated at program start, lives till process end - no tracking/cleaning/load/unload (the OS process manager handles it)
+- sequential push/pop, not random access
+- top-of-stack address always in a CPU register
+- almost always cached (accessed most)
+
+**Stack size** - 1-10MB on modern OS; tunable at OS/process level but don't (a 1GB stack never fits cache). Ignore it unless you write systems code.

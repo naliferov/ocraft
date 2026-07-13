@@ -48,6 +48,8 @@ pants [https://www.staff-clothes.com/product/snt0499-2/](https://www.staff-cloth
   
 shoes [https://vans.org.ua/nizkie-vans-old-skool-model-vn0005ufy611-ru](https://vans.org.ua/nizkie-vans-old-skool-model-vn0005ufy611-ru) [https://vans.org.ua/nizkie-vans-authentic-model-vn000ee3bka1-ru](https://vans.org.ua/nizkie-vans-authentic-model-vn000ee3bka1-ru)  
   
+watch [https://rozetka.com.ua/ua/casio-309578/p359601027/](https://rozetka.com.ua/ua/casio-309578/p359601027/)  
+  
 [robotics](/doc/robotics)  
 [raspberry pi](/doc/raspberry-pi)  
 [uav](/doc/uav)  

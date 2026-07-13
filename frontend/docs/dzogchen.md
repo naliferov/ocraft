@@ -1,3 +1,3 @@
-The practice of bringing contemplation into every action and situation is called trekchö, which means "to release by cutting through," in the sense that you relax the way tightly bound twigs relax when you untie the rope binding them. The continuation of trekchö is the practice of tögal, which means "to surpass the utmost."  
-  
-**Five faculties for the practice of Dzogchen** Engaged participation Diligence. You should not put it off until later each day. Presence of awareness. You need to maintain presence. Contemplation. Immerse yourself in the practice. Prajna. Having sufficient mental capacity to understand what you are being taught.
+**trekchö** = release by cutting through — relax like tightly-bound twigs when the rope is untied. **tögal** = surpass the utmost; continues trekchö.
+
+**five faculties:** engaged participation · diligence (don't defer, each day) · presence of awareness (maintain it) · contemplation (immerse) · prajna (capacity to grasp the teaching).

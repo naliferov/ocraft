@@ -205,17 +205,17 @@ onMounted(connectWs)
 <template>
   <div class="flex max-w-3xl flex-col gap-3">
     <div class="flex items-center gap-2">
-      <input v-model="wsUrl" class="input input-sm input-bordered flex-1 font-mono" placeholder="wss://host/api/ws" @keydown.enter="connectWs" />
-      <input v-model="token" class="input input-sm input-bordered w-36 font-mono" placeholder="room token" @keydown.enter="connectWs" />
+      <input v-model="wsUrl" name="ws-url" class="input input-sm input-bordered flex-1 font-mono" placeholder="wss://host/api/ws" @keydown.enter="connectWs" />
+      <input v-model="token" name="room-token" class="input input-sm input-bordered w-36 font-mono" placeholder="room token" @keydown.enter="connectWs" />
       <button class="btn btn-sm" @click="connectWs">connect ws</button>
       <span class="text-sm opacity-60">{{ status }}</span>
     </div>
     <div class="flex items-center gap-2">
-      <input v-model="peerName" class="input input-sm input-bordered flex-1" placeholder="peer name (see welcome/join in log)" />
+      <input v-model="peerName" name="peer-name" class="input input-sm input-bordered flex-1" placeholder="peer name (see welcome/join in log)" />
       <button class="btn btn-sm" @click="call">call</button>
     </div>
     <div class="flex items-center gap-2">
-      <input v-model="msgText" class="input input-sm input-bordered flex-1" placeholder="text message" @keydown.enter="sendText" />
+      <input v-model="msgText" name="msg-text" class="input input-sm input-bordered flex-1" placeholder="text message" @keydown.enter="sendText" />
       <button class="btn btn-sm" @click="sendText">send</button>
       <button class="btn btn-sm" @click="pickFile">send file</button>
     </div>

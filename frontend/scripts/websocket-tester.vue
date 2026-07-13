@@ -73,13 +73,13 @@ onUnmounted(disconnect)
 <template>
   <div class="flex max-w-3xl flex-col gap-3">
     <div class="flex items-center gap-2">
-      <input v-model="url" class="input input-sm input-bordered flex-1 font-mono" placeholder="ws://host/path" @keydown.enter="connect" />
+      <input v-model="url" name="ws-url" class="input input-sm input-bordered flex-1 font-mono" placeholder="ws://host/path" @keydown.enter="connect" />
       <button class="btn btn-sm" @click="connect">Connect</button>
       <button class="btn btn-sm" @click="disconnect">Disconnect</button>
       <span class="text-sm opacity-60">{{ status }}</span>
     </div>
     <div class="flex items-center gap-2">
-      <input v-model="message" class="input input-sm input-bordered flex-1" placeholder="message to send" @keydown.enter="send" />
+      <input v-model="message" name="ws-message" class="input input-sm input-bordered flex-1" placeholder="message to send" @keydown.enter="send" />
       <button class="btn btn-sm" @click="send">Send</button>
       <button class="btn btn-sm" @click="panel!.clear()">Clear</button>
     </div>

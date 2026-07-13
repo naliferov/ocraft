@@ -3,8 +3,8 @@
 //
 // yo is a tiny async-first language; its keywords are @-mentions:
 //   name = expr            bind a variable
-//   @a -> expr | { … }     async function  (calling it yields a pending value)
-//   @f -> expr | { … }     sync  function  (calling it yields the value directly)
+//   @a(params?) -> expr | { … }  async function  (calling it yields a pending value)
+//   @f(params?) -> expr | { … }  sync  function  (calling it yields the value directly)
 //   @w expr                wait/await the pending value an @a call produced
 //   @r expr                return out of a function
 //   @l(expr)               builtin: print
@@ -154,12 +154,27 @@ const parse = (tokens: any[]) => {
     }
     return parseAdditive()
   }
+  // Optional param list between the @a/@f and the arrow: @f(a, b) -> …
+  const parseParams = () => {
+    const params: string[] = []
+    expect('LPAREN')
+    if (peek().type !== 'RPAREN') {
+      params.push(expect('IDENT').name)
+      while (peek().type === 'COMMA') {
+        next()
+        params.push(expect('IDENT').name)
+      }
+    }
+    expect('RPAREN')
+    return params
+  }
   const parseFn = () => {
     const at = next() // AT 'a' (async) or 'f' (sync)
     const isAsync = at.name === 'a'
+    const params = peek().type === 'LPAREN' ? parseParams() : []
     expect('ARROW')
     const body = peek().type === 'LBRACE' ? parseBlock() : parseExpression()
-    return { type: 'Fn', async: isAsync, body }
+    return { type: 'Fn', async: isAsync, params, body }
   }
   const parseAdditive = () => {
     let node = parseMultiplicative()
@@ -231,8 +246,8 @@ const parse = (tokens: any[]) => {
 
 /* ── 3. CODEGEN  (AST → JavaScript source) ──
    yo's async model is JS's async model, so the mapping is direct:
-     @a -> …   →  async () => …      (call returns a Promise)
-     @f -> …   →  () => …            (call returns the value)
+     @a(a,b) -> …  →  async (a, b) => …  (call returns a Promise; params optional)
+     @f(a,b) -> …  →  (a, b) => …        (call returns the value; params optional)
      @w e      →  (await e)
      @r e      →  return e
      @l        →  log  (the print builtin, injected at run time)
@@ -254,7 +269,8 @@ const compileToJs = (ast: any) => {
       case 'Call':
         return `${genExpr(node.callee)}(${node.args.map(genExpr).join(', ')})`
       case 'Fn': {
-        const head = node.async ? 'async () => ' : '() => '
+        const params = node.params.join(', ')
+        const head = node.async ? `async (${params}) => ` : `(${params}) => `
         const body = node.body.type === 'Block' ? genBlock(node.body.body, 1) : genExpr(node.body)
         return head + body
       }
@@ -291,12 +307,15 @@ const compile = (src: string) => compileToJs(parse(tokenize(src)))
 
 /* ── 4. UI  (source → Compile → JS → Run) ── */
 const SAMPLE = [
-  'onePlusOne = @a -> {',
-  '    sum = 1 + 1',
-  '    @r sum',
+  'add = @f(a, b) -> {',
+  '    @r a + b',
   '}',
   '',
-  'result = @w onePlusOne()',
+  'compute = @a(x) -> {',
+  '    @r add(x, 10)',
+  '}',
+  '',
+  'result = @w compute(5)',
   '@l(result)',
 ].join('\n')
 
@@ -354,6 +373,7 @@ onMounted(showJs)
     </div>
     <textarea
       v-model="source"
+      name="yo-source"
       spellcheck="false"
       class="textarea textarea-bordered w-full resize-y overflow-auto font-mono text-[13px] leading-normal whitespace-pre-wrap"
       rows="8"

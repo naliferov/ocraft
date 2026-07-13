@@ -3,9 +3,8 @@
 # code is on disk (git reset) and the new bundle is staged at frontend/dist.new. When this starts the
 # live :80 process is STILL serving the OLD code (loaded in memory) + the OLD bundle.
 #
-# We migrate, then pre-flight the new backend on a spare port (:3002). Only if it boots and serves do
-# we swap the bundle + restart :80. A broken deploy never takes :80 down, and we roll the code back.
-# NB: migrate runs while the old :80 still serves -> keep migrations additive (backward-compatible).
+# We pre-flight the new backend on a spare port (:3002). Only if it boots and serves do we swap the
+# bundle + restart :80. A broken deploy never takes :80 down, and we roll the code back.
 set -u
 cd /root/ocraft || exit 1
 
@@ -21,18 +20,14 @@ rollback_code() {
   git reset --hard "$OLD_SHA" && npm install
 }
 
-# 1. Migrate (forward-only + additive). Postgres is paused/legacy now — a failure here (no DB, or a
-#    torn-down DB) must NOT block deploying the static frontend, so warn and continue.
-$NODE_TS runtime/cli.ts migrate || echo "migrate skipped/failed (pg paused?) — continuing"
-
-# 2. Pre-flight the NEW backend on :3002 — :80 stays on the old code the whole time.
+# 1. Pre-flight the NEW backend on :3002 — :80 stays on the old code the whole time.
 echo "pre-flighting $NEW_SHA on :3002 ..."
 PORT=3002 BIND_HOST=127.0.0.1 NODE_ENV=production $NODE_TS runtime/api.ts > /tmp/ocraft-preflight.log 2>&1 &
 PRE=$!
 ok=0
 for _ in $(seq 1 12); do
   sleep 1
-  if curl -fsS -m 5 http://127.0.0.1:3002/api/session > /dev/null 2>&1; then
+  if curl -fsS -m 5 http://127.0.0.1:3002/ > /dev/null 2>&1; then
     ok=1
     break
   fi
@@ -57,7 +52,7 @@ pkill -f 'runtime/api.ts' 2>/dev/null || true
 sleep 1
 $NODE_TS runtime/cli.ts service restart api
 sleep 3
-if ! curl -fsS -m 10 http://127.0.0.1/api/session > /dev/null 2>&1; then
+if ! curl -fsS -m 10 http://127.0.0.1/ > /dev/null 2>&1; then
   echo "CUTOVER CHECK FAILED — rolling back to $OLD_SHA"
   rollback_code
   $NODE_TS runtime/cli.ts service restart api

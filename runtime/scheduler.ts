@@ -31,15 +31,9 @@ type Job = {
   intervalMs?: number
   args?: unknown[]
 }
-const jobs: Job[] = [
-  // Daily Postgres backup — the runtime's own instruments (a task on the scheduler), not a
-  // system cron. See runtime/tasks/pg-backup.js. 03:30 server-local (UTC on prod).
-  {
-    id: 'pg-backup',
-    task: 'pg-backup',
-    schedule: { hour: 3, minute: 30 },
-  },
-]
+// No scheduled jobs at the moment. Add one here (id + task + schedule) to run a runtime/tasks/*.ts
+// on a cadence — that's the runtime's own instrument, not a system cron.
+const jobs: Job[] = []
 
 // One pass: run every job that's due now. Call periodically (cron) or via the loop below.
 export const runScheduler = () =>
